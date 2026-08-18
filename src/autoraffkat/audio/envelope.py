@@ -31,12 +31,14 @@ class EnvelopeError(Exception):
 
 
 def cache_dir() -> Path:
+    """Verhokäyrien välimuisti. Turvallista tyhjentää milloin tahansa."""
     root = Path.home() / "Library" / "Caches" / "autoraffkat" / "envelopes"
     root.mkdir(parents=True, exist_ok=True)
     return root
 
 
 def require_ffmpeg() -> None:
+    """Varmistaa työkalut ennen purkua, jotta virhe on luettava eikä OSError."""
     for tool in ("ffmpeg", "ffprobe"):
         if shutil.which(tool) is None:
             raise EnvelopeError(
@@ -45,6 +47,11 @@ def require_ffmpeg() -> None:
 
 
 def _cache_key(path: str) -> str:
+    """Välimuistiavain: polku, koko, muokkausaika ja laskennan parametrit.
+
+    Koko ja muokkausaika mukana, jotta korvattu tiedosto ei osu vanhaan
+    käyrään; ``CACHE_VERSION``, jotta laskennan muutos mitätöi vanhat.
+    """
     st = os.stat(path)
     raw = f"{os.path.abspath(path)}|{st.st_size}|{st.st_mtime_ns}|{SAMPLE_RATE}|{HOP}|{CACHE_VERSION}"
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()

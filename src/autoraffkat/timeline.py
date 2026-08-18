@@ -70,14 +70,17 @@ def to_frames(seconds: Fraction | float, frame_duration: Fraction) -> int:
 
 
 def frames_to_time(frames: int, frame_duration: Fraction) -> Fraction:
+    """Kehysmäärä ajaksi."""
     return frame_duration * frames
 
 
 def frames_str(frames: int, frame_duration: Fraction) -> str:
+    """Kehysmäärä suoraan FCPXML-ajaksi. Tulos on aina kehyksen tarkka."""
     return format_time(frames_to_time(frames, frame_duration))
 
 
 def fps_of(frame_duration: Fraction) -> Fraction:
+    """Ruutunopeus kehyksen kestosta."""
     return 1 / frame_duration
 
 

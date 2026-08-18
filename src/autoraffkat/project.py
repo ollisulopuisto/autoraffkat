@@ -17,21 +17,30 @@ FORMAT_VERSION = 1
 
 
 def settings_path(xml_path: str) -> str:
+    """Asetustiedoston polku: ``jakso.fcpxml`` -> ``jakso.autoraffkat.json``."""
     base, _ = os.path.splitext(os.path.abspath(xml_path))
     return f"{base}.autoraffkat.json"
 
 
 def default_output_path(xml_path: str) -> str:
+    """Viennin polku: ``jakso.fcpxml`` -> ``jakso-leikattu.fcpxml``.
+
+    Erillinen nimi on tahallinen: vienti ei saa osua lähde-XML:n päälle, koska
+    silmukassa palataan aina samaan lähteeseen.
+    """
     base, ext = os.path.splitext(os.path.abspath(xml_path))
     return f"{base}-leikattu{ext or '.fcpxml'}"
 
 
 @dataclass
 class ProjectSettings:
+    """Yhden lähde-XML:n asetukset: raitakohtaiset roolit ja globaalit säätimet."""
+
     tracks: dict[str, TrackConfig] = field(default_factory=dict)
     globals: Globals = field(default_factory=Globals)
 
     def config_for(self, key: str) -> TrackConfig:
+        """Raidan asetukset, oletuksilla luotuna jos raitaa ei ole ennen nähty."""
         cfg = self.tracks.get(key)
         if cfg is None:
             cfg = TrackConfig()
@@ -54,6 +63,11 @@ class ProjectSettings:
 
 
 def load(xml_path: str) -> ProjectSettings:
+    """Lukee asetukset XML:n vierestä.
+
+    Puuttuva tai rikkinäinen tiedosto ei ole virhe vaan tuottaa oletukset:
+    asetukset ovat mukavuus, eivät ehto työskentelylle.
+    """
     path = settings_path(xml_path)
     if not os.path.exists(path):
         return ProjectSettings()
@@ -66,6 +80,11 @@ def load(xml_path: str) -> ProjectSettings:
 
 
 def save(xml_path: str, settings: ProjectSettings) -> str:
+    """Kirjoittaa asetukset XML:n viereen.
+
+    Kirjoitus tehdään väliaikaistiedoston kautta, koska tämä ajetaan jokaisen
+    liukusäätimen liikkeen jälkeen eikä keskeytys saa jättää puolikasta JSONia.
+    """
     path = settings_path(xml_path)
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as fh:

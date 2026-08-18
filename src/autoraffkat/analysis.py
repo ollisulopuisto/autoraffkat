@@ -28,6 +28,7 @@ class AnalysisError(Exception):
 
 
 def _smooth(db: np.ndarray, seconds: float) -> np.ndarray:
+    """Liukuva keskiarvo. Tasoittaa tavuvälit, joita ei haluta leikkauksiksi."""
     k = max(1, int(round(seconds / HOP)))
     if k <= 1 or db.size < k:
         return db
@@ -87,9 +88,16 @@ class Analysis:
     _aligned: dict[tuple, tuple[np.ndarray, np.ndarray, float]] = field(default_factory=dict)
 
     def media_by_key(self) -> dict[str, MediaItem]:
+        """Mediat avaimella haettavina."""
         return {m.key: m for m in self.timeline.media}
 
     def aligned(self, item: MediaItem, program_start: Fraction, n: int):
+        """Kohdistettu käyrä välimuistista: ``(dB, onko mediaa, pohjakohina)``.
+
+        Välimuisti on avainnettu ohjelman rajoilla, koska roolin vaihto siirtää
+        niitä. Pohjakohina lasketaan tässä eikä säätimien yhteydessä, koska se
+        ei riipu säätimistä.
+        """
         cache_key = (item.key, program_start, n)
         hit = self._aligned.get(cache_key)
         if hit is None:
@@ -141,6 +149,12 @@ class Roles:
 
 
 def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
+    """Kääntää raitakohtaiset roolit puhujiksi ja kerää puutteet.
+
+    Puutteet palautetaan listana eikä nosteta poikkeuksena: käyttöliittymässä
+    ollaan jatkuvasti puolivalmiissa tilassa, ja puute on näytettävä ilman että
+    edellinen tulos katoaa.
+    """
     roles = Roles()
     for item in timeline.media:
         cfg = tracks.get(item.key)

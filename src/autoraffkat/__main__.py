@@ -12,6 +12,12 @@ from .server.app import AppState, create_app
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Lukee XML:n, käynnistää palvelimen ja avaa selaimen.
+
+    XML luetaan ennen palvelimen käynnistystä, jotta virheellinen tiedosto
+    näkyy heti terminaalissa. Verhokäyrät lasketaan taustasäikeessä, joten
+    käyttöliittymä aukeaa odottamatta ffmpegiä.
+    """
     parser = argparse.ArgumentParser(
         prog="autoraffkat",
         description="Automaattinen monikameraleikkaus: FCPXML sisään, FCPXML ulos.")

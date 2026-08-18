@@ -58,6 +58,7 @@ def _open_runs(mask: np.ndarray, k: int) -> np.ndarray:
 
 
 def _hops(seconds: float) -> int:
+    """Sekunnit ruudukon askeliksi, aina vähintään yksi."""
     return max(1, int(round(seconds / HOP)))
 
 
@@ -91,6 +92,8 @@ class Grid:
 
 @dataclass
 class Decision:
+    """Päätöksen tulos: leikkauslista ja esikatselun tarvitsemat taulukot."""
+
     segments: list[Segment]
     active: np.ndarray         # (puhujia, n) bool — esikatselupalkkia varten
     chosen: np.ndarray         # (n,) int — puhujan indeksi tai WIDE
@@ -196,6 +199,7 @@ def _force_wide(segments: list[Segment], g: Globals, wide_label: str,
 
 
 def _merge(segments: list[Segment]) -> list[Segment]:
+    """Yhdistää peräkkäiset saman kuvan jaksot ja pudottaa tyhjät."""
     merged: list[Segment] = []
     for seg in segments:
         if seg.end <= seg.start:

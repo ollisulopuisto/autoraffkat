@@ -38,9 +38,9 @@ uv sync            # tai: pip install -e .
 Tuetaan kahta lähdettä:
 
 * **synkronoitu klippi** (`sync-clip`), jonka sisällä kamerat ja mikit ovat
-  omilla laneillaan
+omilla laneillaan
 * **projektin aikajana** (`project` > `sequence` > `spine`), jossa kamerat ja
-  mikit on aseteltu käsin
+mikit on aseteltu käsin
 
 Synkkaus luetaan XML:stä, ei lasketa. Ruutunopeus otetaan sekvenssin tai
 video-assetin formaatista.
@@ -65,32 +65,73 @@ laajan kuvan pakotusväli.
 Kaikkia kolmea koskee lyhin päällekkäispuheen kesto: ohikiitävä myötäily ei
 laukaise sääntöä.
 
-## Arkkitehtuuri
+## Säätäminen
 
-Analyysi on kahdessa kerroksessa, ja jako on käyttöliittymän ehto:
+| Oire | Korjaus |
+|---|---|
+| Kuvat vaihtuvat liian usein | Nosta **lyhintä kuvan kestoa**. Jos ei riitä, nosta **vahvistusaikaa**: lyhyet äännähdykset eivät enää lasketa puheeksi. |
+| Kuva vaihtuu myöhässä | Nosta **ennakkoa**. Puoli sekuntia on yleensä liikaa, 0,1–0,3 s riittää. |
+| Väärä kamera hiljaisissa kohdissa | Mikki kuulee toisen puhujan vuotona. Nosta sen mikin **herkkyyttä**. |
+| Toinen puhuja voittaa aina päällekkäispuheessa | Mikit ovat eri äänekkäitä. Nosta hiljaisemman **vahvistusta**. Se vaikuttaa vain mikkien keskinäiseen vertailuun, ei kynnykseen. |
+| Laajaan mennään liian herkästi | Nosta **lyhintä päällekkäisyyttä**, jolloin myötäily ei laukaise sääntöä. |
 
-1. **Verhokäyrä** (`audio/envelope.py`) — ffmpeg purkaa raidan monoksi, RMS
-   lasketaan 20 ms välein. Sekunteja minuuttia kohden. Ajetaan kerran
-   tiedostoa kohden ja välimuistitetaan `~/Library/Caches/autoraffkat/`. Käyrä
-   indeksoidaan tiedoston alusta, joten sama välimuisti kelpaa vaikka klippi
-   siirtyisi aikajanalla.
-2. **Päätös** (`decide.py`) — kynnykset, hystereesi, minimikestot,
-   päällekkäispuhe. Ajetaan uudestaan joka säädöllä. Mitattu kahden tunnin
-   aineistolla: 11–38 ms sääntökohtaisesti.
+## Rakenne
 
-Väliin jää `analysis.py`, joka kohdistaa verhokäyrät aikajanan ruudukolle.
-Kohdistus on pelkkää numpy-indeksointia, joten roolin vaihtokin on halpa.
+```
+src/autoraffkat/
+  timeline.py        FCPXML:n rationaaliaika (Fraction)
+  model.py           mediat, roolit, asetukset, leikkaukset
+  fcpxml/read.py     sync-clip ja projektin spine sisään
+  fcpxml/write.py    uusi projekti ulos
+  audio/envelope.py  ffmpeg + RMS, levyvälimuisti          HIDAS
+  analysis.py        verhokäyrät aikajanan ruudukolle
+  decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
+  preview.py         palkin tiivistys selaimelle
+  project.py         asetukset JSONina XML:n viereen
+  server/app.py      HTTP-rajapinta
+  server/static/     käyttöliittymä
+```
 
-### Miksi Python ja paikallinen web-käyttöliittymä
+Yksityiskohtainen perustelu: [`DESIGN.md`](DESIGN.md).
 
-Analyysi on jo Pythonia ja päätöskerros on numpya. SwiftUI olisi antanut
-AVFoundationin kautta toiston ja aaltomuodot, mutta olisi vaatinut joko
-analyysin uudelleenkirjoituksen Swiftinä tai Python-alaprosessin ja IPC:n heti
-ensimmäisestä versiosta. Tässä kokoluokassa se maksaa enemmän kuin tuo.
+Lyhyesti: analyysi on kahdessa kerroksessa. Verhokäyrä (ffmpeg, sekunteja
+minuuttia kohden) ajetaan kerran tiedostoa kohden ja välimuistitetaan
+`~/Library/Caches/autoraffkat/`. Päätös (numpy, 11–38 ms kahden tunnin
+aineistolla) ajetaan uudestaan joka säädöllä. Ilman tätä jakoa käyttöliittymä
+olisi käyttökelvoton.
 
-Myöhempi videotoisto on `<video>`-elementti proxytiedostoon, eikä se vaadi
-päätöskerrokseen muutoksia: `preview.py` palauttaa jo aikajanan sekunteina, ja
-`decide.py` ei tiedä käyttöliittymästä mitään.
+Käyttöliittymä on Python ja paikallinen web, ei SwiftUI: analyysikoodi on jo
+Pythonia, eikä myöhempi videotoisto vaadi päätöskerrokseen muutoksia.
+
+## HTTP-rajapinta
+
+Käyttöliittymä käyttää näitä; samat kelpaavat skriptaukseen.
+
+| | |
+|---|---|
+| `GET /api/state` | mediat, roolit, säätimet, verhokäyrien edistyminen |
+| `POST /api/settings` | säätimet sisään, leikkauslista ja esikatselu ulos |
+| `POST /api/export` | kirjoittaa leikatun XML:n, palauttaa polun |
+| `POST /api/reload` | lukee lähde-XML:n uudestaan levyltä |
+
+```
+curl -s -X POST localhost:8731/api/export \
+     -H 'Content-Type: application/json' -d @asetukset.json
+```
+
+`POST /api/settings` palauttaa `ok: false` ja luettavan `problems`-listan, kun
+roolit ovat kesken. Se on normaali välitila, ei virhe.
+
+## Kun jokin ei toimi
+
+| Viesti tai oire | Syy |
+|---|---|
+| `ffmpeg puuttuu polusta` | `brew install ffmpeg` |
+| `Tiedostoa ei löydy levyltä` raitalistassa | XML viittaa polkuun jota ei ole: materiaali on siirtynyt viennin jälkeen tai vienti osoittaa proxyihin. Yhdistä media Final Cutissa ja vie uudestaan. |
+| `XML:stä ei löytynyt projektia eikä synkronoitua klippiä` | Viety on esimerkiksi pelkkä event. Valitse synkattu klippi tai projekti ennen vientiä. |
+| `Laajalla kuvalla ja mikeillä ei ole yhteistä aikaa` | Roolitus osoittaa medioihin jotka eivät ole päällekkäin aikajanalla. |
+| Palkki näyttää oikealta, Final Cut ei | Tarkista sekvenssin ruutunopeus. Se luetaan XML:stä, joten väärä arvo on lähteessä. |
+| Verhokäyrät lasketaan aina uudestaan | Välimuistin avaimessa on muokkausaika. Verkkolevy joka muuttaa aikaleimoja ei osu välimuistiin. |
 
 ## Ulostulo
 

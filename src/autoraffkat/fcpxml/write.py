@@ -26,6 +26,7 @@ class WriteError(Exception):
 
 
 def file_url(path: str) -> str:
+    """Tiedostopolku file-URLiksi, kun lähde-XML:ssä ei ollut ``src``-arvoa."""
     return "file://" + quote(path)
 
 
@@ -37,6 +38,12 @@ def sanitize_role(name: str) -> str:
 
 
 def _format_name(width: int, height: int, frame_duration: Fraction) -> str | None:
+    """Final Cutin nimetty formaatti, tai ``None`` jos mitat ovat epästandardit.
+
+    Väärä nimi on pahempi kuin puuttuva nimi: Final Cut lukee formaatin
+    mitoista ja ``frameDuration``ista, mutta virheellinen nimi voi ohjata sen
+    väärään tulkintaan.
+    """
     label = FPS_LABELS.get(fps_of(frame_duration))
     if label is None or height not in STANDARD_HEIGHTS:
         return None
@@ -44,7 +51,11 @@ def _format_name(width: int, height: int, frame_duration: Fraction) -> str | Non
 
 
 class _Formats:
-    """Kokoaa tarvittavat <format>-resurssit ja jakaa niille id:t."""
+    """Kokoaa tarvittavat ``<format>``-resurssit ja jakaa niille id:t.
+
+    Sama formaatti jaetaan kaikille saman kokoisille ja saman ruutunopeuden
+    asseteille, jotta resursseihin ei synny kymmentä identtistä riviä.
+    """
 
     def __init__(self) -> None:
         self._by_key: dict[tuple[int, int, Fraction], str] = {}
@@ -52,6 +63,7 @@ class _Formats:
 
     def get(self, width: int, height: int, frame_duration: Fraction,
             next_id) -> str:
+        """Formaatin id, luoden resurssin ensimmäisellä kysymisellä."""
         key = (width, height, frame_duration)
         if key in self._by_key:
             return self._by_key[key]
@@ -70,6 +82,11 @@ class _Formats:
 
 
 def _asset_lines(item: MediaItem, res_id: str, format_id: str | None) -> list[str]:
+    """Yhden median ``<asset>``-resurssi ``<media-rep>``-lapsineen.
+
+    Assetin ``start`` ja ``duration`` ovat lähdemateriaalin omat, eivät
+    käytetyn palan: leikkaus rajataan vasta ``<asset-clip>``-tasolla.
+    """
     attrs = [
         f'id="{res_id}"',
         f"name={quoteattr(item.name or os.path.basename(item.path))}",

@@ -32,7 +32,11 @@ STATIC_DIR = Path(__file__).parent / "static"
 
 @dataclass
 class AppState:
-    """Palvelimen tila. Yksi XML kerrallaan."""
+    """Palvelimen tila. Yksi XML kerrallaan.
+
+    ``lock`` suojaa asetukset ja analyysin, koska verhokäyriä lasketaan
+    taustasäikeessä samaan aikaan kun käyttöliittymä lähettää säätöjä.
+    """
 
     xml_path: str
     timeline: Timeline | None = None
@@ -46,6 +50,11 @@ class AppState:
     # ---------------------------------------------------------- lataus
 
     def load(self) -> None:
+        """Lukee XML:n ja käynnistää verhokäyrien laskennan taustalle.
+
+        Lukuvirhe ei kaada palvelinta vaan jää ``load_error``iin, jotta
+        käyttöliittymä voi näyttää sen ja käyttäjä voi korjata viennin.
+        """
         self.load_error = ""
         self.progress = {"done": 0, "total": 0, "current": "", "ready": False}
         try:
@@ -77,6 +86,7 @@ class AppState:
                 cfg.role = "wide"
 
     def _analyze(self) -> None:
+        """Taustasäie: purkaa äänet ja laskee verhokäyrät. Kerran per lataus."""
         assert self.timeline is not None
         targets = [m for m in self.timeline.media if m.has_audio]
         self.progress.update({"total": len(targets), "done": 0, "ready": False})
@@ -122,6 +132,14 @@ class AppState:
             g.project_name = str(raw["project_name"])[:120] or "Raakaleikkaus"
 
     def compute(self) -> dict:
+        """Ajaa päätöskerroksen ja kokoaa vastauksen käyttöliittymälle.
+
+        Puutteelliset roolit palautuvat ``ok: False`` ja luettavana listana,
+        eivät HTTP-virheenä: ne ovat normaali välitila silmukassa.
+
+        Avain ``_grid`` on sisäinen: vienti tarvitsee saman päätöksen, eikä sitä
+        lasketa kahdesti. Se poistetaan ennen JSONiksi kirjoittamista.
+        """
         if self.timeline is None or self.analysis is None:
             raise HTTPException(409, self.load_error or "XML:ää ei ole luettu.")
         started = time.perf_counter()
@@ -160,6 +178,7 @@ class AppState:
 
 
 def _state_json(state: AppState) -> dict:
+    """Koko tila käyttöliittymälle: mediat, roolit, säätimet ja edistyminen."""
     timeline = state.timeline
     media = []
     if timeline is not None:
@@ -184,23 +203,37 @@ def _state_json(state: AppState) -> dict:
 
 
 def create_app(state: AppState) -> FastAPI:
+    """Rakentaa sovelluksen annetun tilan ympärille.
+
+    Tila annetaan ulkoa, jotta testit voivat ajaa saman rajapinnan ilman
+    palvelinprosessia.
+    """
     app = FastAPI(title="autoraffkat", docs_url=None, redoc_url=None)
 
     @app.get("/")
     def index():
+        """Käyttöliittymän sivu."""
         return FileResponse(STATIC_DIR / "index.html")
 
     @app.get("/api/state")
     def get_state():
+        """Koko tila. Käyttöliittymä kysyy tämän avatessa ja edistymistä pollatessa."""
         return _state_json(state)
 
     @app.post("/api/reload")
     def reload_xml():
+        """Lukee lähde-XML:n uudestaan levyltä, esimerkiksi uuden viennin jälkeen."""
         state.load()
         return _state_json(state)
 
     @app.post("/api/settings")
     def post_settings(payload: dict):
+        """Ottaa säätimet vastaan, ajaa päätöksen ja tallentaa asetukset.
+
+        Tämä on silmukan kuuma polku: kutsutaan jokaisesta liukusäätimen
+        liikkeestä, joten tässä ei saa tehdä muuta kuin päätöskerros ja pieni
+        JSON-kirjoitus.
+        """
         with state.lock:
             state.apply(payload)
             result = state.compute()
@@ -214,6 +247,11 @@ def create_app(state: AppState) -> FastAPI:
 
     @app.post("/api/export")
     def export(payload: dict | None = None):
+        """Kirjoittaa leikatun FCPXML:n uutena tiedostona lähteen viereen.
+
+        Ottaa säätimet vastaan samassa pyynnössä, jotta vienti käyttää varmasti
+        sitä mitä ruudulla näkyy eikä edellistä tallennettua tilaa.
+        """
         with state.lock:
             if payload:
                 state.apply(payload)

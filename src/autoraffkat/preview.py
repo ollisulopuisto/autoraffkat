@@ -13,6 +13,7 @@ from .decide import WIDE, Decision, Grid
 
 
 def _bucket_bounds(n: int, columns: int) -> np.ndarray:
+    """Sarakkeiden rajat ruudukon indekseinä, ``columns + 1`` kappaletta."""
     return np.linspace(0, n, columns + 1).astype(np.int64)
 
 

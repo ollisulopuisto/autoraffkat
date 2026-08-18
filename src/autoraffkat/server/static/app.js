@@ -51,6 +51,8 @@ const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement)
   .getPropertyValue(name).trim();
 
+/* Aika muotoon m:ss.ss tai h:mm:ss.ss. Sekunnin sadasosat ovat mukana, koska
+   leikkauskohdan tarkkuus on se mitä listasta halutaan lukea. */
 function fmtTime(seconds) {
   const sign = seconds < 0 ? '-' : '';
   const s = Math.abs(seconds);
@@ -64,6 +66,8 @@ function fmtTime(seconds) {
 
 /* ------------------------------------------------------------ säätimet */
 
+/* Yksi liukusäädin: nimi, kahva ja lukuarvo. Arvo päivittyy heti ruudulle ja
+   onChange niputetaan schedule():ssa, joten raahaus ei lähetä joka pikselistä. */
 function knob(spec, value, onChange) {
   const wrap = document.createElement('div');
   wrap.className = 'knob';
@@ -88,12 +92,17 @@ function knob(spec, value, onChange) {
 
 /* ------------------------------------------------------------ raidat */
 
+/* Puhujan indeksi väripaletissa. Tulee palvelimen esikatselusta, jotta palkki,
+   selite ja leikkauslista käyttävät varmasti samaa väriä. */
 function speakerIndex(name) {
   if (!latest || !latest.preview) return -1;
   const found = latest.preview.speakers.find((s) => s.name === name);
   return found ? found.index : -1;
 }
 
+/* Raitalista. Piirretään kokonaan uudestaan roolin vaihtuessa, koska rooli
+   määrää mitkä säätimet riviin kuuluvat. Puhujakenttien arvot kerätään
+   datalistiin, jotta toisen raidan puhujan voi valita kirjoittamatta. */
 function renderTracks() {
   const host = $('track-list');
   host.textContent = '';
@@ -224,6 +233,8 @@ function colorFor(index) {
   return index < 0 ? css(WIDE_COLOR) : css(SPEAKER_COLORS[index % SPEAKER_COLORS.length]);
 }
 
+/* Esikatselupalkki: rivi per puhuja (kuka on äänessä) ja alimpana valittu kuva.
+   Piirretään devicePixelRatiolla, jotta viivat eivät sumene Retinalla. */
 function drawBar() {
   const canvas = $('bar');
   const preview = latest && latest.preview;
@@ -268,6 +279,8 @@ function drawBar() {
   }
 }
 
+/* Aika-asteikko palkin alle. Väli valitaan luettavista arvoista (1, 2, 5, 10,
+   15, 30 s, 1, 2, 5 min …) niin että merkkejä tulee noin kahdeksan. */
 function renderRuler() {
   const host = $('ruler');
   host.textContent = '';
@@ -324,17 +337,23 @@ function renderCuts() {
 
 /* ------------------------------------------------------------ liikenne */
 
+/* Käyttöliittymän koko tila palvelimelle. Sama rakenne kelpaa sekä säätöön että
+   vientiin, joten vienti käyttää varmasti sitä mitä ruudulla näkyy. */
 function payload() {
   const tracks = {};
   state.media.forEach((m) => { tracks[m.key] = m.config; });
   return { tracks, globals: state.globals };
 }
 
+/* Niputus: säätimen liike ei lähetä pyyntöä heti. Roolin vaihto kutsutaan
+   viiveellä 0, koska se on kertaklikkaus eikä raahaus. */
 function schedule(delay = DEBOUNCE_MS) {
   clearTimeout(pending);
   pending = setTimeout(send, delay);
 }
 
+/* Päätöskierros. Edellinen pyyntö keskeytetään, jotta raahaus ei kasaa jonoa
+   eikä vanhentunut vastaus ehdi ylikirjoittaa tuoretta. */
 async function send() {
   if (!state) return;
   if (inflight) inflight.abort();
@@ -407,6 +426,8 @@ function renderHeader() {
     `Vienti: ${state.output_path}\nAsetukset: ${state.settings_path}`;
 }
 
+/* Verhokäyrien edistyminen. Roolit saa nimetä laskennan aikana; kun se
+   valmistuu, ajetaan päätös kerran automaattisesti. */
 function watchProgress() {
   clearInterval(progressTimer);
   if (state.progress && state.progress.ready) { $('status').textContent = ''; return; }

@@ -61,6 +61,8 @@ class Timeline:
 
 @dataclass
 class _Asset:
+    """``<asset>``-resurssi sellaisenaan. Ei vielä tietoa aikajanapaikoista."""
+
     id: str
     name: str
     path: str
@@ -77,6 +79,11 @@ class _Asset:
 
 
 def _src_to_path(src: str) -> str:
+    """``media-rep src`` tiedostopoluksi.
+
+    Final Cut kirjoittaa polun URL-koodattuna file-URLina, joten ääkköset ja
+    välilyönnit tulevat prosenttimuodossa.
+    """
     if not src:
         return ""
     if src.startswith("file://"):
@@ -86,6 +93,7 @@ def _src_to_path(src: str) -> str:
 
 
 def _int_attr(elem, name: str, default: int) -> int:
+    """Kokonaislukuattribuutti. Puuttuva tai kelvoton antaa oletuksen."""
     raw = elem.get(name)
     if raw is None:
         return default
@@ -109,6 +117,12 @@ def _audio_rate(raw: str | None) -> int:
 
 
 def _collect_resources(root) -> tuple[dict[str, _Asset], dict[str, dict], dict]:
+    """Kerää ``<resources>``-lohkon: assetit, formaatit ja media-kääreet.
+
+    Palauttaa kolmikon ``(assets, formats, medias)`` id:llä avainnettuna.
+    ``medias`` sisältää ``<media>``-elementit sellaisenaan, koska yhdistetyn
+    klipin sisään mennään vasta kävelyvaiheessa.
+    """
     assets: dict[str, _Asset] = {}
     formats: dict[str, dict] = {}
     medias: dict[str, ET.Element] = {}
@@ -150,6 +164,12 @@ def _collect_resources(root) -> tuple[dict[str, _Asset], dict[str, dict], dict]:
 
 @dataclass
 class _Ctx:
+    """Kävelyn tila.
+
+    ``hits`` kerää löydöt järjestyksessä, ``seen`` estää yhdistetyn klipin
+    päätymisen ikuiseen rekursioon jos se viittaa itseensä.
+    """
+
     assets: dict[str, _Asset]
     formats: dict[str, dict]
     medias: dict[str, ET.Element]
