@@ -10,3 +10,4 @@ build/
 # Ajokohtaiset
 *.autoraffkat.json
 out/
+uv.lock
