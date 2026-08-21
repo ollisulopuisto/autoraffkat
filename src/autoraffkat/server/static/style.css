@@ -64,7 +64,32 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
                  font-weight: 600; }
 button.primary:hover { filter: brightness(1.08); }
 button.ghost { background: transparent; }
+button:disabled { cursor: default; opacity: .65; }
+button:disabled:hover { border-color: var(--line); }
 kbd { font: inherit; opacity: .6; margin-left: 4px; }
+
+/* Työn alla oleva painike: kehä pyörii nimen edessä. Leveys ei saa muuttua
+   tekstin vaihtuessa, koska napit ovat vierekkäin ja rivi hyppäisi. */
+button.busy { position: relative; padding-left: 30px; }
+button.busy::before {
+  content: "";
+  position: absolute;
+  left: 11px;
+  top: 50%;
+  width: 11px;
+  height: 11px;
+  margin-top: -6px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  opacity: .8;
+  animation: spin .7s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+/* Liike pois jos käyttäjä on sen kieltänyt; kehä jää näkyviin merkiksi. */
+@media (prefers-reduced-motion: reduce) {
+  button.busy::before { animation: none; border-top-color: currentColor; opacity: .5; }
+}
 
 .banner {
   border-radius: 8px;

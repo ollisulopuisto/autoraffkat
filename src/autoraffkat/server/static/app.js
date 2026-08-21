@@ -386,10 +386,9 @@ function renderAudio() {
   const run = document.createElement('button');
   run.className = 'ghost';
   run.id = 'mix-run';
-  const busy = info.progress && info.progress.running;
-  run.disabled = !!busy;
-  run.textContent = busy ? 'käsitellään…' : 'Käsittele ääni';
+  run.textContent = 'Käsittele ääni';
   run.addEventListener('click', runMix);
+  if (info.progress && info.progress.running) setBusy(run, true, 'Käsitellään…');
   host.append(run);
 
   const note = document.createElement('p');
@@ -596,6 +595,27 @@ async function send() {
   }
 }
 
+/* Painike työn ajaksi kehruuseen. Alkuperäinen teksti talletetaan elementtiin,
+   jotta palautus ei riipu kutsupaikan muistista. */
+function setBusy(button, on, label) {
+  if (!button) return;
+  if (on) {
+    if (button.dataset.idleLabel === undefined) {
+      button.dataset.idleLabel = button.textContent;
+    }
+    button.disabled = true;
+    button.classList.add('busy');
+    if (label) button.textContent = label;
+  } else {
+    button.disabled = false;
+    button.classList.remove('busy');
+    if (button.dataset.idleLabel !== undefined) {
+      button.textContent = button.dataset.idleLabel;
+      delete button.dataset.idleLabel;
+    }
+  }
+}
+
 function banner(text, isError) {
   const el = $('banner');
   el.textContent = text;
@@ -605,8 +625,8 @@ function banner(text, isError) {
 
 async function exportXml() {
   const button = $('export');
-  button.disabled = true;
-  $('status').textContent = 'viedään…';
+  if (button.disabled) return;
+  setBusy(button, true, 'Viedään…');
   try {
     const response = await fetch('/api/export', {
       method: 'POST',
@@ -627,7 +647,7 @@ async function exportXml() {
     $('status').textContent = '';
     banner('Vienti epäonnistui: ' + err.message, true);
   } finally {
-    button.disabled = false;
+    setBusy(button, false);
   }
 }
 
@@ -663,7 +683,11 @@ function renderHeader() {
    valmistuu, ajetaan päätös kerran automaattisesti. */
 function watchProgress() {
   clearInterval(progressTimer);
-  if (state.progress && state.progress.ready) { $('status').textContent = ''; return; }
+  if (state.progress && state.progress.ready) {
+    $('status').textContent = '';
+    setBusy($('reload'), false);
+    return;
+  }
   progressTimer = setInterval(async () => {
     const data = await (await fetch('/api/state')).json();
     state.progress = data.progress;
@@ -675,6 +699,7 @@ function watchProgress() {
     if (p.ready) {
       clearInterval(progressTimer);
       $('status').textContent = '';
+      setBusy($('reload'), false);
       renderTracks();
       send();
     } else {
@@ -695,11 +720,31 @@ async function boot() {
 }
 
 $('export').addEventListener('click', exportXml);
+/* Lukeminen jatkuu verhokäyrien laskentana taustalla, joten painike vapautuu
+   vasta kun se on ohi — ei kun pyyntö palaa. Muuten nappi näyttäisi
+   valmiilta samalla kun tilarivi laskee vielä käyriä, ja uusi klikkaus
+   aloittaisi saman työn alusta. */
 $('reload').addEventListener('click', async () => {
-  state = await (await fetch('/api/reload', { method: 'POST' })).json();
+  const button = $('reload');
+  if (button.disabled) return;
+  setBusy(button, true, 'Luetaan…');
+  try {
+    state = await (await fetch('/api/reload', { method: 'POST' })).json();
+  } catch (err) {
+    setBusy(button, false);
+    banner('Lukeminen epäonnistui: ' + err.message, true);
+    return;
+  }
   latest = null;
-  if (state.error) { banner(state.error, true); return; }
-  renderHeader(); renderTracks(); renderGlobals(); watchProgress();
+  if (state.error) {
+    setBusy(button, false);
+    banner(state.error, true);
+    return;
+  }
+  banner('');
+  renderHeader(); renderTracks(); renderGlobals();
+  watchProgress();
+  if (state.progress && state.progress.ready) setBusy(button, false);
 });
 window.addEventListener('resize', () => { drawBar(); renderRuler(); });
 window.addEventListener('keydown', (e) => {
