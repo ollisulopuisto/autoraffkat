@@ -297,20 +297,27 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
 
 
 def apply_duck(audio: np.ndarray, rate: int, closed: list[tuple[int, int]],
-               depth_db: float, fade: float) -> np.ndarray:
+               depth_db: float, fade: float, release: float = 0.0) -> np.ndarray:
     """Vaimentaa annetut jaksot ja liu'uttaa reunat.
+
+    Liu'ut ovat epäsymmetriset ja desibeliasteikolla. Lasku on nopea, koska se
+    ajoittuu toisen puhujan aloitukseen ja jää sen alle kuulumattomiin. Paluu
+    on hidas, koska se osuu hiljaisuuteen eikä siinä ole mitään mikä
+    peittäisi sen — nopea paluu kuuluu pohjakohinan nykäisynä.
+
+    Lineaarinen liuku amplitudissa kuulostaa äkkinäiseltä, koska kuulo on
+    logaritminen: puolivälissä ollaan jo lähes perillä. Siksi liuku tehdään
+    desibeleissä.
 
     Vaimennus tehdään jaksoittain paikan päällä eikä koko tiedoston mittaisella
     vahvistuskäyrällä: tunnin mittainen mikki on 184 miljoonaa näytettä, ja
     erillinen float-taulukko sen päälle olisi kolme neljäsosaa gigatavusta.
-    Jaksoja on tuhansia.
-
-    Reunoilla on liuku, koska askel vaimennuksesta täyteen tasoon naksahtaa.
     """
     if not closed or depth_db >= 0:
         return audio
     level = 10.0 ** (depth_db / 20.0)
-    ramp = max(1, int(fade * rate))
+    down_n = max(1, int(fade * rate))
+    up_n = max(1, int((release or fade) * rate))
     frames = audio.shape[1]
 
     for start, end in closed:
@@ -319,12 +326,20 @@ def apply_duck(audio: np.ndarray, rate: int, closed: list[tuple[int, int]],
         if end <= start:
             continue
         # Liu'ut eivät saa syödä toisiaan lyhyessä jaksossa.
-        span = min(ramp, (end - start) // 2)
-        body_start, body_end = start + span, end - span
+        span = end - start
+        head = min(down_n, span // 2)
+        tail = min(up_n, span - head)
+        body_start, body_end = start + head, end - tail
         if body_end > body_start:
             audio[:, body_start:body_end] *= level
-        if span > 0:
-            down = np.linspace(1.0, level, span, dtype=np.float32)
-            audio[:, start:start + span] *= down
-            audio[:, end - span:end] *= down[::-1]
+        if head > 0:
+            audio[:, start:start + head] *= _ramp_db(0.0, depth_db, head)
+        if tail > 0:
+            audio[:, end - tail:end] *= _ramp_db(depth_db, 0.0, tail)
     return audio
+
+
+def _ramp_db(from_db: float, to_db: float, count: int) -> np.ndarray:
+    """Liuku desibeleissä, ei amplitudissa. Kuulo on logaritminen."""
+    return (10.0 ** (np.linspace(from_db, to_db, count,
+                                 dtype=np.float32) / 20.0)).astype(np.float32)

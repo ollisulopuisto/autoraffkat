@@ -64,6 +64,9 @@ const DUCK_KNOBS = [
   { key: 'duck_min_open', label: 'Lyhin avaus', min: 0, max: 1, step: 0.05, unit: ' s' },
   { key: 'duck_dominance_db', label: 'Erotus kovimpaan', min: 0, max: 24, step: 0.5,
     unit: ' dB' },
+  { key: 'duck_min_closed', label: 'Lyhin vaimennus', min: 0, max: 3, step: 0.1, unit: ' s' },
+  { key: 'duck_fade', label: 'Lasku', min: 0.02, max: 1, step: 0.01, unit: ' s' },
+  { key: 'duck_release', label: 'Paluu', min: 0.02, max: 2, step: 0.02, unit: ' s' },
 ];
 
 const ROOM_KNOBS = [

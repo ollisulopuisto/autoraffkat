@@ -253,7 +253,14 @@ puhujat, joten kumpikin ylittää kynnyksen lähes aina — mitatussa jaksossa
 hiljempaa kuin lähin mikki, joten kuuden desibelin ikkunalla molemmat jäävät
 auki enää 6 % ajasta — ja se on aitoa päällekkäispuhetta.
 
-Kolme aikasäädintä tekevät portista käyttökelpoisen:
+**Vaimennus tapahtuu vain toisen puheen alla.** Jos kukaan ei puhu, kaikki
+mikit jäävät auki. Hiljaisuuteen laskeva portti kuuluu aina, koska mikään ei
+peitä sitä; toisen puhujan aloituksen alla lasku katoaa kuulumattomiin. Siksi
+lasku ajoitetaan toisen puheen alkuun **ilman ennakkoa**, ja paluu ehtii
+loppuun ennen kuin peittävä ääni loppuu. Liu'ut ovat hitaita — 0,25 s alas ja
+0,4 s ylös — koska ne ovat piilossa eikä niiden tarvitse olla nopeita.
+
+Aikasäätimet tekevät portista käyttökelpoisen:
 
 * **Lyhin avaus** pudottaa liian lyhyet jaksot: yskäisy ei avaa mikkiä.
 * **Ennakko** avaa portin ennen puheen alkua. Tämä onnistuu vain koska
@@ -261,6 +268,8 @@ käsittely on jälkikäteistä — reaaliaikainen portti ei voi avautua ennen ku
 ääni on jo tullut, ja siksi siltä katoaa sanojen alkuja.
 * **Pito** pitää portin auki puheen jälkeen, jolloin lauseen häntä ja hengitys
 jäävät mukaan.
+* **Lyhin vaimennus** estää alle puolen sekunnin kuopat: ne kuuluvat
+naksahduksena eivätkä vaimennuksena.
 
 Vaimennus tehdään viimeisenä, jotta mitattu taso koskee puhetta eikä puheen ja
 hiljaisuuden keskiarvoa.

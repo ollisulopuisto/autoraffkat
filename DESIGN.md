@@ -322,6 +322,24 @@ mediaaniero 12,8 dB — joten auki jätetään vain kovin mikki ja ne jotka ovat
 `duck_dominance_db`:n sisällä siitä. Kuudella desibelillä päällekkäisyys
 putosi 41 %:sta 6 %:iin.
 
+**Vaimennus vain peittävän äänen alla.** Ensimmäinen versio vaimensi aina kun
+puhuja oli hiljaa, ja se kuulosti kamalalta: 20 millisekunnin kuoppia, 13–33
+vaimennusta minuutissa, ja liu'ut keskellä hiljaisuutta. Portti kuuluu aina
+kun mikään ei peitä sitä.
+
+Nyt vaimennus voi olla olemassa vain silloin kun **jokin toinen mikki on
+auki**. Lasku ajoitetaan toisen puheen alkuun ilman ennakkoa — lasku ei saa
+alkaa ennen kuin peittävä ääni on tullut — ja peittävän jakson lopusta
+leikataan pito ja paluun mitta pois, jotta myös nousu tapahtuu peittävän
+äänen alla. Mitattuna hiljaisuudessa tapahtuva vaimennus putosi 5,4 %:sta
+1,6 %:iin ja 12,7 %:sta 5,2 %:iin, ja loppu on lauseensisäisiä taukoja joissa
+toinen puhuja on selvästi vielä kesken.
+
+Liu'ut ovat desibeleissä eivätkä amplitudissa, koska kuulo on logaritminen:
+lineaarinen liuku on puolivälissä jo lähes perillä ja kuulostaa äkkinäiseltä.
+Ne ovat myös epäsymmetriset ja hitaat — 0,25 s alas, 0,4 s ylös — koska
+piilossa oleva liuku ei hyödy nopeudesta.
+
 **Omat ajat.** Kuva odottaa vahvistusaikaa ennen leikkausta; portin on
 avauduttava heti. `open_windows` pudottaa liian lyhyet jaksot (`min_open`,
 yskäisy), avaa etukäteen (`lookahead`) ja pitää auki jälkikäteen (`hold`).

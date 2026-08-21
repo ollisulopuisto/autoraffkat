@@ -89,6 +89,27 @@ def open_windows(on: np.ndarray, lookahead: float, hold: float,
     return out
 
 
+def trim_end(mask: np.ndarray, seconds: float) -> np.ndarray:
+    """Lyhentää jokaista totta jaksoa lopusta annetun verran.
+
+    Tätä tarvitaan vaimennuksen paluuseen: liu'un on ehdittävä loppuun ennen
+    kuin peittävä ääni loppuu, muuten se kuuluu hiljaisuudessa.
+    """
+    if seconds <= 0 or mask.size == 0:
+        return mask
+    cut = _hops(seconds)
+    out = np.zeros_like(mask)
+    for start, end, value in _runs(mask.astype(np.int8)):
+        if value and end - start > cut:
+            out[start:end - cut] = True
+    return out
+
+
+def drop_short(mask: np.ndarray, seconds: float) -> np.ndarray:
+    """Pudottaa annettua lyhyemmät todet jaksot pois."""
+    return _open_runs(mask, _hops(seconds)) if seconds > 0 else mask
+
+
 def _hops(seconds: float) -> int:
     """Sekunnit ruudukon askeliksi, aina vähintään yksi."""
     return max(1, int(round(seconds / HOP)))

@@ -184,7 +184,12 @@ class AudioSettings:
     # säädin joka erottaa puhujat: pelkkä kynnys ei riitä, koska molemmat
     # mikit kuulevat molemmat puhujat.
     duck_dominance_db: float = 6.0
-    duck_fade: float = 0.05         # liu'un pituus, s
+    # Vaimennus piilotetaan toisen mikin avautumisen taakse: lasku alkaa vasta
+    # kun toinen ääni on jo tullut, jolloin sitä ei kuule. Paluu on hitaampi,
+    # koska se osuu hiljaisuuteen eikä siinä ole mitään mikä peittäisi sen.
+    duck_fade: float = 0.25         # lasku, s — hidas, koska se on peitossa
+    duck_release: float = 0.40      # paluu, s
+    duck_min_closed: float = 0.60   # tätä lyhyempää vaimennusta ei tehdä, s
     gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
     room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
     room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa

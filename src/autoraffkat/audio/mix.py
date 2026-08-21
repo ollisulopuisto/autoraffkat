@@ -32,7 +32,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ..decide import _runs, open_windows
+from ..decide import _runs, drop_short, open_windows, trim_end
 from ..model import HOP, AudioSettings
 from . import chain
 from .chain import ChainError
@@ -157,7 +157,7 @@ class MixResult:
         return not self.errors
 
 
-def closed_ranges(item, mask, program_start: float, rate: int) -> list[tuple[int, int]]:
+def closed_ranges(item, closed, program_start: float, rate: int) -> list[tuple[int, int]]:
     """Missä tiedoston kohdissa mikki on kiinni, näyteväleinä.
 
     Ruudukko on aikajanan aikaa, tiedosto omaansa. Muunnos tehdään
@@ -166,8 +166,8 @@ def closed_ranges(item, mask, program_start: float, rate: int) -> list[tuple[int
     vienti käytä sitä.
     """
     out: list[tuple[int, int]] = []
-    for start, end, value in _runs(mask.astype(np.int8)):
-        if value:
+    for start, end, value in _runs(closed.astype(np.int8)):
+        if not value:
             continue
         low = program_start + start * HOP
         high = program_start + end * HOP
@@ -238,7 +238,7 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
         audio = chain.apply_duck(
             audio, rate,
             closed_ranges(job["item"], mask, program_start, rate),
-            settings.duck_db, settings.duck_fade)
+            settings.duck_db, settings.duck_fade, settings.duck_release)
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
@@ -262,30 +262,57 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
 
 
 def duck_masks(grid, settings: AudioSettings) -> dict:
-    """Puhujakohtaiset «mikki auki» -maskit ruudukossa.
+    """Puhujakohtaiset «mikki kiinni» -maskit ruudukossa.
 
     Ohjaus on sama puheentunnistus kuin kuvan leikkauksessa — se on jo säädetty
     herkkyyssäätimillä ja näkyy esikatselupalkissa — mutta omilla ajoillaan.
-    Kuva odottaa vahvistusaikaa ennen leikkausta; portin on avauduttava heti.
 
-    Ratkaiseva ero pelkkään kynnykseen: **auki jää vain kovin mikki** ja ne
-    jotka ovat ``duck_dominance_db``:n sisällä siitä. Kaksi mikkiä samassa
-    huoneessa kuulevat molemmat puhujat, joten kumpikin ylittää kynnyksen
-    lähes aina — mitattuna 41 % ajasta yhtä aikaa. Vuoto on kuitenkin selvästi
-    hiljempaa: mitattu mediaaniero on 12,8 dB, joten kovemman valinta erottaa
-    puhujat siististi. Kuuden desibelin ikkunalla molemmat jäävät auki 3 %
-    ajasta, ja ne ovat aitoa päällekkäispuhetta.
+    Kolme sääntöä, joista jokainen korjaa yhden tavan kuulostaa pahalta:
+
+    **Vaimennus tapahtuu vain toisen puheen alla.** Jos kukaan ei puhu, kaikki
+    mikit jäävät auki. Hiljaisuuteen laskeva portti kuuluu aina, koska mikään
+    ei peitä sitä; toisen puhujan aloituksen alla lasku katoaa kuulumattomiin.
+    Tämä on syy siihen että maskeri lasketaan **ilman ennakkoa**: lasku ei saa
+    alkaa ennen kuin peittävä ääni on jo tullut.
+
+    **Kovin voittaa.** Kaksi mikkiä samassa huoneessa kuulevat molemmat
+    puhujat, joten kumpikin ylittää kynnyksen — mitattuna 41 % ajasta yhtä
+    aikaa. Vuoto on kuitenkin mediaanissa 12,8 dB hiljempaa, joten auki jää
+    kovin ja ne jotka ovat ``duck_dominance_db``:n sisällä siitä.
+
+    **Lyhyitä vaimennuksia ei tehdä.** Ilman tätä syntyi 20 millisekunnin
+    kuoppia: naksahdus, ei vaimennus.
     """
-    if grid is None or not settings.duck or not grid.speakers:
+    if grid is None or not settings.duck or len(grid.speakers) < 2:
         return {}
     active = np.stack([lane.on for lane in grid.speakers])
     levels = np.stack([lane.level for lane in grid.speakers])
     # Vain äänessä olevat kilpailevat; hiljainen ei voi olla kovin.
     loudest = np.where(active, levels, -300.0).max(axis=0)
     keep = active & (levels >= loudest - settings.duck_dominance_db)
-    return {lane.name: open_windows(keep[i], settings.duck_lookahead,
-                                    settings.duck_hold, settings.duck_min_open)
-            for i, lane in enumerate(grid.speakers)}
+
+    # Auki: ennakko mukana, jotta sanan alku ei katoa.
+    opened = [open_windows(keep[i], settings.duck_lookahead, settings.duck_hold,
+                           settings.duck_min_open)
+              for i in range(len(grid.speakers))]
+    # Peittävä puhe. Ilman ennakkoa, koska tämä ajoittaa laskun: lasku ei saa
+    # alkaa ennen kuin peittävä ääni on tullut. Lopusta leikataan pito ja
+    # paluun mitta pois, jotta myös nousu ehtii tapahtua peittävän äänen alla
+    # eikä sen jälkeisessä hiljaisuudessa.
+    masking = [trim_end(open_windows(keep[i], 0.0, settings.duck_hold,
+                                     settings.duck_min_open),
+                        settings.duck_hold + settings.duck_release)
+               for i in range(len(grid.speakers))]
+
+    out = {}
+    for i, lane in enumerate(grid.speakers):
+        others = np.zeros_like(opened[i])
+        for j in range(len(grid.speakers)):
+            if j != i:
+                others |= masking[j]
+        closed = others & ~opened[i]
+        out[lane.name] = drop_short(closed, settings.duck_min_closed)
+    return out
 
 
 def process(timeline, roles, settings: AudioSettings, grid=None,

@@ -189,7 +189,8 @@ class AppState:
         if "duck" in raw:
             a.duck = bool(raw["duck"])
         for name in ("duck_db", "duck_lookahead", "duck_hold", "duck_min_open",
-                     "duck_fade", "duck_dominance_db"):
+                     "duck_fade", "duck_release", "duck_min_closed",
+                     "duck_dominance_db"):
             if name in raw:
                 a.__dict__[name] = float(raw[name])
         for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
