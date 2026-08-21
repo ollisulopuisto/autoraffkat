@@ -1,6 +1,7 @@
 """Koko putki: XML sisään, päätös, XML ulos. Vaatii ffmpegin."""
 
 import os
+import threading
 import time
 from xml.etree import ElementTree as ET
 
@@ -535,3 +536,32 @@ def test_unknown_language_falls_back(scratch_xml):
     state.load()
     client = TestClient(create_app(state))
     assert client.post("/api/language", json={"language": "kl"}).json()["language"] == "fi"
+
+
+@needs_ffmpeg
+def test_opening_another_xml_does_not_hang(scratch_xml):
+    """«Avaa XML…» jumitti, eikä pyyntö palannut koskaan.
+
+    Lukko otettiin kahdesti: reitti otti sen ja ``load()`` otti sen uudestaan,
+    eikä ``threading.Lock`` ole rekursiivinen. Käyttöliittymässä se näkyi
+    ikuisena «verhokäyrät 0/0» -tilana, koska ``load()`` nollaa edistymisen
+    ennen kuin jää odottamaan lukkoa — eli vika näytti äänen laskennalta
+    vaikka oli avauksessa.
+    """
+    first = scratch_xml("sync.fcpxml")
+    second = scratch_xml("multicam.fcpxml")
+    state = AppState(xml_path=str(first))
+    state.load()
+    client = TestClient(create_app(state))
+
+    answer = {}
+
+    def call():
+        answer["data"] = client.post("/api/open", json={"path": str(second)}).json()
+
+    worker = threading.Thread(target=call, daemon=True)
+    worker.start()
+    worker.join(timeout=30)
+    assert not worker.is_alive(), "avaus jäi jumiin"
+    assert answer["data"]["kind"] == "multicam"
+    assert state.xml_path == str(second)

@@ -69,3 +69,35 @@ def test_without_a_terminal_nothing_is_asked(tmp_path, monkeypatch):
 
 def test_missing_directory_is_not_an_error(tmp_path):
     assert pick.candidates(str(tmp_path / "ei-ole")) == []
+
+
+def test_browser_gets_the_picker_from_the_server(tmp_path, monkeypatch):
+    """Selaimessa ei ole tiedostovalitsinta joka antaisi polun.
+
+    Ilman palvelimen puolen ikkunaa «Avaa XML…» ei tee selaimessa mitään eikä
+    kerro miksi — juuri niin kävi. Ikkuna avautuu lähteen hakemistoon, koska
+    seuraava jakso on käytännössä aina siinä.
+    """
+    from fastapi.testclient import TestClient
+
+    from autoraffkat.server import app as server_app
+    from autoraffkat.server.app import AppState, create_app
+
+    source = _touch(str(tmp_path / "jakso" / "a.fcpxml"))
+    chosen = _touch(str(tmp_path / "jakso" / "b.fcpxml"))
+    asked = {}
+
+    def fake_native(directory="", force=False):
+        asked["directory"] = directory
+        asked["force"] = force
+        return chosen
+
+    monkeypatch.setattr(server_app.pick, "native", fake_native)
+    client = TestClient(create_app(AppState(xml_path=source)))
+    assert client.post("/api/pick").json() == {"path": chosen}
+    assert asked["directory"] == os.path.dirname(source)
+    assert asked["force"] is True
+
+    # Peruttu valinta ei ole virhe eikä saa vaihtaa tiedostoa.
+    monkeypatch.setattr(server_app.pick, "native", lambda *a, **k: None)
+    assert client.post("/api/pick").json() == {"path": ""}

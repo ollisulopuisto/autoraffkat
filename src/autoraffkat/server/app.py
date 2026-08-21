@@ -9,6 +9,7 @@ ffmpegiä.
 from __future__ import annotations
 
 import os
+import sys
 import threading
 import time
 import traceback
@@ -18,10 +19,10 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .. import i18n, probe, project, thumbs
+from .. import i18n, pick, probe, project, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
-from ..decide import decide
+from ..decide import WIDE_LABEL, decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (
     WriteError,
@@ -308,6 +309,10 @@ class AppState:
                           "label": s.label, "angle": s.angle}
                          for s in decision.segments],
             "counts": counts,
+            # Laajan tunnus on aineistoa, ei käyttöliittymän tekstiä: sama
+            # merkkijono päätyy vientiin rooliksi. Käyttöliittymä kääntää sen
+            # näytölle, ja tarvitsee siihen tiedon siitä mikä tunnus se on.
+            "wide_label": WIDE_LABEL,
             "preview": build_preview(grid, decision),
             "ms": round(elapsed, 1),
             "_grid": (grid, program_start, program_end, decision),
@@ -500,10 +505,28 @@ def create_app(state: AppState) -> FastAPI:
         path = str((payload or {}).get("path") or "").strip()
         if not path or not os.path.exists(path):
             raise HTTPException(400, t("read.file_missing", path=path or "(polku puuttuu)"))
-        with state.lock:
-            state.xml_path = os.path.abspath(path)
-            state.load()
+        # Lukko on load():n sisällä, eikä threading.Lock ole rekursiivinen:
+        # sen ottaminen tässä jumitti avauksen ikuisesti. Pyyntö ei palannut,
+        # ja koska load() nollaa edistymisen ennen lukkoa, käyttöliittymä jäi
+        # lukemaan «verhokäyrät 0/0» loputtomiin.
+        state.xml_path = os.path.abspath(path)
+        state.load()
         return _state_json(state)
+
+    @app.post("/api/pick")
+    def pick_xml():
+        """Finderin valintaikkuna palvelimen puolelta.
+
+        Selaimessa ei ole tiedostovalitsinta joka antaisi polun: <input type=
+        "file"> antaa sisällön muttei sijaintia, ja koko työkalu toimii
+        poluilla. Natiivi-ikkunassa tämän hoitaa pywebview, selaimessa ei
+        mikään — siksi ikkuna avataan täällä. Palvelin on aina samalla
+        koneella kuin selain, joten ikkuna aukeaa oikealle näytölle.
+        """
+        if sys.platform != "darwin":
+            return {"path": "", "unavailable": True}
+        start = os.path.dirname(state.xml_path) if state.xml_path else ""
+        return {"path": pick.native(start, force=True) or ""}
 
     @app.post("/api/settings")
     def post_settings(payload: dict):

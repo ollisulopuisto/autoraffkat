@@ -981,6 +981,15 @@ function renderLegend() {
   });
 }
 
+/* Kuvan nimi näytölle. Puhujan nimi on käyttäjän kirjoittama ja kelpaa
+   sellaisenaan, mutta laajan tunnus on aineistoa: sama merkkijono menee
+   vientiin rooliksi, joten sitä ei käännetä siellä missä se syntyy vaan
+   tässä. Palvelin kertoo mikä tunnus on, jottei sitä tarvitse kirjoittaa
+   kahteen kertaan. */
+function shotLabel(label) {
+  return (latest && label === latest.wide_label) ? T('legend.wide') : label;
+}
+
 function renderCuts() {
   const body = document.querySelector('#cut-table tbody');
   body.textContent = '';
@@ -988,19 +997,24 @@ function renderCuts() {
   const start = latest.program.start;
   latest.segments.forEach((seg, i) => {
     const tr = document.createElement('tr');
-    const index = speakerIndex(seg.label);
+    /* Laaja ei ole puhuja, joten sitä ei löydy puhujalistasta: ilman tätä
+       speakerIndex putoaisi nollaan ja laaja saisi ensimmäisen puhujan
+       värin — eri värin kuin sama laaja selitteessä ja palkissa. */
+    const index = seg.label === latest.wide_label ? -1 : speakerIndex(seg.label);
     tr.innerHTML =
       `<td>${i + 1}</td>` +
       `<td>${fmtTime(seg.start - start)}</td>` +
       `<td>${fmtTime(seg.end - start)}</td>` +
       `<td>${seg.duration.toFixed(2)} s</td>` +
-      `<td><span class="swatch" style="background:${colorFor(index)}"></span>${seg.label}</td>`;
+      `<td><span class="swatch" style="background:${colorFor(index)}"></span>`
+      + `${shotLabel(seg.label)}</td>`;
     body.append(tr);
   });
   const counts = Object.entries(latest.counts)
-    .map(([k, v]) => `${k} ${v}`).join(' · ');
-  $('cut-summary').textContent =
-    `${latest.segments.length} kuvaa · ${fmtTime(latest.program.duration)} · ${counts}`;
+    .map(([k, v]) => `${shotLabel(k)} ${v}`).join(' · ');
+  $('cut-summary').textContent = [T('app.shots', { n: latest.segments.length }),
+                                  fmtTime(latest.program.duration),
+                                  counts].filter(Boolean).join(' · ');
   $('counts').textContent = T('app.decision', { ms: latest.ms });
 }
 
@@ -1212,6 +1226,10 @@ function renderStatic() {
   $('export').innerHTML = `${T('app.export')} <kbd>⌘E</kbd>`;
 }
 
+/* Tiedoston avaus. Valitsin on kahdessa paikassa, koska selaimessa ei ole
+   kolmatta: natiivi-ikkunassa sen antaa pywebview, selaimessa palvelin avaa
+   Finderin puolestamme. Ilman jälkimmäistä nappi ei tee selaimessa mitään
+   eikä kerro miksi. */
 async function openXml(path) {
   if (!path && typeof window !== 'undefined' && window.pywebview && window.pywebview.api) {
     try {
@@ -1219,6 +1237,18 @@ async function openXml(path) {
     } catch (err) {
       console.error(err);
     }
+  }
+  if (!path) {
+    try {
+      const res = await fetch('/api/pick', { method: 'POST' });
+      const data = await res.json();
+      if (data.unavailable) { banner(T('app.noPicker'), true); return; }
+      path = data.path || '';
+    } catch (err) {
+      banner(T('app.readFailed', { error: err.message }), true);
+      return;
+    }
+    if (!path) return;          // käyttäjä perui
   }
   if (!path) return;
   const button = $('open');

@@ -8,6 +8,7 @@ ajonaikainen virhe kaatuu tänne eikä käyttäjän ruudulle.
 """
 
 import json
+import re
 import shutil
 import subprocess
 import time
@@ -95,3 +96,48 @@ def test_smoke_catches_an_undefined_variable(tmp_path):
         capture_output=True, text=True, timeout=120)
     assert done.returncode != 0
     assert "puuttuvaMuuttuja" in (done.stderr + done.stdout)
+
+
+def _strings():
+    """`i18n.js`:n avaimet kielittäin. Luetaan tekstinä, jotta tämä toimii
+    ilman nodea: kääntämättömän merkkijonon huomaaminen ei saa olla kiinni
+    siitä onko koneella JavaScript-ajoympäristö."""
+    text = (STATIC / "i18n.js").read_text(encoding="utf-8")
+    out = {}
+    for lang in ("fi", "en"):
+        start = text.index(f"\n  {lang}: {{") + len(f"\n  {lang}: {{")
+        depth, end = 1, start
+        while depth:
+            if text[end] == "{":
+                depth += 1
+            elif text[end] == "}":
+                depth -= 1
+            end += 1
+        out[lang] = set(re.findall(r"^\s*'([^']+)':", text[start:end], re.M))
+    return out
+
+
+def test_every_visible_string_is_translated_in_both_languages():
+    """Kovakoodattu merkkijono näkyy väärällä kielellä eikä kukaan huomaa.
+
+    Leikkauslistassa luki «Laaja» englanninkielisessä käyttöliittymässä, ja
+    kuvien määrä oli suoraan koodissa suomeksi. Tämä ei löydä kovakoodattua
+    tekstiä, mutta löytää sen mitä se voi: avaimen joka on vain toisessa
+    kielessä, ja avaimen jota koodi kysyy muttei ole olemassa.
+    """
+    strings = _strings()
+    assert strings["fi"], "i18n.js:n avaimia ei löytynyt"
+    assert strings["fi"] == strings["en"], (
+        f"vain fi: {sorted(strings['fi'] - strings['en'])}, "
+        f"vain en: {sorted(strings['en'] - strings['fi'])}")
+
+    app = (STATIC / "app.js").read_text(encoding="utf-8")
+    html = (STATIC / "index.html").read_text(encoding="utf-8")
+    used = set(re.findall(r"T\(\s*'([^']+)'", app))
+    used |= set(re.findall(r'data-t="([^"]+)"', html))
+    # Kootut avaimet (`kind.${...}`) eivät näy suoraan, joten ne tarkistetaan
+    # etuliitteen kautta.
+    for prefix in re.findall(r"T\(`([a-z]+)\.\$\{", app):
+        assert any(k.startswith(prefix + ".") for k in strings["fi"]), prefix
+    missing = sorted(used - strings["fi"])
+    assert not missing, f"i18n.js:stä puuttuu: {missing}"
