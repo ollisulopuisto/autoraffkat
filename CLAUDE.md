@@ -52,6 +52,28 @@ Herkkyys on kynnys pohjakohinan yli, joten vahvistus ei siirrä sitä — pohja
 siirtyy saman verran. Vahvistus vaikuttaa vain mikkien keskinäiseen vertailuun
 päällekkäispuheessa. Jos tämän muuttaa, säätimet alkavat vaikuttaa toisiinsa.
 
+## Ääni: analysoi raaka, vie käsitelty
+
+`audio/mix.py` on kolmas hidas kerros. Kaksi asiaa eivät ole neuvoteltavissa:
+
+Alkuperäisen päälle ei kirjoiteta. Verhokäyrän välimuisti avainnetaan
+muokkausajalla, joten päällekirjoitus laskisi käyrän uudestaan — ja uusi
+laskenta osuisi käsiteltyyn ääneen. Analyysi tehdään aina raa'asta: kompressori
+nostaa pohjakohinaa sanojen välissä ja tasoittaa mikkien eron, eli tuhoaa
+tasan ne kaksi asiaa joihin herkkyys ja päällekkäispuheen sääntö nojaavat.
+
+Näytemäärä ei saa muuttua. Vienti viittaa käsiteltyyn tiedostoon samoilla
+ajoilla kuin alkuperäiseen. Tarkistus on kahdessa paikassa, ja poikkeava
+hylätään — käsittely tapahtuu vieraassa ympäristössä eikä sen lupauksiin
+nojata.
+
+Kun assetin `src` ohjataan toisaalle, `<bookmark>` on poistettava. Se on
+macOS:n tiedostoviite joka voittaa `src`:n, ja jättäminen tarkoittaisi että
+Final Cut avaa käsittelemättömän tiedoston kertomatta siitä mitään.
+
+automixer ajetaan prosessirajan takana (`uv run --project`), ei importilla:
+se vaatii Python 3.13:n ja MLX:n ja asentuu nimellä `src.automixer`.
+
 ## Final Cut on ankarampi kuin oma lukija
 
 Vienti on tarkistettava Final Cutin omaa DTD:tä vasten

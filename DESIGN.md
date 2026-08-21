@@ -231,6 +231,65 @@ leikkauksia olisi enemmän kuin kehyksiä — mitä päätöskerros ei tuota, mu
 mitä ei saa myöskään kirjoittaa rikkinäisenä — loput pudotetaan ja edellinen
 kuva jatkuu niiden yli.
 
+## Ääni
+
+Kolmas hidas kerros, `audio/mix.py`. Se on **valinnainen** ja **prosessirajan
+takana**: automixer vaatii Python 3.13:n ja MLX:n ja asentuu nimellä
+`src.automixer`, eikä leikkaustyökalu saa periä mitään noista. Rajapinta on
+kapea — "anna näistä tiedostoista käsitellyt, saman pituiset kopiot" — joten
+`uv run --project` maksaa vähemmän kuin yhteinen ympäristö.
+
+### Miksi analyysi ajetaan raa'asta äänestä
+
+Kompressori tekee kaksi asiaa, jotka molemmat huonontavat päätöstä. Se nostaa
+pohjakohinaa sanojen välissä, ja herkkyys on kynnys **pohjan yli**. Se
+tasoittaa mikkien keskinäisen eron, ja päällekkäispuheen sääntö *vahvempi
+voittaa* vertaa mikkejä toisiinsa. Käsitelty ääni on siis parempi kuunnella ja
+huonompi mitata, joten kerrokset erotetaan: analyysi lukee alkuperäisen, vienti
+viittaa käsiteltyyn.
+
+### Normalisointi ennen kompressointia
+
+Kompressorin kynnykset ovat absoluuttisia desibelejä. Käsittelemätön
+podcast-mikki on helposti −40 LUFS, jolloin −12 dB:n kynnys ei ylity
+kertaakaan ja koko ketju on nolla-operaatio. Siksi jokainen mikki mitataan ja
+nostetaan ensin samaan äänekkyyteen.
+
+Tavoite on **stemin** eikä ohjelman: −20 LUFS, ei −16. Yksi puhuja on äänessä
+kerrallaan, joten summa osuu lähelle samaa lukemaa, ja lopullinen taso
+asetetaan Final Cutissa. Ohjelman tavoitteen antaminen jokaiselle raidalle
+erikseen tuottaisi summassa liian kovan.
+
+### Näytemäärä on synkan koko lupaus
+
+Vienti viittaa käsiteltyyn tiedostoon **samoilla ajoilla** kuin alkuperäiseen.
+Yksikin lisätty tai pudotettu näyte siirtää kuvan ja äänen erilleen, eikä
+virhettä huomaa ennen kuin lopputulos on koossa. Siksi pituus tarkistetaan
+työprosessissa näytetaulukoista ja vielä uudestaan ffprobella, ja poikkeava
+hylätään käyttämättömänä.
+
+Tästä seuraa myös se, mitä automixerin ketjusta jätetään pois: **mainoskatko**
+siirtää raitaa ja **summaus** veisi puhujien erottelun ja siten
+`dialogue.<puhuja>`-roolit. Kumpikaan ei kuulu tänne.
+
+### Ohjaus tapahtuu resurssitasolla
+
+Monikameraviennissä `<resources>` kopioidaan lähteestä, joten käsitelty ääni
+ohjataan paikalleen vaihtamalla assetin `media-rep src`. Kulmat ja `mc-source`t
+viittaavat assettiin, joten leikkauslistaan ei tarvitse koskea.
+
+`<bookmark>` on samalla **poistettava**. Se on macOS:n tiedostoviite, joka
+voittaa `src`:n: jättäminen tarkoittaisi että Final Cut avaa alkuperäisen
+käsittelemättömän tiedoston kertomatta siitä mitään.
+
+### Tilaääni on liitetty klippi, ei kulma
+
+Kuvakulma vaihtuu joka leikkauksessa, tilaäänen on jatkuttava yli niiden.
+Siksi se ei ole `mc-source` vaan `<asset-clip>` lanella −1 omalla roolillaan,
+liitettynä ensimmäiseen klippiin — sama rakenne kuin littanan mikeillä.
+Kameran ääni puretaan ensin ffmpegillä välimuistiin, koska soundfile ei avaa
+mp4:ää.
+
 ## Käyttöliittymä
 
 FastAPI ja tavallinen JavaScript ilman käännösvaihetta. Selain pitää tilaa vain

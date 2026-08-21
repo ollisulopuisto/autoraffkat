@@ -44,6 +44,23 @@ const OVERLAP_KNOBS = [
   { key: 'dominance_db', label: 'Vaadittu ero', min: 0, max: 24, step: 0.5, unit: ' dB' },
 ];
 
+const AUDIO_KNOBS = [
+  { key: 'target_lufs', label: 'Tavoiteäänekkyys', min: -32, max: -10, step: 0.5,
+    unit: ' LUFS' },
+  { key: 'high_pass_hz', label: 'Ylipäästö', min: 0, max: 200, step: 5, unit: ' Hz',
+    zero: 'ei käytössä' },
+  { key: 'peak_threshold_db', label: 'Huippujen kynnys', min: -30, max: 0, step: 0.5,
+    unit: ' dB' },
+  { key: 'leveler_threshold_db', label: 'Tasaajan kynnys', min: -36, max: 0, step: 0.5,
+    unit: ' dB' },
+  { key: 'gain_db', label: 'Trimmi', min: -12, max: 12, step: 0.5, unit: ' dB' },
+];
+
+const ROOM_KNOBS = [
+  { key: 'room_db', label: 'Tilaäänen taso', min: -40, max: 0, step: 1,
+    unit: ' dB puhetta hiljempaa' },
+];
+
 const OVERLAP_RULES = [
   ['wide', 'Laaja', 'Molemmat äänessä, mennään laajaan.'],
   ['hold', 'Pidä nykyinen', 'Ei leikata mihinkään.'],
@@ -55,6 +72,7 @@ let latest = null;              // viimeisin laskettu tulos
 let pending = null;             // ajastin
 let inflight = null;            // AbortController
 let progressTimer = null;
+let mixTimer = null;
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement)
@@ -274,9 +292,153 @@ function renderGlobals() {
     }));
   });
 
+  renderAudio();
+
   const title = $('project-title');
   title.value = state.globals.project_name;
   title.oninput = () => { state.globals.project_name = title.value; schedule(); };
+}
+
+/* Äänenkäsittely. Käsittely itsessään on hidas ja tapahtuu erillisestä
+   painikkeesta: säätimien liikuttelu ei saa käynnistää minuutteja kestävää
+   ajoa. Valmiit tiedostot jäävät levylle, joten vienti käyttää niitä. */
+function renderAudio() {
+  const host = $('audio-panel');
+  host.textContent = '';
+  const audio = state.audio;
+  const info = state.mix || {};
+
+  if (!info.available) {
+    const note = document.createElement('p');
+    note.className = 'muted small';
+    note.textContent = 'automixeria ei löydy, joten ääni viedään sellaisenaan. '
+      + 'Asenna se autoraffkatin naapuriksi tai aseta AUTORAFFKAT_AUTOMIXER.';
+    host.append(note);
+    return;
+  }
+
+  const toggle = document.createElement('label');
+  toggle.className = 'check';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = !!audio.enabled;
+  box.addEventListener('change', () => {
+    audio.enabled = box.checked;
+    renderAudio();
+    schedule(0);
+  });
+  toggle.append(box, Object.assign(document.createElement('span'),
+    { textContent: 'Käsittele mikit automixerilla' }));
+  host.append(toggle);
+
+  if (!audio.enabled) return;
+
+  AUDIO_KNOBS.forEach((spec) => {
+    host.append(knob(spec, audio[spec.key], (v) => {
+      audio[spec.key] = v;
+      schedule();
+    }));
+  });
+
+  const ess = document.createElement('label');
+  ess.className = 'check';
+  const essBox = document.createElement('input');
+  essBox.type = 'checkbox';
+  essBox.checked = !!audio.de_ess;
+  essBox.addEventListener('change', () => { audio.de_ess = essBox.checked; schedule(); });
+  ess.append(essBox, Object.assign(document.createElement('span'),
+    { textContent: 'Sihinänvaimennus' }));
+  host.append(ess);
+
+  /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana ovat
+     vain raidat joissa on ääntä. */
+  const field = document.createElement('label');
+  field.className = 'field';
+  field.append(Object.assign(document.createElement('span'),
+    { textContent: 'Tilaääni' }));
+  const select = document.createElement('select');
+  const none = document.createElement('option');
+  none.value = ''; none.textContent = 'ei käytössä';
+  select.append(none);
+  state.tracks.filter((t) => t.has_audio && t.has_video).forEach((t) => {
+    const opt = document.createElement('option');
+    opt.value = t.key; opt.textContent = t.name;
+    if (audio.room_track === t.key) opt.selected = true;
+    select.append(opt);
+  });
+  select.addEventListener('change', () => {
+    audio.room_track = select.value;
+    renderAudio();
+    schedule(0);
+  });
+  field.append(select);
+  host.append(field);
+
+  if (audio.room_track) {
+    ROOM_KNOBS.forEach((spec) => {
+      host.append(knob(spec, audio[spec.key], (v) => {
+        audio[spec.key] = v;
+        schedule();
+      }));
+    });
+  }
+
+  const run = document.createElement('button');
+  run.className = 'ghost';
+  run.id = 'mix-run';
+  const busy = info.progress && info.progress.running;
+  run.disabled = !!busy;
+  run.textContent = busy ? 'käsitellään…' : 'Käsittele ääni';
+  run.addEventListener('click', runMix);
+  host.append(run);
+
+  const note = document.createElement('p');
+  note.className = 'muted small';
+  if (busy) {
+    const p = info.progress;
+    note.textContent = `${p.done}/${p.total}${p.current ? ' · ' + p.current : ''}`;
+  } else if (info.errors && info.errors.length) {
+    note.className = 'warn';
+    note.textContent = info.errors.join('\n');
+  } else if (info.ready) {
+    note.textContent = `${info.ready} mikkitiedostoa valmiina`
+      + (info.room ? ` · tilaääni ${info.room}` : '')
+      + '. Vienti käyttää niitä.';
+  } else {
+    note.textContent = 'Alkuperäisiin tiedostoihin ei kosketa; '
+      + 'käsitelty ääni kirjoitetaan [mix]-kopioiksi niiden viereen.';
+  }
+  host.append(note);
+}
+
+/* Käsittelyn käynnistys ja edistymisen seuranta. */
+async function runMix() {
+  try {
+    const response = await fetch('/api/mix', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload()),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      banner(data.detail || 'Äänen käsittely ei käynnistynyt', true);
+      return;
+    }
+    banner('');
+    watchMix();
+  } catch (err) {
+    banner('Äänen käsittely epäonnistui: ' + err.message, true);
+  }
+}
+
+function watchMix() {
+  clearInterval(mixTimer);
+  mixTimer = setInterval(async () => {
+    const data = await (await fetch('/api/state')).json();
+    state.mix = data.mix;
+    renderAudio();
+    if (!data.mix.progress.running) clearInterval(mixTimer);
+  }, 700);
 }
 
 /* ------------------------------------------------------------ esikatselu */
@@ -394,7 +556,7 @@ function renderCuts() {
 function payload() {
   const tracks = {};
   state.tracks.forEach((m) => { tracks[m.key] = m.config; });
-  return { tracks, globals: state.globals };
+  return { tracks, globals: state.globals, audio: state.audio };
 }
 
 /* Niputus: säätimen liike ei lähetä pyyntöä heti. Roolin vaihto kutsutaan
@@ -453,7 +615,9 @@ async function exportXml() {
     });
     const data = await response.json();
     if (response.ok && data.ok) {
-      $('status').textContent = `${data.cuts} kuvaa → ${data.path.split('/').pop()}`;
+      const mixed = data.mixed ? ` · ${data.mixed} käsiteltyä ääntä` : '';
+      $('status').textContent =
+        `${data.cuts} kuvaa → ${data.path.split('/').pop()}${mixed}`;
       banner('');
     } else {
       $('status').textContent = '';

@@ -12,7 +12,7 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from .model import Globals, TrackConfig
+from .model import AudioSettings, Globals, TrackConfig
 
 FORMAT_VERSION = 1
 
@@ -66,6 +66,7 @@ class ProjectSettings:
 
     tracks: dict[str, TrackConfig] = field(default_factory=dict)
     globals: Globals = field(default_factory=Globals)
+    audio: AudioSettings = field(default_factory=AudioSettings)
 
     def config_for(self, key: str) -> TrackConfig:
         """Raidan asetukset, oletuksilla luotuna jos raitaa ei ole ennen nähty."""
@@ -79,6 +80,7 @@ class ProjectSettings:
         return {
             "version": FORMAT_VERSION,
             "globals": self.globals.to_json(),
+            "audio": self.audio.to_json(),
             "tracks": {k: v.to_json() for k, v in self.tracks.items()},
         }
 
@@ -87,7 +89,9 @@ class ProjectSettings:
         tracks = {k: TrackConfig.from_json(v)
                   for k, v in (data.get("tracks") or {}).items()
                   if isinstance(v, dict)}
-        return cls(tracks=tracks, globals=Globals.from_json(data.get("globals") or {}))
+        return cls(tracks=tracks,
+                   globals=Globals.from_json(data.get("globals") or {}),
+                   audio=AudioSettings.from_json(data.get("audio") or {}))
 
 
 def find_previous(xml_path: str) -> str | None:

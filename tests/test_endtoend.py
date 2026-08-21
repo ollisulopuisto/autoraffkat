@@ -302,3 +302,53 @@ def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
     state.load()
     assert state.settings.tracks["WIDE"].role == "wide"
     assert state.inherited_from == ""
+
+
+def test_audio_settings_survive_a_round_trip(scratch_xml):
+    """Ääniasetukset tallentuvat XML:n viereen kuten muutkin."""
+    from autoraffkat import project
+    source = scratch_xml("multicam.fcpxml")
+    state = AppState(xml_path=str(source))
+    state.load()
+    client = TestClient(create_app(state))
+    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+               "globals": {},
+               "audio": {"enabled": True, "target_lufs": -18.0,
+                         "room_track": "WIDE", "room_db": -20.0}}
+    client.post("/api/settings", json=payload)
+    saved = project.load(str(source)).audio
+    assert saved.enabled and saved.target_lufs == -18.0
+    assert saved.room_track == "WIDE" and saved.room_db == -20.0
+
+
+def test_unknown_room_track_is_refused(scratch_xml):
+    """Tuntematon raita jäisi hiljaa pois; se nollataan heti."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    client.post("/api/settings", json={
+        "tracks": {}, "globals": {},
+        "audio": {"enabled": True, "room_track": "EI OLE"}})
+    assert state.settings.audio.room_track == ""
+
+
+def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
+    """Puuttuvaan [mix]-tiedostoon ei viitata, vaikka se olisi kirjattu."""
+    from autoraffkat.audio import mix as mixer
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+    state.mix_result = mixer.MixResult(
+        replacements={"olli a Track1.wav": "/ei/ole [mix].wav"})
+    state.settings.audio.enabled = True
+
+    client = TestClient(create_app(state))
+    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+               "globals": {}, "audio": {"enabled": True}}
+    result = client.post("/api/export", json=payload).json()
+    assert result["ok"] and result["mixed"] == 0
+    assert "%5Bmix%5D" not in ET.tostring(ET.parse(result["path"]).getroot(),
+                                          encoding="unicode")

@@ -14,6 +14,9 @@ from fractions import Fraction
 from urllib.parse import quote
 from xml.sax.saxutils import quoteattr
 
+from dataclasses import replace
+
+from ..audio.mix import ROOM_ROLE
 from ..model import MediaItem, Segment
 from ..timeline import (ZERO, FPS_LABELS, format_time, frames_str, fps_of,
                         to_frames)
@@ -81,15 +84,19 @@ class _Formats:
         return fid
 
 
-def _asset_lines(item: MediaItem, res_id: str, format_id: str | None) -> list[str]:
+def _asset_lines(item: MediaItem, res_id: str, format_id: str | None,
+                 path: str = "", name: str = "") -> list[str]:
     """Yhden median ``<asset>``-resurssi ``<media-rep>``-lapsineen.
 
     Assetin ``start`` ja ``duration`` ovat lähdemateriaalin omat, eivät
     käytetyn palan: leikkaus rajataan vasta ``<asset-clip>``-tasolla.
+
+    ``path`` korvaa lähdetiedoston. Käsitelty ääni on näytteelleen saman
+    pituinen kuin alkuperäinen, joten ajat kelpaavat sellaisenaan.
     """
     attrs = [
         f'id="{res_id}"',
-        f"name={quoteattr(item.name or os.path.basename(item.path))}",
+        f"name={quoteattr(name or item.name or os.path.basename(item.path))}",
         f'start="{format_time(item.asset_start)}"',
         f'duration="{format_time(item.asset_duration)}"',
     ]
@@ -105,8 +112,8 @@ def _asset_lines(item: MediaItem, res_id: str, format_id: str | None) -> list[st
         if format_id:
             attrs.append(f'format="{format_id}"')
     lines = ["    <asset " + " ".join(attrs) + ">"]
-    if item.src or item.path:
-        src = item.src or file_url(item.path)
+    src = file_url(path) if path else (item.src or file_url(item.path))
+    if src:
         lines.append(f'      <media-rep kind="original-media" src={quoteattr(src)}/>')
     lines.append("    </asset>")
     return lines
@@ -152,12 +159,20 @@ def build_fcpxml(
     program_end: Fraction,
     project_name: str = "Raakaleikkaus",
     version: str = "1.10",
+    replacements: dict[str, str] | None = None,
+    room: list[tuple[str, str]] | None = None,
 ) -> str:
     """Rakentaa FCPXML-merkkijonon.
 
     ``mic_tracks`` on lista pareja (median key, puhujan nimi) siinä
     järjestyksessä, jossa mikit halutaan laneille -1, -2, ...
+
+    ``replacements`` ohjaa median käsiteltyyn tiedostoon, ``room`` liittää
+    tilaäänen omalle lanelleen. Molemmat ovat saman pituisia kuin lähteensä,
+    joten aikoihin ei kosketa.
     """
+    replacements = replacements or {}
+    room = room or []
     if not segments:
         raise WriteError("Leikkauslista on tyhjä.")
 
@@ -204,7 +219,20 @@ def build_fcpxml(
             fmt_id = formats.get(item.width or seq_width,
                                  item.height or seq_height, fd, next_id)
         res_ids[key] = next_id()
-        asset_lines += _asset_lines(item, res_ids[key], fmt_id)
+        asset_lines += _asset_lines(item, res_ids[key], fmt_id,
+                                    replacements.get(key, ""))
+
+    # Tilaääni on oma assettinsa, vaikka lähde olisi sama kamera jota
+    # käytetään kuvaan: eri tiedosto, eri rooli, eri lane.
+    room_ids: dict[str, str] = {}
+    for key, path in room:
+        item = media_by_key.get(key)
+        if item is None:
+            continue
+        room_ids[key] = next_id()
+        asset_lines += _asset_lines(
+            _audio_only(item), room_ids[key], None, path,
+            f"{item.name} tilaääni")
 
     # ---------------------------------------------------------- spine
     body: list[str] = []
@@ -235,9 +263,13 @@ def build_fcpxml(
             attrs.append(f'srcEnable="{src_enable}"')
         clip = "            <asset-clip " + " ".join(attrs)
 
-        if index == 0 and mic_tracks:
+        if index == 0 and (mic_tracks or room_ids):
             body.append(clip + ">")
-            body += _mic_lines(media_by_key, mic_tracks, res_ids, frame_duration,
+            attached = [(k, f"dialogue.{sanitize_role(name)}", res_ids)
+                        for k, name in mic_tracks]
+            attached += [(k, ROOM_ROLE, room_ids) for k, _ in room
+                         if k in room_ids]
+            body += _mic_lines(media_by_key, attached, frame_duration,
                                program_start, program_end, first_clip_start_frames)
             body.append("            </asset-clip>")
         else:
@@ -269,9 +301,23 @@ def build_fcpxml(
     return "\n".join(out) + "\n"
 
 
-def _mic_lines(media_by_key, mic_tracks, res_ids, frame_duration,
+def _audio_only(item: MediaItem) -> MediaItem:
+    """Kopio mediasta pelkkänä äänenä.
+
+    Tilaääni irrotetaan kameratiedostosta omaksi WAViksi, joten sen assetissa
+    ei saa olla kuvaa eikä formaattia — muuten Final Cut etsii kuvaraitaa
+    jota tiedostossa ei ole.
+    """
+    return replace(item, has_video=False, video_sources=0, format_id="",
+                   width=0, height=0, frame_duration=None,
+                   audio_channels=max(1, item.audio_channels), placements=item.placements)
+
+
+def _mic_lines(media_by_key, attached, frame_duration,
                program_start, program_end, parent_start_frames) -> list[str]:
-    """Mikit liitettyinä klippeinä ensimmäiseen spine-klippiin.
+    """Liitetyt ääniklipit ensimmäiseen spine-klippiin.
+
+    ``attached`` on lista kolmikoita (median key, rooli, resurssi-id-taulukko).
 
     Liitetyn klipin ``offset`` on isännän paikallisessa aikapohjassa, jonka
     nollakohta on isännän ``start``. Siksi ohjelman alkuun osuva mikki saa
@@ -279,13 +325,12 @@ def _mic_lines(media_by_key, mic_tracks, res_ids, frame_duration,
     """
     lines: list[str] = []
     lane = 0
-    for key, speaker in mic_tracks:
+    for key, role, res_ids in attached:
         item = media_by_key.get(key)
-        if item is None or not item.has_audio:
+        if item is None or not item.has_audio or key not in res_ids:
             continue
         lane -= 1
-        role = f"dialogue.{sanitize_role(speaker)}"
-        src_enable = ' srcEnable="audio"' if item.has_video else ""
+        src_enable = ""
         for placement in item.placements:
             clip_start = max(placement.offset, program_start)
             clip_end = min(placement.end, program_end)
@@ -373,11 +418,60 @@ def _mc_sources(video_angle: str, audio_angles: list[tuple[str, str]],
     return lines
 
 
-def _source_resources(path: str) -> tuple[str, str, str]:
-    """Lähde-XML:n ``<resources>`` sellaisenaan, versio ja sekvenssin formaatti.
+def _redirect_asset(asset, path: str) -> None:
+    """Ohjaa assetin toiseen tiedostoon.
+
+    ``<bookmark>`` on **poistettava**. Se on macOS:n tiedostoviite, joka
+    osoittaa alkuperäiseen tiedostoon ja voittaa ``src``:n: ilman poistoa
+    Final Cut käyttäisi käsittelemätöntä ääntä eikä kertoisi siitä mitään.
+    """
+    rep = asset.find("media-rep")
+    if rep is None:
+        return
+    rep.set("src", file_url(path))
+    for bookmark in rep.findall("bookmark"):
+        rep.remove(bookmark)
+
+
+def _room_asset(source, res_id: str, path: str):
+    """Tilaäänestä oma ``<asset>`` kameran assetin pohjalta.
+
+    Ajat peritään lähteestä, koska käsitelty tiedosto on näytteelleen saman
+    pituinen. Kuvaan liittyvät tiedot jätetään pois: tilaääni on WAV.
+    """
+    from xml.etree import ElementTree as ET
+
+    asset = ET.Element("asset")
+    asset.set("id", res_id)
+    asset.set("name", (source.get("name", "") or "Tilaääni") + " tilaääni")
+    for name in ("start", "duration", "audioSources", "audioChannels", "audioRate"):
+        if source.get(name):
+            asset.set(name, source.get(name))
+    asset.set("hasAudio", "1")
+    asset.set("audioSources", source.get("audioSources", "1"))
+    ET.SubElement(asset, "media-rep", {"kind": "original-media",
+                                       "src": file_url(path)})
+    return asset
+
+
+def _next_resource_id(resources) -> str:
+    """Vapaa resurssi-id kopioidusta lohkosta."""
+    used = {child.get("id", "") for child in resources.iter()}
+    index = 1
+    while f"a{index}" in used:
+        index += 1
+    return f"a{index}"
+
+
+def _source_resources(path: str, redirects: dict[str, str] | None = None,
+                      room: list[tuple[str, str]] | None = None
+                      ) -> tuple[str, str, str, dict[str, str]]:
+    """Lähde-XML:n ``<resources>``, versio, sekvenssin formaatti ja tilaääni-id:t.
 
     Multicam-määrittelyä ei rakenneta uudestaan vaan se kopioidaan: kulmien
     angleID:t ja assettien synkkaus ovat juuri se osa, jota ei saa muuttaa.
+    Käsitelty ääni ohjataan paikalleen tätä kopiota muokkaamalla, jolloin
+    kaikki muu säilyy koskemattomana.
     """
     from xml.etree import ElementTree as ET
 
@@ -388,8 +482,62 @@ def _source_resources(path: str) -> tuple[str, str, str]:
         raise WriteError("Lähde-XML:stä ei löydy <resources>-lohkoa.")
     sequence = root.find(".//sequence")
     seq_format = sequence.get("format", "") if sequence is not None else ""
+
+    by_id = {a.get("id", ""): a for a in resources.iter("asset")}
+    for asset_id, target in (redirects or {}).items():
+        asset = by_id.get(asset_id)
+        if asset is not None:
+            _redirect_asset(asset, target)
+
+    room_ids: dict[str, str] = {}
+    for asset_id, target in (room or []):
+        source = by_id.get(asset_id)
+        if source is None:
+            continue
+        res_id = _next_resource_id(resources)
+        resources.append(_room_asset(source, res_id, target))
+        room_ids[asset_id] = res_id
+
     body = ET.tostring(resources, encoding="unicode")
-    return body, root.get("version", "1.10"), seq_format
+    return body, root.get("version", "1.10"), seq_format, room_ids
+
+
+def _room_lines(timeline, room, room_ids, frame_duration, program_start,
+                program_end, parent_start_frames) -> list[str]:
+    """Tilaääni liitettynä klippinä. Sama aikasääntö kuin littanan mikeillä.
+
+    Tilaääni ei ole kulma vaan oma tiedostonsa: kuvakulma vaihtuu joka
+    leikkauksessa, tilaäänen on jatkuttava yli niiden.
+    """
+    lines: list[str] = []
+    by_key = timeline.media_by_key()
+    for key, _ in room:
+        item = by_key.get(key)
+        if item is None or item.asset_id not in room_ids:
+            continue
+        # Kaikki osat ovat samaa tilaääntä eivätkä mene päällekkäin, joten ne
+        # kuuluvat samalle lanelle. Oma lane per osa näyttäisi Final Cutissa
+        # monelta eri raidalta.
+        lane = -1
+        res_id = room_ids[item.asset_id]
+        for placement in item.placements:
+            clip_start = max(placement.offset, program_start)
+            clip_end = min(placement.end, program_end)
+            if clip_end <= clip_start:
+                continue
+            off = to_frames(clip_start - program_start, frame_duration)
+            dur = to_frames(clip_end - clip_start, frame_duration)
+            if dur <= 0:
+                continue
+            src = to_frames(placement.source_at(clip_start), frame_duration)
+            lines.append(
+                f'              <asset-clip ref="{res_id}" lane="{lane}" '
+                f'offset="{frames_str(parent_start_frames + off, frame_duration)}" '
+                f"name={quoteattr(item.name + ' tilaääni')} "
+                f'start="{frames_str(src, frame_duration)}" '
+                f'duration="{frames_str(dur, frame_duration)}" '
+                f'audioRole={quoteattr(ROOM_ROLE)}/>')
+    return lines
 
 
 def build_multicam_fcpxml(
@@ -399,6 +547,8 @@ def build_multicam_fcpxml(
     program_start: Fraction,
     program_end: Fraction,
     project_name: str = "Raakaleikkaus",
+    replacements: dict[str, str] | None = None,
+    room: list[tuple[str, str]] | None = None,
 ) -> str:
     """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
 
@@ -423,9 +573,19 @@ def build_multicam_fcpxml(
         raise WriteError("Leikkauskohdat kutistuivat tyhjiksi.")
 
     angles_of = {t.key: t.angle_ids for t in timeline.tracks}
-    resources, version, seq_format = _source_resources(timeline.source_path)
+
+    # Käsitelty ääni ohjataan resurssitasolla: kulmat ja mc-sourcet viittaavat
+    # assettiin, joten yksi src riittää eikä leikkauslistaan tarvitse koskea.
+    by_key = timeline.media_by_key()
+    redirects = {by_key[k].asset_id: path
+                 for k, path in (replacements or {}).items() if k in by_key}
+    room_jobs = [(by_key[k].asset_id, path)
+                 for k, path in (room or []) if k in by_key]
+    resources, version, seq_format, room_ids = _source_resources(
+        timeline.source_path, redirects, room_jobs)
 
     body: list[str] = []
+    attached_room = False
     for index, (seg, a, b) in enumerate(spans):
         at = program_start + frame_duration * a
         mc = timeline.multicam_at(at)
@@ -453,6 +613,11 @@ def build_multicam_fcpxml(
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
         sources = _mc_sources(video_angle, audio_angles, mc.angle_roles)
+        if not attached_room and room_ids:
+            attached_room = True
+            sources = sources + _room_lines(
+                timeline, room or [], room_ids, frame_duration,
+                program_start, program_end, to_frames(mc.source_at(at), frame_duration))
         if sources:
             body.append("            <mc-clip " + " ".join(attrs) + ">")
             body += sources

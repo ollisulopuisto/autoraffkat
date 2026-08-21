@@ -209,3 +209,85 @@ def test_multicam_gap_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
                                 Fraction(0), Fraction(44), "Aukolla")
     assert "<gap" in xml
     validate_fcpxml(xml, "gap.fcpxml")
+
+
+# ------------------------------------------------------- käsitelty ääni
+
+
+def test_replacement_redirects_and_drops_the_bookmark():
+    """``<bookmark>`` voittaa ``src``:n, joten sen on lähdettävä.
+
+    Ilman poistoa Final Cut avaisi alkuperäisen käsittelemättömän tiedoston
+    eikä kertoisi siitä mitään.
+    """
+    from autoraffkat.fcpxml.write import _redirect_asset
+    asset = ET.fromstring(
+        '<asset id="r3"><media-rep kind="original-media" src="file:///a/vanha.wav">'
+        '<bookmark>Ym9va21hcms=</bookmark></media-rep></asset>')
+    _redirect_asset(asset, "/a/uusi [mix].wav")
+    rep = asset.find("media-rep")
+    assert rep.get("src") == "file:///a/uusi%20%5Bmix%5D.wav"
+    assert rep.find("bookmark") is None
+
+
+def test_multicam_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    replacements = {k: f"/mix/{k[:-4]} [mix].wav"
+                    for k in tl.media_by_key() if k.endswith(".wav")}
+    xml = build_multicam_fcpxml(
+        tl, [Segment("WIDE", "Laaja", 0.0, 36.0)],
+        [("olli Track1", "Olli")], Fraction(0), Fraction(36), "Käsitelty",
+        replacements=replacements)
+    assert xml.count("%5Bmix%5D.wav") == len(replacements)
+    # Kameroihin ei kosketa: kuva tulee yhä alkuperäisistä tiedostoista.
+    assert "WIDE 01.mp4" in xml
+    validate_fcpxml(xml, "mixed.fcpxml")
+
+
+def test_multicam_room_tone_is_one_lane_with_its_own_role(fixture_dir,
+                                                          validate_fcpxml):
+    """Tilaääni ei ole kulma vaan liitetty klippi: kuva vaihtuu, ääni jatkuu."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    room = [(k, f"/mix/{k[:-4]} [room].wav")
+            for k in tl.media_by_key() if k.startswith("WIDE")]
+    xml = build_multicam_fcpxml(
+        tl, [Segment("CLOSE_A", "Olli", 0.0, 18.0),
+             Segment("CLOSE_B", "Vieras", 18.0, 36.0)],
+        [("olli Track1", "Olli")], Fraction(0), Fraction(36), "Tilaäänellä",
+        room=room)
+    root = ET.fromstring(xml)
+    clips = root.findall(".//mc-clip/asset-clip")
+    assert len(clips) == len(room)
+    # Osat eivät mene päällekkäin, joten ne kuuluvat samalle lanelle.
+    assert {c.get("lane") for c in clips} == {"-1"}
+    assert {c.get("audioRole") for c in clips} == {"effects.Tilaääni"}
+    # Molemmat liitetään ensimmäiseen klippiin, ei omiinsa.
+    hosts = [c for c in root.findall(".//spine/mc-clip") if c.find("asset-clip") is not None]
+    assert len(hosts) == 1
+    validate_fcpxml(xml, "room.fcpxml")
+
+
+def test_room_asset_has_no_video(fixture_dir):
+    """Tilaääni on WAV, joten sen assetissa ei saa luvata kuvaa."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    room = [(k, f"/mix/{k[:-4]} [room].wav")
+            for k in tl.media_by_key() if k.startswith("WIDE 01")]
+    xml = build_multicam_fcpxml(
+        tl, [Segment("WIDE", "Laaja", 0.0, 36.0)], [], Fraction(0), Fraction(36),
+        "Tilaääni", room=room)
+    asset = next(a for a in ET.fromstring(xml).iter("asset")
+                 if (a.get("name") or "").endswith("tilaääni"))
+    assert asset.get("hasAudio") == "1"
+    assert asset.get("hasVideo") is None and asset.get("format") is None
+
+
+def test_flat_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
+    tl = read_fcpxml(str(fixture_dir / "sync.fcpxml"))
+    by_key = {m.key: m for m in tl.media}
+    xml = build_fcpxml(
+        by_key, [Segment("WIDE.mp4", "Laaja", 0.0, 20.0)],
+        [("MIC_A.wav", "Olli")], tl.frame_duration, Fraction(0), Fraction(20),
+        "Käsitelty", replacements={"MIC_A.wav": "/mix/MIC_A [mix].wav"})
+    assert "MIC_A%20%5Bmix%5D.wav" in xml
+    assert "WIDE.mp4" in xml
+    validate_fcpxml(xml, "flat-mixed.fcpxml")

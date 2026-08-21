@@ -132,6 +132,7 @@ src/autoraffkat/
   fcpxml/read.py     sync-clip, spine ja monikamera sisään
   fcpxml/write.py    uusi projekti ulos, littana tai monikamerana
   audio/envelope.py  ffmpeg + RMS, levyvälimuisti          HIDAS
+  audio/mix.py       automixerin kanavanauha, valinnainen  HIDAS
   analysis.py        verhokäyrät aikajanan ruudukolle
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
   preview.py         palkin tiivistys selaimelle
@@ -189,6 +190,36 @@ mikit yhtenäisinä liitettyinä klippeinä laneilla -1, -2, … omilla
 `dialogue.<puhuja>`-rooleillaan. Leikkauskohdat kvantisoidaan kehyksiin niin,
 ettei aikajanalle jää aukkoja eikä päällekkäisyyksiä. Kaikki aika kulkee
 `Fraction`ina, koska liukulukujen pyöristysvirhe kertyy tuhansien kehysten yli.
+
+## Ääni
+
+Käsittelemätön mikki on tyypillisesti −40 LUFS, eikä sitä kannata viedä
+sellaisenaan. Jos [automixer](../automixer) löytyy naapurista (tai
+`AUTORAFFKAT_AUTOMIXER` osoittaa siihen), mikit voi ajaa sen kanavanauhan läpi
+painikkeesta «Käsittele ääni».
+
+Ketju: ylipäästö → normalisointi tavoiteäänekkyyteen → huippujen kompressointi
+→ tasaus → sihinänvaimennus → trimmi → rajoitin. Normalisointi on ensimmäisenä
+tarkoituksella: ilman sitä kompressorin kynnykset eivät ylity kertaakaan.
+
+Kaksi sääntöä pitävät kuvan ja äänen yhdessä:
+
+* **Alkuperäiseen ei kosketa.** Käsitelty ääni menee viereen nimellä
+`mikki [mix].wav`, ja vienti viittaa siihen.
+* **Näytemäärä ei muutu.** Se tarkistetaan kahdesti, ja poikkeava hylätään.
+
+Analyysi ajetaan aina raa'asta äänestä, koska kompressori nostaa pohjakohinaa
+ja tasoittaa mikkien eron — juuri ne kaksi asiaa, joihin herkkyys ja
+päällekkäispuheen sääntö nojaavat.
+
+**Tilaääni**: yksi kameraraita voidaan purkaa omaksi ääniraidakseen ja liittää
+leikkaukseen roolilla `effects.Tilaääni` asetetun verran puhetta hiljemmalle.
+Se ei ole kulma vaan liitetty klippi, joten se jatkuu leikkausten yli.
+
+automixer on **valinnainen**. Ilman sitä ääni viedään sellaisenaan, ja kaikki
+muu toimii kuten ennen. Se ajetaan omassa ympäristössään (`uv run --project`),
+koska se vaatii Python 3.13:n ja MLX:n eikä leikkaustyökalu saa vaatia
+kumpaakaan.
 
 ## Rajaukset
 

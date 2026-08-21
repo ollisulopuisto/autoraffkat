@@ -21,12 +21,13 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import project
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
+from ..audio import mix
 from ..decide import decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
                             write_fcpxml)
 from ..model import (LONGTAKE_RULES, OVERLAP_RULES, ROLES, ROLE_MIC,
-                     Globals, TrackConfig)
+                     AudioSettings, Globals, TrackConfig)
 from ..preview import build as build_preview
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -48,6 +49,9 @@ class AppState:
                                                     "current": "", "ready": False})
     load_error: str = ""
     inherited_from: str = ""        # mistä roolit perittiin, "" jos ei mistään
+    mix_result: mix.MixResult = field(default_factory=mix.MixResult)
+    mix_progress: dict = field(default_factory=lambda: {"done": 0, "total": 0,
+                                                        "current": "", "running": False})
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ---------------------------------------------------------- lataus
@@ -60,6 +64,7 @@ class AppState:
         """
         self.load_error = ""
         self.inherited_from = ""
+        self.mix_result = mix.MixResult()
         self.progress = {"done": 0, "total": 0, "current": "", "ready": False}
         try:
             timeline = read_fcpxml(self.xml_path)
@@ -170,8 +175,47 @@ class AppState:
             g.overlap_rule = raw["overlap_rule"]
         if raw.get("long_take_rule") in LONGTAKE_RULES:
             g.long_take_rule = raw["long_take_rule"]
+        self._apply_audio(payload.get("audio") or {})
         if "project_name" in raw:
             g.project_name = str(raw["project_name"])[:120] or "Raakaleikkaus"
+
+    def _apply_audio(self, raw: dict) -> None:
+        """Äänenkäsittelyn asetukset. Ei käynnistä käsittelyä — se on hidas."""
+        a = self.settings.audio
+        if "enabled" in raw:
+            a.enabled = bool(raw["enabled"])
+        if "de_ess" in raw:
+            a.de_ess = bool(raw["de_ess"])
+        for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
+                     "leveler_threshold_db", "gain_db", "room_db"):
+            if name in raw:
+                a.__dict__[name] = float(raw[name])
+        if "room_track" in raw:
+            keys = {t.key for t in self.timeline.tracks} if self.timeline else set()
+            wanted = str(raw["room_track"])
+            a.room_track = wanted if wanted in keys else ""
+
+    def run_mix(self) -> None:
+        """Käsittelee äänet taustalla. Kestää minuutteja, ei kuulu silmukkaan."""
+        assert self.timeline is not None
+        roles = resolve_roles(self.timeline, self.settings.tracks)
+        self.mix_progress.update({"done": 0, "total": 0, "current": "",
+                                  "running": True})
+
+        def report(done: int, total: int, current: str) -> None:
+            self.mix_progress.update({"done": done, "total": total,
+                                      "current": current})
+
+        try:
+            result = mix.process(self.timeline, roles, self.settings.audio,
+                                 progress=report)
+            with self.lock:
+                self.mix_result = result
+        except Exception as exc:                  # taustasäie ei saa kaatua hiljaa
+            self.mix_result = mix.MixResult(errors={"mix": str(exc)})
+            traceback.print_exc()
+        finally:
+            self.mix_progress["running"] = False
 
     def compute(self) -> dict:
         """Ajaa päätöskerroksen ja kokoaa vastauksen käyttöliittymälle.
@@ -272,6 +316,16 @@ def _state_json(state: AppState) -> dict:
         "globals": state.settings.globals.to_json(),
         "progress": state.progress,
         "inherited_from": state.inherited_from,
+        "audio": state.settings.audio.to_json(),
+        "mix": {
+            "available": mix.available(),
+            "path": mix.automixer_path(),
+            "progress": state.mix_progress,
+            "ready": len(state.mix_result.replacements),
+            "room": len(state.mix_result.room),
+            "skipped": state.mix_result.skipped,
+            "errors": list(state.mix_result.errors.values()),
+        },
         "error": state.load_error,
     }
 
@@ -350,6 +404,13 @@ def create_app(state: AppState) -> FastAPI:
                 raise HTTPException(
                     400, "Vienti osuisi Final Cutin .fcpxmld-paketin sisään.")
             try:
+                # Käsitelty ääni otetaan mukaan jos se on olemassa ja
+                # ajan tasalla. Vanhentunutta ei käytetä hiljaa.
+                result = state.mix_result if state.settings.audio.enabled \
+                    else mix.MixResult()
+                replacements = {k: v for k, v in result.replacements.items()
+                                if os.path.exists(v)}
+                room = [(k, v) for k, v in result.room if os.path.exists(v)]
                 if state.timeline.multicams:
                     # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman
                     # voi vaihtaa Final Cutissa jälkikäteen.
@@ -357,6 +418,7 @@ def create_app(state: AppState) -> FastAPI:
                         state.timeline, decision.segments, mic_tracks,
                         program_start, program_end,
                         state.settings.globals.project_name,
+                        replacements=replacements, room=room,
                     )
                 else:
                     xml = build_fcpxml(
@@ -364,12 +426,38 @@ def create_app(state: AppState) -> FastAPI:
                         decision.segments, mic_tracks,
                         state.timeline.frame_duration, program_start, program_end,
                         state.settings.globals.project_name,
+                        replacements=replacements, room=room,
                     )
                 write_fcpxml(out_path, xml)
             except (WriteError, OSError) as exc:
                 raise HTTPException(400, str(exc)) from exc
             project.save(state.xml_path, state.settings)
-        return {"ok": True, "path": out_path, "cuts": len(decision.segments)}
+        return {"ok": True, "path": out_path, "cuts": len(decision.segments),
+                "mixed": len(replacements), "room": len(room)}
+
+    @app.post("/api/mix")
+    def run_mix(payload: dict | None = None):
+        """Käynnistää äänenkäsittelyn taustalle.
+
+        Erillinen painike eikä osa vientiä: käsittely kestää minuutteja, ja
+        vienti on silmukan nopea pää. Valmiit tiedokset jäävät levylle, joten
+        seuraavat viennit käyttävät niitä ilman uutta ajoa.
+        """
+        if state.timeline is None:
+            raise HTTPException(409, state.load_error or "XML:ää ei ole luettu.")
+        if state.mix_progress.get("running"):
+            return {"ok": True, "running": True}
+        with state.lock:
+            if payload:
+                state.apply(payload)
+            state.settings.audio.enabled = True
+            project.save(state.xml_path, state.settings)
+        if not mix.available():
+            raise HTTPException(400, (
+                "automixeria ei löydy. Asenna se autoraffkatin naapuriksi tai "
+                f"aseta polku ympäristömuuttujaan {mix.ENV_VAR}."))
+        threading.Thread(target=state.run_mix, daemon=True).start()
+        return {"ok": True, "running": True}
 
     @app.post("/api/reveal")
     def reveal(payload: dict):

@@ -148,6 +148,40 @@ class Globals:
 
 
 @dataclass
+class AudioSettings:
+    """Äänenkäsittely: automixerin kanavanauha mikeille.
+
+    Käsittely ei koske analyysiä. Verhokäyrät luetaan aina raa'asta äänestä,
+    koska kompressori nostaa pohjakohinaa sanojen välissä ja tasoittaa juuri
+    sen eron, johon herkkyys ja päällekkäispuheen sääntö nojaavat.
+    """
+
+    enabled: bool = False
+    high_pass_hz: float = 80.0
+    # Jokainen mikki nostetaan ensin samaan äänekkyyteen. Ilman tätä
+    # kompressorin kynnykset ovat mielivaltaisia: käsittelemätön podcast-mikki
+    # on helposti -40 LUFS, jolloin -18 dB:n kynnys ei ylity kertaakaan.
+    # Tavoite on **stemin** eikä ohjelman: yksi puhuja kerrallaan äänessä, joten
+    # summa osuu lähelle samaa lukemaa ja lopullinen taso asetetaan vasta
+    # Final Cutissa.
+    target_lufs: float = -20.0
+    peak_threshold_db: float = -12.0    # nopea, 30 ms
+    leveler_threshold_db: float = -18.0  # hidas, 300 ms
+    de_ess: bool = False
+    gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
+    room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
+    room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa
+
+    def to_json(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_json(cls, data: dict) -> "AudioSettings":
+        fields = {f.name for f in cls.__dataclass_fields__.values()}
+        return cls(**{k: v for k, v in data.items() if k in fields})
+
+
+@dataclass
 class Segment:
     """Yksi kuva valmiissa leikkauksessa, aikajanan sekunneissa."""
 
