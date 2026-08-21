@@ -199,7 +199,7 @@ ja jokainen niitä lukeva kohta osaisi käsitellä monta avainta. Raita hoitaa
 saman yhdessä paikassa: päätöskerros näkee edelleen yhden avaimen kuvaa
 kohden, ja peitto on raidan osien yhdiste.
 
-Ryhmittely tapahtuu kulman nimellä (`"1"`, `"nyman a Track2"`), koska se on
+Ryhmittely tapahtuu kulman nimellä (`"1"`, `"host a Track2"`), koska se on
 leikkaajan oma merkintä siitä että kyse on samasta kamerasta. Avain sen sijaan
 johdetaan tiedostonimistä, koska nimet ja `angleID`:t vaihtuvat viennistä
 toiseen. Kahta saman multicamin kulmaa ei koskaan yhdistetä, vaikka nimet

@@ -33,7 +33,7 @@ def test_cache_path_follows_the_file(tmp_path):
 def test_audio_only_media_has_no_thumbnail(fixture_dir):
     from autoraffkat.fcpxml.read import read_fcpxml
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    mic = timeline.media_by_key()["olli a Track1.wav"]
+    mic = timeline.media_by_key()["host a Track1.wav"]
     assert thumbs.for_item(mic) is None
 
 

@@ -57,7 +57,7 @@ def test_multicam_groups_angles_across_parts(fixture_dir):
     assert tl.kind == "multicam"
     assert len(tl.media) == 10
     assert [t.key for t in tl.tracks] == [
-        "WIDE", "CLOSE_A", "CLOSE_B", "olli Track1", "vieras Track2"]
+        "WIDE", "CLOSE_A", "CLOSE_B", "host Track1", "guest Track2"]
     for track in tl.tracks:
         assert len(track.media_keys) == 2, track.key
         # Raidan väli kattaa molemmat osat, ei vain jälkimmäistä.

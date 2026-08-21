@@ -10,12 +10,12 @@ def test_round_trip(tmp_path):
     xml = tmp_path / "jakso.fcpxml"
     xml.write_text("<fcpxml/>")
     settings = project.ProjectSettings(
-        tracks={"MIC_A.wav": TrackConfig(role="mic", speaker="Olli",
+        tracks={"MIC_A.wav": TrackConfig(role="mic", speaker="Host",
                                          sensitivity_db=9.5, gain_db=-3.0)},
         globals=Globals(min_shot=4.0, overlap_rule="louder"))
     project.save(str(xml), settings)
     again = project.load(str(xml))
-    assert again.tracks["MIC_A.wav"].speaker == "Olli"
+    assert again.tracks["MIC_A.wav"].speaker == "Host"
     assert again.tracks["MIC_A.wav"].sensitivity_db == 9.5
     assert again.globals.min_shot == 4.0
     assert again.globals.overlap_rule == "louder"
@@ -63,7 +63,7 @@ def test_previous_is_found_beside_and_above(tmp_path):
     older = tmp_path / "jakso53.fcpxmld"
     older.mkdir()
     previous = _write_settings(older / "Info.autoraffkat.json",
-                               {"CAM 1": {"role": "close", "speaker": "Olli"}})
+                               {"CAM 1": {"role": "close", "speaker": "Host"}})
     assert project.find_previous(str(xml)) == str(previous)
 
 
@@ -90,12 +90,12 @@ def test_broken_settings_read_as_none(tmp_path):
 
 def test_bundle_keeps_its_derived_files_outside(tmp_path):
     """Final Cutin paketin sisään ei kirjoiteta mitään."""
-    bundle = tmp_path / "pp 53.fcpxmld"
+    bundle = tmp_path / "episode 12.fcpxmld"
     bundle.mkdir()
     xml = str(bundle / "Info.fcpxml")
     # Nimi tulee paketista, ei sen sisällön Info-tiedostosta.
-    assert project.settings_path(xml) == str(tmp_path / "pp 53.autoraffkat.json")
-    assert project.default_output_path(xml) == str(tmp_path / "pp 53-leikattu.fcpxml")
+    assert project.settings_path(xml) == str(tmp_path / "episode 12.autoraffkat.json")
+    assert project.default_output_path(xml) == str(tmp_path / "episode 12-leikattu.fcpxml")
     for path in (project.settings_path(xml), project.default_output_path(xml)):
         assert not os.path.dirname(path).endswith(".fcpxmld")
 
@@ -108,7 +108,7 @@ def test_plain_xml_is_unchanged(tmp_path):
 
 def test_settings_left_inside_a_bundle_are_still_read(tmp_path):
     """Vanhat asetukset paketin sisällä eivät katoa, mutta uudet menevät ulos."""
-    bundle = tmp_path / "pp 53.fcpxmld"
+    bundle = tmp_path / "episode 12.fcpxmld"
     bundle.mkdir()
     xml = str(bundle / "Info.fcpxml")
     _write_settings(bundle / "Info.autoraffkat.json",
@@ -118,4 +118,4 @@ def test_settings_left_inside_a_bundle_are_still_read(tmp_path):
     assert loaded.globals.min_shot == 7.0
 
     written = project.save(xml, loaded)
-    assert written == str(tmp_path / "pp 53.autoraffkat.json")
+    assert written == str(tmp_path / "episode 12.autoraffkat.json")

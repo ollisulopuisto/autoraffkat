@@ -17,7 +17,7 @@ from conftest import needs_ffmpeg
 
 
 def test_sibling_is_always_wav():
-    assert mix.sibling("/x/nyman a.wav", mix.MIX_SUFFIX) == "/x/nyman a [mix].wav"
+    assert mix.sibling("/x/host a.wav", mix.MIX_SUFFIX) == "/x/host a [mix].wav"
     # Myös mp4:stä tulee WAV: purettu ääni ei mene takaisin säiliöön.
     assert mix.sibling("/x/CAM 1.mp4", mix.ROOM_SUFFIX) == "/x/CAM 1 [room].wav"
 
@@ -69,7 +69,7 @@ def test_missing_plugin_is_reported_not_raised(fixture_dir):
     from autoraffkat.model import ROLE_MIC, TrackConfig
 
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    tracks = {"olli Track1": TrackConfig(role=ROLE_MIC, speaker="Olli")}
+    tracks = {"host Track1": TrackConfig(role=ROLE_MIC, speaker="Host")}
     result = mix.process(timeline, resolve_roles(timeline, tracks),
                          AudioSettings(enabled=True,
                                        plugin_path="/ei/ole/mitaan.vst3"))
@@ -204,7 +204,7 @@ def test_closed_ranges_map_timeline_to_file_time(fixture_dir):
     from autoraffkat.model import HOP
 
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    item = timeline.media_by_key()["olli a Track1.wav"]
+    item = timeline.media_by_key()["host a Track1.wav"]
     # Osa A kattaa aikajanan 0–18 s ja tiedoston 0–18 s.
     closed = np.zeros(int(36 / HOP), dtype=bool)
     closed[int(4 / HOP):int(6 / HOP)] = True       # kiinni 4–6 s
@@ -222,7 +222,7 @@ def test_closed_ranges_stay_inside_the_clip(fixture_dir):
     from autoraffkat.model import HOP
 
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    item = timeline.media_by_key()["olli a Track1.wav"]     # aikajanalla 0–18 s
+    item = timeline.media_by_key()["host a Track1.wav"]     # aikajanalla 0–18 s
     closed = np.ones(int(36 / HOP), dtype=bool)            # kaikki kiinni
     ranges = mix.closed_ranges(item, closed, 0.0, 48000)
     assert len(ranges) == 1

@@ -438,8 +438,8 @@ def _source_roles(mc_clip) -> dict[str, str]:
 def _group_key(name: str) -> str:
     """Kulman nimi ryhmittelyavaimeksi.
 
-    Osat erotetaan tyypillisesti yhdellä kirjaimella — ``"nyman a Track2"`` ja
-    ``"nyman b Track2"`` ovat sama mikki — joten yksikirjaimiset sanat
+    Osat erotetaan tyypillisesti yhdellä kirjaimella — ``"host a Track2"`` ja
+    ``"host b Track2"`` ovat sama mikki — joten yksikirjaimiset sanat
     pudotetaan. Pelkkä numero on kelvollinen kulman nimi (``"1"``), joten
     numeroihin ei kosketa.
     """
@@ -452,8 +452,8 @@ def _common_name(names: list[str]) -> str:
     """Nimien yhteinen osa: erottavat sanat pois, järjestys säilyttäen.
 
     Ryhmän avain johdetaan tiedostonimistä eikä kulman nimestä, koska kulmien
-    nimet ja angleID:t vaihtuvat viennistä toiseen. ``"STATUS CAM 1 01"`` ja
-    ``"STATUS CAM 1 02"`` antavat ``"STATUS CAM 1"``, joka osoittaa saman
+    nimet ja angleID:t vaihtuvat viennistä toiseen. ``"CAM 1 01"`` ja
+    ``"CAM 1 02"`` antavat ``"CAM 1"``, joka osoittaa saman
     kameran vielä silloinkin kun kulmat on numeroitu uusiksi.
     """
     if len(set(names)) <= 1:

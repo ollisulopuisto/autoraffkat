@@ -17,12 +17,12 @@ def _cut(fixture_dir, name="sync.fcpxml", fd=Fraction(1, 25)):
     by_key = {m.key: m for m in tl.media}
     segments = [
         Segment("WIDE.mp4", "Laaja", 0.0, 3.3),
-        Segment("CLOSE_A.mp4", "Olli", 3.3, 9.77),
-        Segment("CLOSE_B.mp4", "Vieras", 9.77, 20.01),
+        Segment("CLOSE_A.mp4", "Host", 3.3, 9.77),
+        Segment("CLOSE_B.mp4", "Guest", 9.77, 20.01),
         Segment("WIDE.mp4", "Laaja", 20.01, 35.0),
     ]
     xml = build_fcpxml(by_key, segments,
-                       [("MIC_A.wav", "Olli"), ("MIC_B.wav", "Vieras")],
+                       [("MIC_A.wav", "Host"), ("MIC_B.wav", "Guest")],
                        tl.frame_duration, tl.start, tl.start + Fraction(35),
                        "Testi")
     return tl, xml
@@ -45,7 +45,7 @@ def test_cameras_lose_their_own_audio(fixture_dir):
     by_key = {m.key: m for m in tl.media}
     by_key["WIDE.mp4"].has_audio = True
     segments = [Segment("WIDE.mp4", "Laaja", 0.0, 10.0)]
-    xml = build_fcpxml(by_key, segments, [("MIC_A.wav", "Olli")],
+    xml = build_fcpxml(by_key, segments, [("MIC_A.wav", "Host")],
                        tl.frame_duration, Fraction(0), Fraction(10), "Testi")
     clip = ET.fromstring(xml).find(".//spine/asset-clip")
     assert clip.get("srcEnable") == "video"
@@ -56,7 +56,7 @@ def test_mics_are_connected_with_roles(fixture_dir):
     first = ET.fromstring(xml).find(".//spine/asset-clip")
     mics = first.findall("asset-clip")
     assert [m.get("lane") for m in mics] == ["-1", "-2"]
-    assert [m.get("audioRole") for m in mics] == ["dialogue.Olli", "dialogue.Vieras"]
+    assert [m.get("audioRole") for m in mics] == ["dialogue.Host", "dialogue.Guest"]
     assert all(parse_time(m.get("duration")) == 35 for m in mics)
 
 
@@ -101,8 +101,8 @@ def test_empty_segments_refused(fixture_dir):
 
 
 def test_role_sanitizing():
-    assert sanitize_role("Olli") == "Olli"
-    assert sanitize_role("Olli.S") == "Olli S"
+    assert sanitize_role("Host") == "Host"
+    assert sanitize_role("Host.S") == "Host S"
     assert sanitize_role("  ") == "Puhuja"
 
 
@@ -114,12 +114,12 @@ def _multicam_cut(fixture_dir, segments=None):
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     segments = segments or [
         Segment("WIDE", "Laaja", 0.0, 4.0),
-        Segment("CLOSE_A", "Olli", 4.0, 12.0),
-        Segment("CLOSE_B", "Vieras", 12.0, 30.0),
+        Segment("CLOSE_A", "Host", 4.0, 12.0),
+        Segment("CLOSE_B", "Guest", 12.0, 30.0),
         Segment("WIDE", "Laaja", 30.0, 36.0),
     ]
     xml = build_multicam_fcpxml(
-        tl, segments, [("olli Track1", "Olli"), ("vieras Track2", "Vieras")],
+        tl, segments, [("host Track1", "Host"), ("guest Track2", "Guest")],
         Fraction(0), Fraction(36), "Monikameratesti")
     return tl, xml
 
@@ -139,7 +139,7 @@ def test_multicam_shot_splits_at_part_boundary(fixture_dir):
     """Sama kuva osien yli on kaksi klippiä: eri multicam, eri angleID."""
     _, xml = _multicam_cut(fixture_dir)
     clips = ET.fromstring(xml).findall(".//spine/mc-clip")
-    crossing = [c for c in clips if c.get("name", "").startswith("Vieras")]
+    crossing = [c for c in clips if c.get("name", "").startswith("Guest")]
     assert len(crossing) == 2
     assert [c.get("ref") for c in crossing] == ["mA", "mB"]
     assert parse_time(crossing[0].get("duration")) == 6      # 12 s -> 18 s
@@ -156,7 +156,7 @@ def test_multicam_mic_angles_get_speaker_roles(fixture_dir):
     clip = ET.fromstring(xml).find(".//spine/mc-clip")
     audio = clip.findall('mc-source[@srcEnable="audio"]')
     assert [a.find("audio-role-source").get("role") for a in audio] == [
-        "dialogue.Olli", "dialogue.Vieras"]
+        "dialogue.Host", "dialogue.Guest"]
     # Kuvakulman oma ääni jää pois päältä, kuten Final Cut sen kirjoittaa.
     video = clip.find('mc-source[@srcEnable="video"]')
     assert video.find("audio-role-source").get("active") == "0"
@@ -204,8 +204,8 @@ def test_multicam_gap_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     # Ohjelma jatkuu multicamien loputtua, joten loppuun tulee <gap>.
     segments = [Segment("WIDE", "Laaja", 0.0, 36.0),
-                Segment("CLOSE_A", "Olli", 36.0, 44.0)]
-    xml = build_multicam_fcpxml(tl, segments, [("olli Track1", "Olli")],
+                Segment("CLOSE_A", "Host", 36.0, 44.0)]
+    xml = build_multicam_fcpxml(tl, segments, [("host Track1", "Host")],
                                 Fraction(0), Fraction(44), "Aukolla")
     assert "<gap" in xml
     validate_fcpxml(xml, "gap.fcpxml")
@@ -236,7 +236,7 @@ def test_multicam_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
                     for k in tl.media_by_key() if k.endswith(".wav")}
     xml = build_multicam_fcpxml(
         tl, [Segment("WIDE", "Laaja", 0.0, 36.0)],
-        [("olli Track1", "Olli")], Fraction(0), Fraction(36), "Käsitelty",
+        [("host Track1", "Host")], Fraction(0), Fraction(36), "Käsitelty",
         replacements=replacements)
     assert xml.count("%5Bmix%5D.wav") == len(replacements)
     # Kameroihin ei kosketa: kuva tulee yhä alkuperäisistä tiedostoista.
@@ -251,9 +251,9 @@ def test_multicam_room_tone_is_one_lane_with_its_own_role(fixture_dir,
     room = [(k, f"/mix/{k[:-4]} [room].wav")
             for k in tl.media_by_key() if k.startswith("WIDE")]
     xml = build_multicam_fcpxml(
-        tl, [Segment("CLOSE_A", "Olli", 0.0, 18.0),
-             Segment("CLOSE_B", "Vieras", 18.0, 36.0)],
-        [("olli Track1", "Olli")], Fraction(0), Fraction(36), "Tilaäänellä",
+        tl, [Segment("CLOSE_A", "Host", 0.0, 18.0),
+             Segment("CLOSE_B", "Guest", 18.0, 36.0)],
+        [("host Track1", "Host")], Fraction(0), Fraction(36), "Tilaäänellä",
         room=room)
     root = ET.fromstring(xml)
     clips = root.findall(".//mc-clip/asset-clip")
@@ -286,7 +286,7 @@ def test_flat_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
     by_key = {m.key: m for m in tl.media}
     xml = build_fcpxml(
         by_key, [Segment("WIDE.mp4", "Laaja", 0.0, 20.0)],
-        [("MIC_A.wav", "Olli")], tl.frame_duration, Fraction(0), Fraction(20),
+        [("MIC_A.wav", "Host")], tl.frame_duration, Fraction(0), Fraction(20),
         "Käsitelty", replacements={"MIC_A.wav": "/mix/MIC_A [mix].wav"})
     assert "MIC_A%20%5Bmix%5D.wav" in xml
     assert "WIDE.mp4" in xml

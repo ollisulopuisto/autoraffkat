@@ -41,8 +41,8 @@ def test_candidates_are_newest_first(tmp_path):
 
 
 def test_label_names_the_bundle_not_its_contents(tmp_path):
-    inner = _touch(str(tmp_path / "pp 53.fcpxmld" / "Info.fcpxml"))
-    assert pick.label(inner) == "pp 53.fcpxmld"
+    inner = _touch(str(tmp_path / "episode 12.fcpxmld" / "Info.fcpxml"))
+    assert pick.label(inner) == "episode 12.fcpxmld"
     assert pick.label(str(tmp_path / "kasin.fcpxml")) == "kasin.fcpxml"
 
 

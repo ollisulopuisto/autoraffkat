@@ -201,7 +201,7 @@ lists, and every site reading them would have to handle several keys. A track
 handles it in one place: the decision layer still sees one key per shot, and
 coverage is the union of the track's parts.
 
-Grouping is by angle name (`"1"`, `"nyman a Track2"`), because that is the
+Grouping is by angle name (`"1"`, `"host a Track2"`), because that is the
 editor's own marking that this is the same camera. The key, however, is derived
 from the filenames, because names and `angleID`s change from one export to the
 next. Two angles of the same multicam are never merged, even if their names

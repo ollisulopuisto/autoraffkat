@@ -19,10 +19,10 @@ from make_fixture import SPEECH_A, SPEECH_B
 def _tracks():
     return {
         "WIDE.mp4": TrackConfig(role=ROLE_WIDE),
-        "CLOSE_A.mp4": TrackConfig(role=ROLE_CLOSE, speaker="Olli"),
-        "CLOSE_B.mp4": TrackConfig(role=ROLE_CLOSE, speaker="Vieras"),
-        "MIC_A.wav": TrackConfig(role=ROLE_MIC, speaker="Olli"),
-        "MIC_B.wav": TrackConfig(role=ROLE_MIC, speaker="Vieras"),
+        "CLOSE_A.mp4": TrackConfig(role=ROLE_CLOSE, speaker="Host"),
+        "CLOSE_B.mp4": TrackConfig(role=ROLE_CLOSE, speaker="Guest"),
+        "MIC_A.wav": TrackConfig(role=ROLE_MIC, speaker="Host"),
+        "MIC_B.wav": TrackConfig(role=ROLE_MIC, speaker="Guest"),
     }
 
 
@@ -58,8 +58,8 @@ def test_speech_selects_the_right_camera(fixture_dir, source):
     to_timeline = source_to_timeline(timeline)
 
     # Yksinpuhelun keskellä pitää olla puhujan lähikuva.
-    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Olli"),
-                                   (SPEECH_B, SPEECH_A, "Vieras")):
+    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Host"),
+                                   (SPEECH_B, SPEECH_A, "Guest")):
         for lo, hi in spans:
             mid = (lo + hi) / 2
             if any(o0 < mid < o1 for o0, o1 in other):
@@ -116,7 +116,7 @@ def test_server_round_trip(scratch_xml):
     result = client.post("/api/settings", json=payload).json()
     assert result["ok"], result.get("problems")
     assert len(result["segments"]) > 4
-    assert result["preview"]["speakers"][0]["name"] == "Olli"
+    assert result["preview"]["speakers"][0]["name"] == "Host"
     assert result["ms"] < 500
 
     exported = client.post("/api/export", json=payload).json()
@@ -161,10 +161,10 @@ def _multicam_tracks():
     """Roolit raita-avaimilla: kulma on yksi raita, vaikka osia on kaksi."""
     return {
         "WIDE": TrackConfig(role=ROLE_WIDE),
-        "CLOSE_A": TrackConfig(role=ROLE_CLOSE, speaker="Olli"),
-        "CLOSE_B": TrackConfig(role=ROLE_CLOSE, speaker="Vieras"),
-        "olli Track1": TrackConfig(role=ROLE_MIC, speaker="Olli"),
-        "vieras Track2": TrackConfig(role=ROLE_MIC, speaker="Vieras"),
+        "CLOSE_A": TrackConfig(role=ROLE_CLOSE, speaker="Host"),
+        "CLOSE_B": TrackConfig(role=ROLE_CLOSE, speaker="Guest"),
+        "host Track1": TrackConfig(role=ROLE_MIC, speaker="Host"),
+        "guest Track2": TrackConfig(role=ROLE_MIC, speaker="Guest"),
     }
 
 
@@ -180,10 +180,10 @@ def test_multicam_speech_selects_the_right_camera(fixture_dir):
     assert float(start) == 0.0 and float(end) > 30.0
     decision = decide(grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3,
                                     min_overlap=0.4))
-    to_timeline = source_to_timeline(timeline, "olli a Track1.wav")
+    to_timeline = source_to_timeline(timeline, "host a Track1.wav")
 
-    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Olli"),
-                                   (SPEECH_B, SPEECH_A, "Vieras")):
+    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Host"),
+                                   (SPEECH_B, SPEECH_A, "Guest")):
         for lo, hi in spans:
             mid = (lo + hi) / 2
             if any(o0 < mid < o1 for o0, o1 in other):
@@ -236,9 +236,9 @@ def test_multicam_defaults_guess_speakers_from_mic_names(scratch_xml):
     """Mikin ensimmäinen sana on käytännössä aina puhujan nimi."""
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
-    assert state.settings.tracks["olli Track1"].role == "mic"
-    assert state.settings.tracks["olli Track1"].speaker == "Olli"
-    assert state.settings.tracks["vieras Track2"].speaker == "Vieras"
+    assert state.settings.tracks["host Track1"].role == "mic"
+    assert state.settings.tracks["host Track1"].speaker == "Host"
+    assert state.settings.tracks["guest Track2"].speaker == "Guest"
     # Kameroita ei arvata: kulmat ovat 1, 2, 3 eikä niistä näe mitään.
     assert state.settings.tracks["CLOSE_A"].role == "unused"
 
@@ -276,7 +276,7 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
     state = AppState(xml_path=str(current / "Info.fcpxml"))
     state.load()
     assert state.settings.tracks["CLOSE_A"].role == "close"
-    assert state.settings.tracks["CLOSE_A"].speaker == "Olli"
+    assert state.settings.tracks["CLOSE_A"].speaker == "Host"
     assert state.settings.tracks["WIDE"].role == "wide"
     assert state.settings.globals.min_shot == 4.0
     assert state.inherited_from.endswith("jakso53.autoraffkat.json")
@@ -366,7 +366,7 @@ def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
             break
         time.sleep(0.05)
     state.mix_result = mixer.MixResult(
-        replacements={"olli a Track1.wav": "/ei/ole [mix].wav"})
+        replacements={"host a Track1.wav": "/ei/ole [mix].wav"})
     state.settings.audio.enabled = True
 
     client = TestClient(create_app(state))
@@ -449,7 +449,7 @@ def test_tracks_carry_kind_and_file_facts(scratch_xml):
     client = TestClient(create_app(state))
     tracks = {t["key"]: t for t in client.get("/api/state").json()["tracks"]}
     assert tracks["WIDE"]["kind"] == "video"
-    assert tracks["olli Track1"]["kind"] == "audio"
+    assert tracks["host Track1"]["kind"] == "audio"
     # Kesto ja koko lasketaan yhteen kaikista osista.
     assert tracks["WIDE"]["total_duration"] > 0
     assert tracks["WIDE"]["total_size"] > 0

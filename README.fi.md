@@ -21,7 +21,7 @@ hakemistosta avautuu Finderin valintaikkuna. Polun voi silti antaa, ja
 `.fcpxmld`-paketin voi antaa sellaisenaan:
 
 ```
-uv run autoraffkat "pp 53 multicam.fcpxmld"
+uv run autoraffkat "episode 12.fcpxmld"
 uv run autoraffkat --pick            # suoraan valintaikkuna
 ```
 
@@ -45,12 +45,12 @@ kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
 viereen.
 
 Kun lähde on `.fcpxmld`-paketti, kumpikaan tiedosto ei mene paketin sisään
-vaan sen viereen ja saa paketin nimen: `pp 53 multicam.fcpxmld` tuottaa
-`pp 53 multicam-leikattu.fcpxml` ja `pp 53 multicam.autoraffkat.json`.
+vaan sen viereen ja saa paketin nimen: `episode 12.fcpxmld` tuottaa
+`episode 12-leikattu.fcpxml` ja `episode 12.autoraffkat.json`.
 Paketti kuuluu Final Cutille.
 
 Uusi jakso perii roolit edellisestä: raita-avaimet on johdettu
-tiedostonimistä, joten `STATUS CAM 1` on sama kamera myös ensi viikolla.
+tiedostonimistä, joten `CAM 1` on sama kamera myös ensi viikolla.
 Perintä haetaan XML:n hakemistosta, sen yläpuolelta ja yläpuolen
 `.fcpxmld`-paketeista, ja lähde näkyy otsikon alla rivillä «Roolit peritty».
 Jakson omat asetukset ohittavat perinnän aina.
@@ -83,7 +83,7 @@ kahdessa osassa on kuusi tiedostoa mutta kolme **raitaa**: roolit, säätimet ja
 leikkaus kulkevat raidoittain, ja raita kootaan kulman nimen perusteella.
 
 Raidan avain johdetaan tiedostonimien yhteisestä osasta
-(`STATUS CAM 1 01` + `STATUS CAM 1 02` → `STATUS CAM 1`), koska kulmien nimet
+(`CAM 1 01` + `CAM 1 02` → `CAM 1`), koska kulmien nimet
 ja `angleID`:t vaihtuvat viennistä toiseen mutta tiedostot eivät. Näin
 tallennetut roolit kelpaavat vielä uuden viennin jälkeenkin.
 
@@ -373,7 +373,6 @@ Testiaineisto syntetisoidaan ffmpegillä: siniaaltopurskeita tunnetuissa
 kohdissa, joten päätöksen oikeellisuus on tarkistettavissa ilman oikeaa
 kuvausmateriaalia (`tests/make_fixture.py`).
 
-## Prototyyppi
+## Lisenssi
 
-`prototype/autocut_multicam.py` on alkuperäinen komentorivityökalu, josta tämä
-lähti liikkeelle. Säilytetään viitteenä.
+MIT — katso [`LICENSE`](LICENSE).

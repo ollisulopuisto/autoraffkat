@@ -150,16 +150,16 @@ PART_FILES = {
     "wide": ("WIDE 01.mp4", "WIDE 02.mp4"),
     "close_a": ("CLOSE_A 01.mp4", "CLOSE_A 02.mp4"),
     "close_b": ("CLOSE_B 01.mp4", "CLOSE_B 02.mp4"),
-    "mic_a": ("olli a Track1.wav", "olli b Track1.wav"),
-    "mic_b": ("vieras a Track2.wav", "vieras b Track2.wav"),
+    "mic_a": ("host a Track1.wav", "host b Track1.wav"),
+    "mic_b": ("guest a Track2.wav", "guest b Track2.wav"),
 }
 # Kulmien nimet osittain: kamerat numeroina, mikit puhujan mukaan.
 ANGLE_NAMES = (
     ("wide", "1", "1"),
     ("close_a", "2", "2"),
     ("close_b", "3", "3"),
-    ("mic_a", "olli a Track1", "olli b Track1"),
-    ("mic_b", "vieras a Track2", "vieras b Track2"),
+    ("mic_a", "host a Track1", "host b Track1"),
+    ("mic_b", "guest a Track2", "guest b Track2"),
 )
 SPLIT = DURATION / 2
 

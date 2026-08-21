@@ -1,8 +1,20 @@
 [project]
 name = "autoraffkat"
 version = "0.1.0"
-description = "Automaattinen monikameraleikkaus FCPXML:stä FCPXML:ksi"
+description = "Automatic multicam editing for interview video: FCPXML in, FCPXML out"
+readme = "README.md"
 requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Olli Sulopuisto" }]
+keywords = ["fcpxml", "final-cut-pro", "multicam", "video-editing", "podcast"]
+classifiers = [
+    "Environment :: Console",
+    "Intended Audience :: End Users/Desktop",
+    "Operating System :: MacOS",
+    "Programming Language :: Python :: 3",
+    "Topic :: Multimedia :: Video :: Non-Linear Editor",
+]
 dependencies = [
     "numpy>=1.26",
     "fastapi>=0.115",

@@ -18,7 +18,7 @@ newest), and an empty directory opens a Finder dialog. You can still pass a
 path, and a `.fcpxmld` bundle works as-is:
 
 ```
-uv run autoraffkat "pp 53 multicam.fcpxmld"
+uv run autoraffkat "episode 12.fcpxmld"
 uv run autoraffkat --pick            # go straight to the file dialog
 ```
 
@@ -41,12 +41,12 @@ Export writes a new file `episode-leikattu.fcpxml`; the source XML is never
 touched. Settings are saved next to it as `episode.autoraffkat.json`.
 
 When the source is a `.fcpxmld` bundle, neither file goes inside it. Both land
-beside it and take the bundle's name: `pp 53 multicam.fcpxmld` produces
-`pp 53 multicam-leikattu.fcpxml` and `pp 53 multicam.autoraffkat.json`. The
+beside it and take the bundle's name: `episode 12.fcpxmld` produces
+`episode 12-leikattu.fcpxml` and `episode 12.autoraffkat.json`. The
 bundle belongs to Final Cut.
 
 A new episode inherits its roles from the previous one. Track keys are derived
-from filenames, so `STATUS CAM 1` is the same camera next week too. Inheritance
+from filenames, so `CAM 1` is the same camera next week too. Inheritance
 looks in the XML's directory, the one above it, and any `.fcpxmld` bundles
 there; the source is shown under the title as "Roles inherited from". An
 episode's own settings always win.
@@ -80,7 +80,7 @@ two parts is six files but three **tracks**: roles, controls and the edit all
 work per track, and a track is assembled by angle name.
 
 The track key is derived from the common part of the filenames
-(`STATUS CAM 1 01` + `STATUS CAM 1 02` → `STATUS CAM 1`), because angle names
+(`CAM 1 01` + `CAM 1 02` → `CAM 1`), because angle names
 and `angleID`s change from one export to the next while the files do not.
 Saved roles therefore survive a re-export.
 
@@ -381,7 +381,6 @@ installed — our reader accepts far more than the importer does.
 Test material is synthesised with ffmpeg: sine bursts at known positions, so
 the decision can be checked without real footage (`tests/make_fixture.py`).
 
-## Prototype
+## Licence
 
-`prototype/autocut_multicam.py` is the original command-line tool this grew
-out of. Kept for reference.
+MIT — see [`LICENSE`](LICENSE).
