@@ -13,23 +13,31 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
-from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .. import probe, project, thumbs
-from ..i18n import LANGUAGES, t
-from .. import i18n
+from .. import i18n, probe, project, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
 from ..decide import decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
-from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
-                            write_fcpxml)
-from ..model import (LONGTAKE_RULES, OVERLAP_RULES, ROLES, ROLE_MIC,
-                     AudioSettings, Globals, TrackConfig)
+from ..fcpxml.write import (
+    WriteError,
+    build_fcpxml,
+    build_multicam_fcpxml,
+    write_fcpxml,
+)
+from ..i18n import LANGUAGES, t
+from ..model import (
+    LONGTAKE_RULES,
+    OVERLAP_RULES,
+    ROLE_MIC,
+    ROLES,
+    AudioSettings,
+    Globals,
+)
 from ..paths import get_resource_path
 from ..preview import build as build_preview
 
@@ -380,7 +388,7 @@ def _state_json(state: AppState) -> dict:
     return {
         "xml_path": state.xml_path,
         "settings_path": project.settings_path(state.xml_path),
-        "output_path": project.default_output_path(state.xml_path),
+        "output_path": project.next_output_path(state.xml_path),
         "name": timeline.name if timeline else "",
         "kind": timeline.kind if timeline else "",
         "parts": len(timeline.multicams) if timeline else 0,
@@ -531,14 +539,14 @@ def create_app(state: AppState) -> FastAPI:
                 return JSONResponse({"ok": False,
                                      "problems": result.get("problems", [])},
                                     status_code=400)
-            grid, program_start, program_end, decision = result["_grid"]
+            _grid, program_start, program_end, decision = result["_grid"]
             assert state.timeline is not None
             roles = resolve_roles(state.timeline, state.settings.tracks)
             mic_tracks: list[tuple[str, str]] = []
             for name in roles.speakers:
                 for key in roles.mics.get(name, []):
                     mic_tracks.append((key, name))
-            out_path = project.default_output_path(state.xml_path)
+            out_path = project.next_output_path(state.xml_path)
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
                 raise HTTPException(400, t("export.would_overwrite"))
             if os.path.dirname(out_path).endswith(project.BUNDLE_EXT):
@@ -575,9 +583,12 @@ def create_app(state: AppState) -> FastAPI:
             except (WriteError, OSError) as exc:
                 raise HTTPException(400, str(exc)) from exc
             project.save(state.xml_path, state.settings)
+        # Seuraavan viennin nimi mukaan: ruudulla näkyvä polku on juuri
+        # kirjoitettu, ja ilman tätä se jäisi lupaamaan väärää tiedostoa.
         return {"ok": True, "path": out_path, "cuts": len(decision.segments),
                 "mixed": len(replacements), "room": len(room),
-                "warnings": warnings}
+                "warnings": warnings,
+                "next_path": project.next_output_path(state.xml_path)}
 
     @app.post("/api/mix")
     def run_mix(payload: dict | None = None):

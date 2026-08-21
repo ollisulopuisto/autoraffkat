@@ -27,6 +27,18 @@ def test_settings_live_next_to_xml(tmp_path):
     assert project.default_output_path(str(xml)) == str(tmp_path / "jakso-leikattu.fcpxml")
 
 
+def test_export_never_overwrites_an_earlier_cut(tmp_path):
+    """Edellinen vienti on jo Final Cutissa; sen päälle ei kirjoiteta."""
+    xml = tmp_path / "jakso.fcpxml"
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu.fcpxml")
+
+    (tmp_path / "jakso-leikattu.fcpxml").write_text("<fcpxml/>")
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu v2.fcpxml")
+
+    (tmp_path / "jakso-leikattu v2.fcpxml").write_text("<fcpxml/>")
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu v3.fcpxml")
+
+
 def test_broken_file_does_not_block(tmp_path):
     xml = tmp_path / "jakso.fcpxml"
     xml.write_text("<fcpxml/>")

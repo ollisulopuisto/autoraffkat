@@ -44,6 +44,11 @@ Vienti kirjoittaa uuden tiedoston `jakso-leikattu.fcpxml`; lähde-XML:ää ei
 kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
 viereen.
 
+Aiemman viennin päälle ei kirjoiteta. Jos `jakso-leikattu.fcpxml` on jo
+olemassa, seuraavasta tulee `jakso-leikattu v2.fcpxml`, sitten `v3` ja niin
+edelleen. Käyttöliittymässä näkyvä polku on aina se johon seuraava vienti
+menee.
+
 Kun lähde on `.fcpxmld`-paketti, kumpikaan tiedosto ei mene paketin sisään
 vaan sen viereen ja saa paketin nimen: `episode 12.fcpxmld` tuottaa
 `episode 12-leikattu.fcpxml` ja `episode 12.autoraffkat.json`.

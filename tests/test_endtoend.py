@@ -1,5 +1,6 @@
 """Koko putki: XML sisään, päätös, XML ulos. Vaatii ffmpegin."""
 
+import os
 import time
 from xml.etree import ElementTree as ET
 
@@ -376,6 +377,33 @@ def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
     assert result["ok"] and result["mixed"] == 0
     assert "%5Bmix%5D" not in ET.tostring(ET.parse(result["path"]).getroot(),
                                           encoding="unicode")
+
+
+def test_second_export_writes_a_new_file(scratch_xml):
+    """Toinen vienti ei korvaa ensimmäistä.
+
+    Edellinen leikkaus on tyypillisesti jo tuotu Final Cutiin ja sitä on
+    ehditty muokata, eikä siihen työhön ole enää muuta lähdettä.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+
+    client = TestClient(create_app(state))
+    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+               "globals": {}}
+    first = client.post("/api/export", json=payload).json()
+    second = client.post("/api/export", json=payload).json()
+    assert first["ok"] and second["ok"]
+    assert first["path"] != second["path"]
+    assert second["path"].endswith("-leikattu v2.fcpxml")
+    assert os.path.exists(first["path"]) and os.path.exists(second["path"])
+    # Ruudulla näkyvä polku kertoo mihin seuraava vienti menee.
+    assert second["next_path"].endswith("-leikattu v3.fcpxml")
+    assert client.get("/api/state").json()["output_path"] == second["next_path"]
 
 
 def test_export_warns_when_audio_is_still_processing(scratch_xml):

@@ -13,6 +13,7 @@ molemmat tarkoittavat tässä samaa asiaa.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 import sys
 
@@ -37,10 +38,14 @@ def resolve(path: str) -> str:
     return path
 
 
+# Oma vienti tunnuksineen, myös numeroituna: "jakso-leikattu v3.fcpxml".
+_OUTPUT_RE = re.compile(re.escape(OUTPUT_SUFFIX) + r"( v\d+)?$")
+
+
 def _is_output(path: str) -> bool:
     """Onko tiedosto tämän työkalun oma vienti."""
     base, _ = os.path.splitext(os.path.basename(path))
-    return base.endswith(OUTPUT_SUFFIX)
+    return _OUTPUT_RE.search(base) is not None
 
 
 def candidates(directory: str) -> list[str]:

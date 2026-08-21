@@ -32,7 +32,11 @@ function makeElement(tag) {
     tagName: (tag || 'div').toUpperCase(),
     children: [],
     dataset: {},
-    style: {},
+    /* style on tavallinen olio, mutta app.js asettaa CSS-muuttujia:
+       ilman setPropertya piirto kaatuisi tähän. */
+    style: { setProperty(name, value) { this[name] = value; },
+             removeProperty(name) { delete this[name]; },
+             getPropertyValue(name) { return this[name] || ''; } },
     attributes: {},
     _text: '',
     innerHTML: '',
@@ -60,12 +64,21 @@ function makeElement(tag) {
       return new Proxy({}, { get: () => () => {}, set: () => true });
     },
     focus() {},
+    /* Sijainti ja koko: piuhat mitataan merkkien reunoista, joten ilman
+       tätä drawCables palaisi heti eikä testaisi mitään. Jokainen elementti
+       saa oman y:n, jotta kaari lasketaan oikeasti. */
+    getBoundingClientRect() {
+      const y = (this._index || 0) * 40;
+      return { left: 40, top: y, right: 140, bottom: y + 20,
+               width: 100, height: 20, x: 40, y };
+    },
     // Canvas-mitat, jotta drawBar laskee jotain järkevää.
     clientWidth: 1200,
     width: 1200,
     height: 120,
   };
   el.classList._set = new Set();
+  el._index = created.length;
   created.push(el);
   return el;
 }
@@ -89,6 +102,12 @@ function fireAll(report) {
       }
     }
   }
+  /* Sukupolvi kerrallaan: osa käsittelijöistä piirtää koko raitalistan
+     uudestaan, jolloin syntyy uusi joukko elementtejä. Jos irronneiden
+     rivien käsittelijät laukaistaan vielä seuraavallakin kierroksella, määrä
+     kasvaa kierros kierrokselta eksponentiaalisesti eikä kerro mitään uutta:
+     seuraava kierros piirtää saman käyttöliittymän joka tapauksessa. */
+  created.length = 0;
 }
 
 const registry = new Map();

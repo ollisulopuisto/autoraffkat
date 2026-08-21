@@ -30,6 +30,8 @@ def test_own_export_is_not_a_candidate(tmp_path):
     source = _touch(str(tmp_path / "jakso.fcpxml"))
     _touch(str(tmp_path / "jakso-leikattu.fcpxml"))
     _touch(str(tmp_path / "jakso-leikattu.fcpxmld" / "Info.fcpxml"))
+    # Numeroitu vienti on yhtä lailla oma tuotos.
+    _touch(str(tmp_path / "jakso-leikattu v2.fcpxml"))
     assert pick.candidates(str(tmp_path)) == [source]
 
 

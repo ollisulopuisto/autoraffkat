@@ -40,6 +40,11 @@ layer, and the preview bar shows the result without a round trip through XML.
 Export writes a new file `episode-leikattu.fcpxml`; the source XML is never
 touched. Settings are saved next to it as `episode.autoraffkat.json`.
 
+An earlier export is never overwritten either. If `episode-leikattu.fcpxml`
+exists, the next one becomes `episode-leikattu v2.fcpxml`, then `v3`, and so
+on. The path shown in the interface is always the one the next export will
+write.
+
 When the source is a `.fcpxmld` bundle, neither file goes inside it. Both land
 beside it and take the bundle's name: `episode 12.fcpxmld` produces
 `episode 12-leikattu.fcpxml` and `episode 12.autoraffkat.json`. The

@@ -52,12 +52,31 @@ def legacy_settings_path(xml_path: str) -> str:
 
 
 def default_output_path(xml_path: str) -> str:
-    """Viennin polku: ``jakso.fcpxml`` -> ``jakso-leikattu.fcpxml``.
+    """Viennin perusnimi: ``jakso.fcpxml`` -> ``jakso-leikattu.fcpxml``.
 
     Erillinen nimi on tahallinen: vienti ei saa osua lähde-XML:n päälle, koska
     silmukassa palataan aina samaan lähteeseen.
     """
     return f"{derived_base(xml_path)}{OUTPUT_SUFFIX}.fcpxml"
+
+
+def next_output_path(xml_path: str) -> str:
+    """Ensimmäinen vapaa viennin polku.
+
+    ``jakso-leikattu.fcpxml``, sitten ``jakso-leikattu v2.fcpxml``, ``v3`` ja
+    niin edelleen. Valmiin leikkauksen päälle ei kirjoiteta: edellinen vienti
+    on tyypillisesti jo tuotu Final Cutiin ja sitä on ehditty leikata, eikä
+    siihen työhön ole enää muuta lähdettä. Numero tulee nimen loppuun
+    tunnuksen jälkeen, jotta ``pick`` tunnistaa myös numeroidut viennit
+    omikseen eikä tarjoa niitä uudeksi lähteeksi.
+    """
+    base = f"{derived_base(xml_path)}{OUTPUT_SUFFIX}"
+    if not os.path.exists(f"{base}.fcpxml"):
+        return f"{base}.fcpxml"
+    number = 2
+    while os.path.exists(f"{base} v{number}.fcpxml"):
+        number += 1
+    return f"{base} v{number}.fcpxml"
 
 
 @dataclass

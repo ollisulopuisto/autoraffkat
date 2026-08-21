@@ -109,6 +109,13 @@ killed the entire import. `clip` and `asset-clip` know that attribute,
 Derived files do not go inside the `.fcpxmld` bundle but beside it, taking the
 bundle's name. The bundle belongs to Final Cut.
 
+An export never lands on an existing file. `project.next_output_path` walks
+`-leikattu`, `-leikattu v2`, `v3` … until it finds a free name, and `pick`'s
+`_OUTPUT_RE` recognises the numbered ones as our own so they are not offered
+back as a source. The reason is not tidiness: the previous export is usually
+already imported into Final Cut and edited by hand, and that work has no other
+source to be rebuilt from.
+
 ## User-visible text is translated, code is not
 
 Everything the user reads goes through translation: server messages via
@@ -120,6 +127,22 @@ Code, comments and docstrings stay in Finnish. They are for the maintainers.
 
 The language is a `ContextVar`, not a global: audio processing runs in a
 background thread while the interface is asking for state.
+
+## The pair is drawn, not explained
+
+A close-up and its microphone are one thing in two rows, and the interface has
+to say so without being read. Four things do it, and they depend on each other:
+the speaker chip sits in its **own grid column**, identical on both rows; the
+row carries the speaker colour as a `--tint` custom property (background, left
+border, hover, pin); the microphone row shows its close-up's thumbnail; and
+`drawCables` draws a patch cable from chip to chip.
+
+The cable is measured, not laid out: `chipEls` keeps the chip and the row for
+each track key, and the positions come from `getBoundingClientRect` after the
+rows are on screen. So anything that moves a row has to redraw — renderTracks,
+pinning, hovering, window resize. Each speaker gets a lane of its own outside
+the rows' left edge, which is why `.panel.tracks` has the extra left padding:
+cables crossing the rows or each other say nothing.
 
 ## The interface has a smoke test, and it is not optional
 
@@ -140,7 +163,10 @@ Three things keep it honest, and none of them are decoration:
   nothing.
 * The harness fires every registered event handler. Rendering alone runs about
   half the file; clicks, selects and text fields are the other half, and that
-  is where an undefined variable hides.
+  is where an undefined variable hides. It fires one generation at a time:
+  handlers that redraw the track list create a whole new set of elements, and
+  firing the detached ones again on the next pass multiplies them until node
+  runs out of heap. The next pass renders the same interface anyway.
 * Every top-level function is wrapped in a counter, and the run **fails** if
   any was never called. Add a function without covering it and the test says
   so by name. Anything genuinely unreachable goes in `NEVER_CALLED_OK` with a

@@ -9,6 +9,13 @@ const SPEAKER_COLORS = ['--sp0', '--sp1', '--sp2', '--sp3', '--sp4'];
 const WIDE_COLOR = '--wide';
 const DEBOUNCE_MS = 45;
 
+/* Mikkimerkki peilikuvan päälle. Merkkijonona, koska SVG-solmu vaatisi
+   createElementNS:n eikä toisi tähän mitään. */
+const MIC_ICON = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+  + ' stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">'
+  + '<rect x="9" y="2" width="6" height="11" rx="3"/>'
+  + '<path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/></svg>';
+
 const ROLE_LABELS = () => [
   ['unused', T('role.unused')],
   ['wide', T('role.wide')],
@@ -224,6 +231,7 @@ function renderTracks() {
 
   /* Kuva ja ääni omiin ryhmiinsä: niillä on eri roolit, eri säätimet ja
      kuvalla pikkukuva. Sekaisin lueteltuna kumpikaan ei ole luettava. */
+  chipEls.clear();
   [['video-tracks', 'video'], ['audio-tracks', 'audio']].forEach(([id, kind]) => {
     const host = $(id);
     host.textContent = '';
@@ -235,9 +243,188 @@ function renderTracks() {
     }
     rows.forEach((media) => host.append(trackRow(media, kind)));
   });
+
+  /* Kiinnitys elää piirtojen yli: rivit ovat uusia olioita. */
+  applyPin();
 }
 
-/* Yksi raitarivi. Kuvarivillä on pikkukuva, äänirivillä ei — muuten sama. */
+/* Kiinnitetty puhuja. Hiiren korostus katoaa heti kun hiiri liikkuu, joten
+   parin tarkasteluun tarvitaan tila, joka pysyy. */
+let pinned = null;
+let hovered = null;
+
+function togglePin(name) {
+  pinned = pinned === name ? null : name;
+  applyPin();
+}
+
+/* Luokat merkitään suoraan riveihin eikä listaa piirretä uudestaan: puhujan
+   nimikentässä voi olla kesken kirjoitettu arvo. Kiinnitys myös puretaan jos
+   puhujaa ei enää ole — muuten kaikki rivit jäisivät himmeiksi. */
+function applyPin() {
+  const rows = [...document.querySelectorAll('.track')];
+  if (pinned && !rows.some((el) => el.dataset.speaker === pinned)) pinned = null;
+  rows.forEach((el) => {
+    const mine = !!pinned && el.dataset.speaker === pinned;
+    el.classList.toggle('is-pinned', mine);
+    el.classList.toggle('is-dimmed', !!pinned && !mine);
+  });
+  drawCables();
+}
+
+/* Merkin kytkentäpiste: merkin vasen reuna, pystysuunnassa keskeltä.
+   Mitat suhteessa piuhakerrokseen, joka peittää koko raitapaneelin. */
+function plugAt(key, base) {
+  const found = chipEls.get(key);
+  if (!found || typeof found.chip.getBoundingClientRect !== 'function') return null;
+  const r = found.chip.getBoundingClientRect();
+  if (!r.width && !r.height) return null;
+  /* Rivin vasen reuna erikseen: kaista kulkee sen ulkopuolella, muuten piuha
+     menisi rivin oman värireunuksen päälle eikä erottuisi siitä. */
+  return { x: r.left - base.left, y: r.top - base.top + r.height / 2,
+           edge: found.row.getBoundingClientRect().left - base.left };
+}
+
+/* Yhden piuhan reitti: merkistä sivuun, omaa kaistaa alas ja takaisin sisään.
+   Kaista on puhujakohtainen, koska päällekkäin kulkevista piuhoista ei näe
+   kumpi menee minne — juuri se on ainoa asia jonka piuhan on kerrottava. */
+function cablePath(a, b, lane) {
+  const laneX = Math.max(2, Math.min(a.edge, b.edge) - 10 - lane * 9);
+  const turn = Math.min(18, Math.abs(b.y - a.y) / 2.5);
+  const down = b.y > a.y ? 1 : -1;
+  return `M${a.x} ${a.y} C${a.x - 10} ${a.y} ${laneX} ${a.y} ${laneX} ${a.y + turn * down}`
+    + ` L${laneX} ${b.y - turn * down}`
+    + ` C${laneX} ${b.y} ${b.x - 10} ${b.y} ${b.x} ${b.y}`;
+}
+
+/* Piuhat parien merkkien välille. Väri ja tausta kertovat parin, mutta vasta
+   yhtenäinen viiva kertoo sen katsomatta: silmä seuraa viivaa, ei sävyä.
+   Piuhat kulkevat paneelin vasemmassa reunassa, koska väliin jää muita rivejä
+   eikä niiden päältä saa mennä. Korostettu piuha piirretään viimeisenä, jotta
+   se jää muiden päälle. */
+function drawCables() {
+  const host = $('cables');
+  if (typeof host.getBoundingClientRect !== 'function') return;
+  const base = host.getBoundingClientRect();
+  if (!base.width || !base.height) { host.innerHTML = ''; return; }
+
+  const active = pinned || hovered;
+  const back = [];
+  const front = [];
+  state.tracks.forEach((media) => {
+    if (media.config.role !== 'close') return;
+    const speakerName = (media.config.speaker || '').trim();
+    const mate = counterpartOf(media, speakerName);
+    if (!mate) return;
+    const a = plugAt(media.key, base);
+    const b = plugAt(mate.key, base);
+    if (!a || !b) return;
+    const index = speakerIndex(speakerName);
+    const color = colorFor(index);
+    const strong = active === speakerName;
+    const faded = active && !strong;
+    const d = cablePath(a, b, index);
+    const parts = [
+      `<path d="${d}" fill="none" stroke="#000" stroke-width="5.5"`
+      + ` stroke-linecap="round" stroke-linejoin="round" opacity="${faded ? 0.1 : 0.5}"/>`,
+      `<path d="${d}" fill="none" stroke="${color}" stroke-width="${strong ? 3.4 : 2.4}"`
+      + ` stroke-linecap="round" stroke-linejoin="round"`
+      + ` opacity="${faded ? 0.16 : strong ? 1 : 0.85}"/>`,
+      `<circle cx="${a.x}" cy="${a.y}" r="3.4" fill="${color}"`
+      + ` opacity="${faded ? 0.16 : 1}"/>`,
+      `<circle cx="${b.x}" cy="${b.y}" r="3.4" fill="${color}"`
+      + ` opacity="${faded ? 0.16 : 1}"/>`,
+    ];
+    (strong ? front : back).push(parts.join(''));
+  });
+  const body = back.join('') + front.join('');
+  host.innerHTML = body
+    ? `<svg width="100%" height="100%" aria-hidden="true">${body}</svg>` : '';
+}
+
+/* Raidan pari: lähikuvalle saman puhujan mikki ja mikille lähikuva. Side on
+   puhuja, ei tiedostonimi. */
+function counterpartOf(media, speakerName) {
+  if (!speakerName) return null;
+  const wanted = media.config.role === 'close' ? ['audio', 'mic']
+    : media.config.role === 'mic' ? ['video', 'close'] : null;
+  if (!wanted) return null;
+  return state.tracks.find((t) => t.kind === wanted[0]
+    && t.config.role === wanted[1]
+    && (t.config.speaker || '').trim() === speakerName) || null;
+}
+
+/* Pikkukuvan paikka. Kuvarivi näyttää oman kuvansa, mikkirivi parinsa kuvan
+   himmeänä ja mikkimerkillä: ääniraidasta ei näe kasvoja, ja juuri kasvot
+   kertovat kenen mikki on. Paikka piirretään myös tyhjänä, jotta sarakkeet
+   pysyvät linjassa. */
+function thumbSlot(media, kind, counterpart) {
+  const slot = document.createElement('div');
+  slot.className = 'thumb-slot';
+  const source = kind === 'video' ? media : counterpart;
+  if (!source) {
+    if (media.config.role === 'mic' && (media.config.speaker || '').trim()) {
+      slot.classList.add('unlinked');
+      slot.title = T('app.noLinkedClose');
+    }
+    return slot;
+  }
+  const thumb = document.createElement('img');
+  thumb.className = 'thumb';
+  thumb.loading = 'lazy';
+  thumb.alt = '';
+  thumb.src = `/api/thumb?track=${encodeURIComponent(source.key)}`;
+  thumb.addEventListener('error', () => thumb.classList.add('thumb-missing'));
+  slot.append(thumb);
+  if (kind === 'audio') {
+    slot.classList.add('mirror');
+    slot.title = T('app.linkedClose', { name: source.name });
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.innerHTML = MIC_ICON;
+    slot.append(badge);
+  }
+  return slot;
+}
+
+/* Puhujamerkit raitakohtaisesti talteen. Piuha piirretään merkistä merkkiin,
+   ja sijainti mitataan vasta kun rivit ovat ruudulla. */
+const chipEls = new Map();
+
+/* Puhujamerkki omassa solussaan. Sama merkki lähikuvalle ja mikille, samalle
+   kohdalle: kaksi samanlaista merkkiä samassa sarakkeessa luetaan samaksi
+   asiaksi ilman selitystä. */
+function chipCell(media, speakerName, row) {
+  const cell = document.createElement('div');
+  cell.className = 'chip-cell';
+  const chip = document.createElement('span');
+  chip.className = 'chip';
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  const label = document.createElement('span');
+  label.className = 'label';
+  label.textContent = media.config.role === 'wide' ? T('role.wide') : speakerName;
+  chip.append(dot, label);
+  cell.append(chip);
+  chipEls.set(media.key, { chip, row });
+  return cell;
+}
+
+/* Parin nimi nimen alle. Merkki kertoo kuka, tämä minkä tiedoston kanssa. */
+function pairedLabel(media, counterpart) {
+  const role = media.config.role;
+  if (role !== 'close' && role !== 'mic') return null;
+  const key = role === 'close'
+    ? (counterpart ? 'app.linkedMic' : 'app.noLinkedMic')
+    : (counterpart ? 'app.linkedClose' : 'app.noLinkedClose');
+  const link = document.createElement('div');
+  link.className = counterpart ? 'paired-label' : 'paired-label unlinked';
+  link.textContent = counterpart ? T(key, { name: counterpart.name }) : T(key);
+  return link;
+}
+
+/* Yksi raitarivi. Kuvarivillä on oma pikkukuva, mikkirivillä parinsa kuva —
+   muuten sama rakenne. */
 function trackRow(media, kind) {
   const row = document.createElement('div');
   row.className = `track track-${kind}`;
@@ -251,8 +438,11 @@ function trackRow(media, kind) {
     trackColor = colorFor(speakerIndex(speakerName));
   }
 
+  /* Väri annetaan muuttujana, koska sitä käyttävät myös taustan sävy,
+     merkki ja korostukset — ei pelkkä reunapalkki. */
   if (trackColor) {
-    row.style.borderLeftColor = trackColor;
+    row.style.setProperty('--tint', trackColor);
+    row.classList.add('is-tinted');
   }
   if (speakerName) {
     row.dataset.speaker = speakerName;
@@ -260,22 +450,21 @@ function trackRow(media, kind) {
       const escape = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape : (s) => s;
       document.querySelectorAll(`.track[data-speaker="${escape(speakerName)}"]`)
         .forEach((el) => el.classList.add('is-highlighted'));
+      hovered = speakerName;
+      drawCables();
     });
     row.addEventListener('mouseleave', () => {
       document.querySelectorAll('.track.is-highlighted')
         .forEach((el) => el.classList.remove('is-highlighted'));
+      hovered = null;
+      drawCables();
     });
   }
 
-  if (kind === 'video') {
-    const thumb = document.createElement('img');
-    thumb.className = 'thumb';
-    thumb.loading = 'lazy';
-    thumb.alt = '';
-    thumb.src = `/api/thumb?track=${encodeURIComponent(media.key)}`;
-    thumb.addEventListener('error', () => thumb.classList.add('thumb-missing'));
-    row.append(thumb);
-  }
+  const counterpart = counterpartOf(media, speakerName);
+  const cell = trackColor ? chipCell(media, speakerName, row) : document.createElement('div');
+  const slot = thumbSlot(media, kind, counterpart);
+  row.append(cell, slot);
 
   const left = document.createElement('div');
   left.className = 'meta';
@@ -290,54 +479,16 @@ function trackRow(media, kind) {
   tags.className = 'tags';
   tags.textContent = trackFacts(media);
   left.append(name, tags);
+  const link = pairedLabel(media, counterpart);
+  if (link) left.append(link);
 
-  if (media.config.role === 'close' && speakerName) {
-    const pair = document.createElement('div');
-    pair.className = 'pairing';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = trackColor;
-    const spSpan = document.createElement('span');
-    spSpan.className = 'speaker-name';
-    spSpan.textContent = speakerName;
-    const counterpart = state.tracks.find((t) => t.kind === 'audio' && t.config.role === 'mic' && (t.config.speaker || '').trim() === speakerName);
-    const link = document.createElement('span');
-    link.className = 'paired-label';
-    link.textContent = counterpart
-      ? ` · ${T('app.linkedMic', { name: counterpart.name })}`
-      : ` · ${T('app.noLinkedMic')}`;
-    if (!counterpart) pair.classList.add('unlinked');
-    pair.append(dot, spSpan, link);
-    left.append(pair);
-  } else if (media.config.role === 'mic' && speakerName) {
-    const pair = document.createElement('div');
-    pair.className = 'pairing';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = trackColor;
-    const spSpan = document.createElement('span');
-    spSpan.className = 'speaker-name';
-    spSpan.textContent = speakerName;
-    const counterpart = state.tracks.find((t) => t.kind === 'video' && t.config.role === 'close' && (t.config.speaker || '').trim() === speakerName);
-    const link = document.createElement('span');
-    link.className = 'paired-label';
-    link.textContent = counterpart
-      ? ` · ${T('app.linkedClose', { name: counterpart.name })}`
-      : ` · ${T('app.noLinkedClose')}`;
-    if (!counterpart) pair.classList.add('unlinked');
-    pair.append(dot, spSpan, link);
-    left.append(pair);
-  } else if (media.config.role === 'wide') {
-    const pair = document.createElement('div');
-    pair.className = 'pairing';
-    const dot = document.createElement('span');
-    dot.className = 'dot';
-    dot.style.background = trackColor;
-    const spSpan = document.createElement('span');
-    spSpan.className = 'speaker-name';
-    spSpan.textContent = T('role.wide');
-    pair.append(dot, spSpan);
-    left.append(pair);
+  if (speakerName) {
+    const pin = () => togglePin(speakerName);
+    [left, slot, cell].forEach((el) => {
+      el.classList.add('pinnable');
+      el.addEventListener('click', pin);
+    });
+    left.title = T('app.pinHint');
   }
 
   const controls = document.createElement('div');
@@ -366,7 +517,9 @@ function trackRow(media, kind) {
     media.config.speaker = speaker.value;
     schedule();
   });
-  speaker.addEventListener('change', renderLegend);
+  /* Nimen vahvistus piirtää rivit uusiksi: merkki, peilikuva ja piuha
+     syntyvät vasta kun puhuja on tiedossa. */
+  speaker.addEventListener('change', () => { renderLegend(); renderTracks(); });
   controls.append(role, speaker);
   row.append(left, controls);
 
@@ -941,6 +1094,9 @@ async function exportXml() {
       const mixed = data.mixed ? T('app.exportedMix', { n: data.mixed }) : '';
       $('status').textContent =
         T('app.exported', { cuts: data.cuts, file: data.path.split('/').pop() }) + mixed;
+      /* Polkurivi näyttää mihin *seuraava* vienti menee: äsken kirjoitettua
+         tiedostoa ei enää korvata. */
+      if (data.next_path) { state.output_path = data.next_path; renderHeader(); }
       banner((data.warnings || []).join('\n'));
     } else {
       $('status').textContent = '';
@@ -1138,7 +1294,7 @@ $('reload').addEventListener('click', async () => {
   watchProgress();
   if (state.progress && state.progress.ready) setBusy(button, false);
 });
-window.addEventListener('resize', () => { drawBar(); renderRuler(); });
+window.addEventListener('resize', () => { drawBar(); renderRuler(); drawCables(); });
 window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
     e.preventDefault();

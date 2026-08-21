@@ -13,7 +13,7 @@ bin/
 out/
 # Viennit ja lähdepaketit: johdettua tai konekohtaista. Paketissa on
 # absoluuttiset mediapolut ja macOS:n bookmarkit, joten se ei siirry.
-*-leikattu.fcpxml
+*-leikattu*.fcpxml
 *.fcpxmld/
 # Käsitelty ääni median vieressä.
 * [mix].wav
