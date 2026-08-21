@@ -141,7 +141,7 @@ def test_defaults_are_guessed_but_speakers_are_asked(scratch_xml):
     client = TestClient(create_app(state))
     result = client.post("/api/settings", json={"tracks": {}, "globals": {}}).json()
     assert not result["ok"]
-    assert any("puhujaa" in problem for problem in result["problems"])
+    assert any("puhujaa" in p or "speaker" in p.lower() for p in result["problems"])
 
 
 def test_no_wide_is_reported(scratch_xml):
@@ -153,7 +153,7 @@ def test_no_wide_is_reported(scratch_xml):
     payload["tracks"]["WIDE.mp4"]["role"] = "unused"
     result = client.post("/api/settings", json=payload).json()
     assert not result["ok"]
-    assert any("laajaksi" in problem for problem in result["problems"])
+    assert any("laajaksi" in p or "wide" in p.lower() for p in result["problems"])
 
 
 # ------------------------------------------------------------------ multicam
@@ -256,7 +256,7 @@ def test_all_wide_is_a_problem_not_a_result(scratch_xml):
     result = client.post("/api/settings",
                          json={"tracks": tracks, "globals": {}}).json()
     assert not result["ok"]
-    assert any("lähikuvaa" in problem for problem in result["problems"])
+    assert any("lähikuvaa" in p or "close-up" in p.lower() for p in result["problems"])
 
 
 def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
@@ -427,7 +427,7 @@ def test_export_warns_when_audio_is_still_processing(scratch_xml):
                "globals": {}, "audio": {"enabled": True}}
     result = client.post("/api/export", json=payload).json()
     assert result["ok"] and result["mixed"] == 0
-    assert any("kesken" in w for w in result["warnings"])
+    assert any("kesken" in w or "running" in w.lower() for w in result["warnings"])
 
 
 def test_export_is_quiet_when_audio_is_off(scratch_xml):
