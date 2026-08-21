@@ -121,6 +121,26 @@ Code, comments and docstrings stay in Finnish. They are for the maintainers.
 The language is a `ContextVar`, not a global: audio processing runs in a
 background thread while the interface is asking for state.
 
+## The interface has a smoke test, and it is not optional
+
+`node --check` validates syntax only, so it does not notice an undefined
+variable. One got through: `renderAudio` referenced a `busy` variable that had
+been removed, which aborted the whole render — "Reload" span forever and the
+console showed nothing but a `ReferenceError`.
+
+`tests/ui_smoke.js` loads `i18n.js` and `app.js` into a stub DOM and runs every
+render function in both languages, with audio processing on and off and with
+processing in progress. The state comes from the server for real
+(`_state_json`), so a field renamed at only one end fails here too.
+
+`test_smoke_catches_an_undefined_variable` guards the guard: it injects a
+broken reference and asserts the harness notices. A smoke test that passes
+everything protects nothing.
+
+Note when writing the harness: `let state` in `app.js` is a lexical binding,
+not a property of the global object, so `context.state = ...` does not reach
+it. Assign it from inside the context.
+
 ## Static files are versioned
 
 `index.html` is served with `app.js`, `i18n.js` and `style.css` given their

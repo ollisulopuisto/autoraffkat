@@ -378,6 +378,10 @@ uv run pytest
 The export is validated against Final Cut's own DTD when Final Cut is
 installed — our reader accepts far more than the importer does.
 
+The interface has a smoke test: every render function is run in a stub DOM in
+both languages, driven by the state the server actually produces. Node is
+optional — the test skips without it.
+
 Test material is synthesised with ffmpeg: sine bursts at known positions, so
 the decision can be checked without real footage (`tests/make_fixture.py`).
 

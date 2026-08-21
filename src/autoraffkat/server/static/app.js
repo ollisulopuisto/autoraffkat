@@ -533,12 +533,13 @@ function renderAudio() {
     });
   }
 
+  const busy = !!(info.progress && info.progress.running);
   const run = document.createElement('button');
   run.className = 'ghost';
   run.id = 'mix-run';
   run.textContent = T('audio.run');
   run.addEventListener('click', runMix);
-  if (info.progress && info.progress.running) setBusy(run, true, T('audio.running'));
+  if (busy) setBusy(run, true, T('audio.running'));
   host.append(run);
 
   host.append(resetButton('audio', T('app.reset.audio')));
