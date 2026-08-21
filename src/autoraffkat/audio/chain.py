@@ -294,3 +294,37 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     return audio, ChainResult(frames=frames, channels=audio.shape[0],
                               gain_db=round(lift, 2), measured_lufs=measured,
                               lag=lag)
+
+
+def apply_duck(audio: np.ndarray, rate: int, closed: list[tuple[int, int]],
+               depth_db: float, fade: float) -> np.ndarray:
+    """Vaimentaa annetut jaksot ja liu'uttaa reunat.
+
+    Vaimennus tehdään jaksoittain paikan päällä eikä koko tiedoston mittaisella
+    vahvistuskäyrällä: tunnin mittainen mikki on 184 miljoonaa näytettä, ja
+    erillinen float-taulukko sen päälle olisi kolme neljäsosaa gigatavusta.
+    Jaksoja on tuhansia.
+
+    Reunoilla on liuku, koska askel vaimennuksesta täyteen tasoon naksahtaa.
+    """
+    if not closed or depth_db >= 0:
+        return audio
+    level = 10.0 ** (depth_db / 20.0)
+    ramp = max(1, int(fade * rate))
+    frames = audio.shape[1]
+
+    for start, end in closed:
+        start = max(0, start)
+        end = min(frames, end)
+        if end <= start:
+            continue
+        # Liu'ut eivät saa syödä toisiaan lyhyessä jaksossa.
+        span = min(ramp, (end - start) // 2)
+        body_start, body_end = start + span, end - span
+        if body_end > body_start:
+            audio[:, body_start:body_end] *= level
+        if span > 0:
+            down = np.linspace(1.0, level, span, dtype=np.float32)
+            audio[:, start:start + span] *= down
+            audio[:, end - span:end] *= down[::-1]
+    return audio

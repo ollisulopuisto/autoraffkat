@@ -56,6 +56,16 @@ const AUDIO_KNOBS = [
   { key: 'gain_db', label: 'Trimmi', min: -12, max: 12, step: 0.5, unit: ' dB' },
 ];
 
+const DUCK_KNOBS = [
+  { key: 'duck_db', label: 'Vaimennus', min: -60, max: 0, step: 1, unit: ' dB',
+    zero: 'ei vaimennusta' },
+  { key: 'duck_lookahead', label: 'Ennakko', min: 0, max: 0.5, step: 0.01, unit: ' s' },
+  { key: 'duck_hold', label: 'Pito', min: 0, max: 2, step: 0.05, unit: ' s' },
+  { key: 'duck_min_open', label: 'Lyhin avaus', min: 0, max: 1, step: 0.05, unit: ' s' },
+  { key: 'duck_dominance_db', label: 'Erotus kovimpaan', min: 0, max: 24, step: 0.5,
+    unit: ' dB' },
+];
+
 const ROOM_KNOBS = [
   { key: 'room_db', label: 'Tilaäänen taso', min: -40, max: 0, step: 1,
     unit: ' dB puhetta hiljempaa' },
@@ -363,6 +373,31 @@ function renderAudio() {
   ess.append(essBox, Object.assign(document.createElement('span'),
     { textContent: 'Maiskausten poisto' }));
   host.append(ess);
+
+  /* Toisen mikin vaimennus. Ohjaus tulee samasta puheentunnistuksesta kuin
+     esikatselupalkin värit, joten palkki kertoo suoraan milloin kumpikin
+     mikki on auki. */
+  const duckBox = document.createElement('input');
+  duckBox.type = 'checkbox';
+  duckBox.checked = !!audio.duck;
+  duckBox.addEventListener('change', () => {
+    audio.duck = duckBox.checked;
+    renderAudio();
+    schedule(0);
+  });
+  const duckLabel = document.createElement('label');
+  duckLabel.className = 'check';
+  duckLabel.append(duckBox, Object.assign(document.createElement('span'),
+    { textContent: 'Vaimenna toinen mikki puheen ulkopuolella' }));
+  host.append(duckLabel);
+  if (audio.duck) {
+    DUCK_KNOBS.forEach((spec) => {
+      host.append(knob(spec, audio[spec.key], (v) => {
+        audio[spec.key] = v;
+        schedule();
+      }));
+    });
+  }
 
   /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana ovat
      vain raidat joissa on ääntä. */

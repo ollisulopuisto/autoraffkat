@@ -3,6 +3,7 @@
 import numpy as np
 import pytest
 
+from autoraffkat import decide as decide_mod
 from autoraffkat.decide import HOLD, WIDE, Grid, SpeakerLanes, decide
 from autoraffkat.model import (HOP, LONGTAKE_RETURN, LONGTAKE_STAY,
                                OVERLAP_HOLD, OVERLAP_LOUDER, OVERLAP_WIDE,
@@ -239,3 +240,50 @@ def test_short_turns_are_left_alone():
         # A:n vuoro on 8 s eli alle kynnyksen; se jää yhdeksi kuvaksi.
         assert [s.angle for s in d.segments[:3]] == ["W", "CA", "CB"], rule
         assert d.segments[1].duration == pytest.approx(8.0, abs=0.05), rule
+
+
+# ------------------------------------------------- mikin vaimennus
+
+
+def mask_from(spans, seconds=20.0):
+    n = int(seconds / HOP)
+    out = np.zeros(n, dtype=bool)
+    for start, end in spans:
+        out[int(start / HOP):int(end / HOP)] = True
+    return out
+
+
+def spans_of(mask):
+    """Maskin todet jaksot sekunteina, luettavuuden vuoksi."""
+    from autoraffkat.decide import _runs
+    return [(round(a * HOP, 2), round(b * HOP, 2))
+            for a, b, v in _runs(mask.astype(np.int8)) if v]
+
+
+def test_open_windows_drops_a_cough():
+    """Yksittäinen yskäisy ei saa avata mikkiä."""
+    mask = mask_from([(5.0, 5.08), (10.0, 12.0)])
+    out = decide_mod.open_windows(mask, lookahead=0.0, hold=0.0, min_open=0.2)
+    assert spans_of(out) == [(10.0, 12.0)]
+
+
+def test_open_windows_opens_early_and_holds():
+    """Ennakko pelastaa sanan alun, pito lauseen hännän."""
+    mask = mask_from([(10.0, 12.0)])
+    out = decide_mod.open_windows(mask, lookahead=0.15, hold=0.4, min_open=0.0)
+    start, end = spans_of(out)[0]
+    assert start == pytest.approx(9.85, abs=0.02)
+    assert end == pytest.approx(12.4, abs=0.02)
+
+
+def test_open_windows_merges_words_across_a_pause():
+    """Sanaväli ei saa sulkea porttia, jos pito kattaa sen."""
+    mask = mask_from([(10.0, 10.5), (10.7, 11.5)])
+    out = decide_mod.open_windows(mask, lookahead=0.15, hold=0.4, min_open=0.0)
+    assert len(spans_of(out)) == 1
+
+
+def test_open_windows_without_knobs_is_the_input():
+    mask = mask_from([(3.0, 4.0)])
+    out = decide_mod.open_windows(mask, lookahead=0.0, hold=0.0, min_open=0.0)
+    assert np.array_equal(out, mask)

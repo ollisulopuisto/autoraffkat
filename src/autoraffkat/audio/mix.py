@@ -30,7 +30,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..model import AudioSettings
+import numpy as np
+
+from ..decide import _runs, open_windows
+from ..model import HOP, AudioSettings
 from . import chain
 from .chain import ChainError
 
@@ -154,14 +157,41 @@ class MixResult:
         return not self.errors
 
 
+def closed_ranges(item, mask, program_start: float, rate: int) -> list[tuple[int, int]]:
+    """Missä tiedoston kohdissa mikki on kiinni, näyteväleinä.
+
+    Ruudukko on aikajanan aikaa, tiedosto omaansa. Muunnos tehdään
+    esiintymittäin, koska kunkin palan sisällä kuvaus on lineaarinen.
+    Ruudukon ulkopuolelle jäävää osaa ei vaimenneta: siitä ei ole tietoa, eikä
+    vienti käytä sitä.
+    """
+    out: list[tuple[int, int]] = []
+    for start, end, value in _runs(mask.astype(np.int8)):
+        if value:
+            continue
+        low = program_start + start * HOP
+        high = program_start + end * HOP
+        for placement in item.placements:
+            first = max(low, float(placement.offset))
+            last = min(high, float(placement.end))
+            if last <= first:
+                continue
+            # tiedostoaika = klipin start - assetin start + (aikajana - offset)
+            base = float(placement.start - item.asset_start - placement.offset)
+            out.append((int(round((base + first) * rate)),
+                        int(round((base + last) * rate))))
+    return out
+
+
 def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
     """Käsiteltävät tiedostot: mikit, ja tilaääni jos sellainen on valittu."""
     jobs: list[dict] = []
-    for keys in roles.mics.values():
+    for speaker, keys in roles.mics.items():
         for track_key in keys:
             for item in timeline.track_media(track_key):
                 if item.path:
                     jobs.append({"key": item.key, "name": item.name,
+                                 "speaker": speaker, "item": item,
                                  "source": item.path,
                                  "target": sibling(item.path, MIX_SUFFIX),
                                  "target_lufs": settings.target_lufs,
@@ -183,9 +213,9 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
     return jobs
 
 
-def _run_one(job: dict, settings: AudioSettings, plugin) -> float:
+def _run_one(job: dict, settings: AudioSettings, plugin,
+             masks: dict | None = None, program_start: float = 0.0) -> float:
     """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston."""
-    import numpy as np
     from pedalboard.io import AudioFile
 
     source = ensure_readable(job["source"])
@@ -200,6 +230,15 @@ def _run_one(job: dict, settings: AudioSettings, plugin) -> float:
     audio, info = chain.process(audio, rate, settings, job.get("gain_db", 0.0),
                                 job.get("speech", True), job.get("target_lufs"),
                                 plugin)
+
+    # Vaimennus viimeisenä: sitä ennen mitattu taso koskee puhetta, ei
+    # puheen ja hiljaisuuden keskiarvoa.
+    mask = (masks or {}).get(job.get("speaker"))
+    if mask is not None and settings.duck and settings.duck_db < 0:
+        audio = chain.apply_duck(
+            audio, rate,
+            closed_ranges(job["item"], mask, program_start, rate),
+            settings.duck_db, settings.duck_fade)
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
@@ -222,7 +261,35 @@ def _run_one(job: dict, settings: AudioSettings, plugin) -> float:
     return info.gain_db
 
 
-def process(timeline, roles, settings: AudioSettings, progress=None) -> MixResult:
+def duck_masks(grid, settings: AudioSettings) -> dict:
+    """Puhujakohtaiset «mikki auki» -maskit ruudukossa.
+
+    Ohjaus on sama puheentunnistus kuin kuvan leikkauksessa — se on jo säädetty
+    herkkyyssäätimillä ja näkyy esikatselupalkissa — mutta omilla ajoillaan.
+    Kuva odottaa vahvistusaikaa ennen leikkausta; portin on avauduttava heti.
+
+    Ratkaiseva ero pelkkään kynnykseen: **auki jää vain kovin mikki** ja ne
+    jotka ovat ``duck_dominance_db``:n sisällä siitä. Kaksi mikkiä samassa
+    huoneessa kuulevat molemmat puhujat, joten kumpikin ylittää kynnyksen
+    lähes aina — mitattuna 41 % ajasta yhtä aikaa. Vuoto on kuitenkin selvästi
+    hiljempaa: mitattu mediaaniero on 12,8 dB, joten kovemman valinta erottaa
+    puhujat siististi. Kuuden desibelin ikkunalla molemmat jäävät auki 3 %
+    ajasta, ja ne ovat aitoa päällekkäispuhetta.
+    """
+    if grid is None or not settings.duck or not grid.speakers:
+        return {}
+    active = np.stack([lane.on for lane in grid.speakers])
+    levels = np.stack([lane.level for lane in grid.speakers])
+    # Vain äänessä olevat kilpailevat; hiljainen ei voi olla kovin.
+    loudest = np.where(active, levels, -300.0).max(axis=0)
+    keep = active & (levels >= loudest - settings.duck_dominance_db)
+    return {lane.name: open_windows(keep[i], settings.duck_lookahead,
+                                    settings.duck_hold, settings.duck_min_open)
+            for i, lane in enumerate(grid.speakers)}
+
+
+def process(timeline, roles, settings: AudioSettings, grid=None,
+            program_start: float = 0.0, progress=None) -> MixResult:
     """Käsittelee mikit ja tilaäänen. Hidas — ei kuulu säätösilmukkaan.
 
     Liitännäinen ladataan kerran ja sen tila nollataan tiedostojen välissä:
@@ -254,13 +321,15 @@ def process(timeline, roles, settings: AudioSettings, progress=None) -> MixResul
         result.errors["plugin"] = str(exc)
         return result
 
+    masks = duck_masks(grid, settings)
     started = time.perf_counter()
     for index, job in enumerate(todo):
         if progress is not None:
             progress(index, len(todo), job["name"],
                      _eta(started, index, len(todo)))
         try:
-            result.gains[job["key"]] = _run_one(job, settings, plugin)
+            result.gains[job["key"]] = _run_one(job, settings, plugin,
+                                                masks, program_start)
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)
             continue

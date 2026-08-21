@@ -237,6 +237,34 @@ leikkaukseen roolilla `effects.Tilaääni` asetetun verran puhetta hiljemmalle.
 Se ei ole kulma vaan liitetty klippi, joten se jatkuu leikkausten yli.
 Kompressointia siihen ei tehdä: kompressoitu tilaääni pumppaa.
 
+### Toisen mikin vaimennus
+
+Valinnainen. Kun toinen puhuu, toisen mikki vaimennetaan — oletuksena 15 dB,
+ei kokonaan mykistetä.
+
+Ohjaus tulee **samasta puheentunnistuksesta kuin kuvan leikkaus**, eli siitä
+mikä näkyy esikatselupalkissa ja on jo säädetty herkkyyssäätimillä. Se on koko
+idea: portin vaikea osa on tunnistus, ja se on jo tehty ja katsottu.
+
+Kynnys yksin ei riitä. Kaksi mikkiä samassa huoneessa kuulevat molemmat
+puhujat, joten kumpikin ylittää kynnyksen lähes aina — mitatussa jaksossa
+41 % ajasta yhtä aikaa. Siksi auki jää vain **kovin** mikki ja ne jotka ovat
+«erotus kovimpaan» -säätimen sisällä siitä. Vuoto on mitatusti 12,8 dB
+hiljempaa kuin lähin mikki, joten kuuden desibelin ikkunalla molemmat jäävät
+auki enää 6 % ajasta — ja se on aitoa päällekkäispuhetta.
+
+Kolme aikasäädintä tekevät portista käyttökelpoisen:
+
+* **Lyhin avaus** pudottaa liian lyhyet jaksot: yskäisy ei avaa mikkiä.
+* **Ennakko** avaa portin ennen puheen alkua. Tämä onnistuu vain koska
+käsittely on jälkikäteistä — reaaliaikainen portti ei voi avautua ennen kuin
+ääni on jo tullut, ja siksi siltä katoaa sanojen alkuja.
+* **Pito** pitää portin auki puheen jälkeen, jolloin lauseen häntä ja hengitys
+jäävät mukaan.
+
+Vaimennus tehdään viimeisenä, jotta mitattu taso koskee puhetta eikä puheen ja
+hiljaisuuden keskiarvoa.
+
 ### Järjestys: käsittele, vie, leikkaa
 
 Tässä järjestyksessä ja tästä syystä:

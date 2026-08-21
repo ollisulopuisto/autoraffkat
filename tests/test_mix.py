@@ -112,3 +112,82 @@ def test_frame_count_matches_the_asset(fixture_dir):
     if not path.exists():
         pytest.skip("fixturen mediaa ei ole")
     assert mix.frame_count(str(path)) == int(DURATION * 48000)
+
+
+# ------------------------------------------------- toisen mikin vaimennus
+
+
+def _grid(on_a, on_b, level_a, level_b, n=500):
+    """Kaksi puhujaa ruudukolla, annetuilla maskeilla ja tasoilla."""
+    import numpy as np
+    from autoraffkat.decide import Grid, SpeakerLanes
+
+    def lane(name, on, level):
+        mask = np.zeros(n, dtype=bool)
+        db = np.full(n, -60.0, dtype=np.float32)
+        for start, end in on:
+            mask[start:end] = True
+            db[start:end] = level
+        return SpeakerLanes(name, db, mask, f"C{name}")
+    return Grid(n=n, program_start=0.0, wide_key="W",
+                speakers=[lane("A", on_a, level_a), lane("B", on_b, level_b)])
+
+
+def test_only_the_loudest_mic_stays_open():
+    """Kaksi mikkiä samassa huoneessa kuulevat molemmat puhujat.
+
+    Kynnys ylittyy siis molemmilla, ja vain tasoero erottaa puhujat. Tämä on
+    se kohta joka tekee portista käyttökelpoisen.
+    """
+    grid = _grid([(100, 300)], [(100, 300)], level_a=-25.0, level_b=-40.0)
+    masks = mix.duck_masks(grid, AudioSettings(duck=True, duck_dominance_db=6.0,
+                                               duck_lookahead=0, duck_hold=0,
+                                               duck_min_open=0))
+    assert masks["A"][200] and not masks["B"][200]
+
+
+def test_genuine_overlap_keeps_both_open():
+    """Kun tasot ovat lähellä toisiaan, molemmat puhuvat oikeasti."""
+    grid = _grid([(100, 300)], [(100, 300)], level_a=-25.0, level_b=-28.0)
+    masks = mix.duck_masks(grid, AudioSettings(duck=True, duck_dominance_db=6.0,
+                                               duck_lookahead=0, duck_hold=0,
+                                               duck_min_open=0))
+    assert masks["A"][200] and masks["B"][200]
+
+
+def test_ducking_off_produces_no_masks():
+    grid = _grid([(100, 300)], [], level_a=-25.0, level_b=-40.0)
+    assert mix.duck_masks(grid, AudioSettings(duck=False)) == {}
+    assert mix.duck_masks(None, AudioSettings(duck=True)) == {}
+
+
+def test_closed_ranges_map_timeline_to_file_time(fixture_dir):
+    """Ruudukko on aikajanan aikaa, vaimennus tiedoston aikaa."""
+    import numpy as np
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import HOP
+
+    timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    item = timeline.media_by_key()["olli a Track1.wav"]
+    # Osa A kattaa aikajanan 0–18 s ja tiedoston 0–18 s.
+    mask = np.ones(int(36 / HOP), dtype=bool)
+    mask[int(4 / HOP):int(6 / HOP)] = False        # kiinni 4–6 s
+    ranges = mix.closed_ranges(item, mask, 0.0, 48000)
+    assert len(ranges) == 1
+    start, end = ranges[0]
+    assert start == pytest.approx(4 * 48000, abs=48)
+    assert end == pytest.approx(6 * 48000, abs=48)
+
+
+def test_closed_ranges_stay_inside_the_clip(fixture_dir):
+    """Esiintymän ulkopuolta ei vaimenneta: siitä ei ole tietoa."""
+    import numpy as np
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import HOP
+
+    timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    item = timeline.media_by_key()["olli a Track1.wav"]     # aikajanalla 0–18 s
+    mask = np.zeros(int(36 / HOP), dtype=bool)             # kaikki kiinni
+    ranges = mix.closed_ranges(item, mask, 0.0, 48000)
+    assert len(ranges) == 1
+    assert ranges[0][1] <= 18 * 48000 + 48

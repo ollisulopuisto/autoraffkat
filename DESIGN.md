@@ -306,6 +306,36 @@ viittaavat assettiin, joten leikkauslistaan ei tarvitse koskea.
 voittaa `src`:n: jättäminen tarkoittaisi että Final Cut avaa alkuperäisen
 käsittelemättömän tiedoston kertomatta siitä mitään.
 
+### Vaimennus käyttää kuvan puheentunnistusta
+
+Mikin portti on klassisesti vaikea: tunnistus välkkyy tavuvälien yli ja
+reagoi yskäisyyn. Tässä tunnistus on kuitenkin jo olemassa, säädetty
+herkkyyssäätimillä ja katsottu esikatselupalkista — sama `SpeakerLanes.on`
+joka päättää kuvan. Portti saa siis ohjauksen ilmaiseksi.
+
+Kaksi asiaa piti silti lisätä.
+
+**Kovin voittaa.** Pelkkä kynnys ei erota puhujia: kaksi mikkiä samassa
+huoneessa kuulevat molemmat, ja mitatussa aineistossa kumpikin ylitti
+kynnyksen 41 % ajasta yhtä aikaa. Vuoto on kuitenkin selvästi hiljempaa —
+mediaaniero 12,8 dB — joten auki jätetään vain kovin mikki ja ne jotka ovat
+`duck_dominance_db`:n sisällä siitä. Kuudella desibelillä päällekkäisyys
+putosi 41 %:sta 6 %:iin.
+
+**Omat ajat.** Kuva odottaa vahvistusaikaa ennen leikkausta; portin on
+avauduttava heti. `open_windows` pudottaa liian lyhyet jaksot (`min_open`,
+yskäisy), avaa etukäteen (`lookahead`) ja pitää auki jälkikäteen (`hold`).
+Ennakko on mahdollinen vain koska käsittely on jälkikäteistä — juuri sen
+puuttuminen tekee reaaliaikaisesta portista sanoja syövän.
+
+`_close_gaps` oli tähän asti kuollutta koodia `decide.py`:ssä. Sanavälien
+täyttö tapahtuu nyt implisiittisesti: ennakko ja pito laajentavat jaksoja
+molempiin suuntiin, ja lähekkäiset sulautuvat.
+
+Vaimennus tehdään näytetasolla jaksoittain eikä koko tiedoston mittaisella
+vahvistuskäyrällä: tunnin mikki on 184 miljoonaa näytettä, ja float-taulukko
+sen päälle olisi kolme neljäsosaa gigatavusta. Jaksoja on tuhansia.
+
 ### Tilaääni on liitetty klippi, ei kulma
 
 Kuvakulma vaihtuu joka leikkauksessa, tilaäänen on jatkuttava yli niiden.

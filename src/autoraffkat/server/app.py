@@ -186,6 +186,12 @@ class AppState:
             a.enabled = bool(raw["enabled"])
         if "declick" in raw:
             a.declick = bool(raw["declick"])
+        if "duck" in raw:
+            a.duck = bool(raw["duck"])
+        for name in ("duck_db", "duck_lookahead", "duck_hold", "duck_min_open",
+                     "duck_fade", "duck_dominance_db"):
+            if name in raw:
+                a.__dict__[name] = float(raw[name])
         for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
                      "leveler_threshold_db", "gain_db", "room_db"):
             if name in raw:
@@ -207,12 +213,29 @@ class AppState:
         self.mix_progress.update({"done": 0, "total": 0, "current": "",
                                   "eta": 0, "running": True})
 
+        # Vaimennus tarvitsee saman puheentunnistuksen kuin kuvan leikkaus.
+        # Ruudukko rakennetaan tässä eikä säätösilmukassa, koska käsittely on
+        # muutenkin hidas — ja jos se ei onnistu, vaimennus jää pois eikä
+        # koko käsittely kaadu.
+        grid, program_start = None, 0.0
+        if self.settings.audio.duck and self.analysis is not None:
+            try:
+                grid, start, _ = build_grid(self.analysis, self.settings.tracks,
+                                            roles)
+                program_start = float(start)
+            except AnalysisError as exc:
+                self.mix_progress["running"] = False
+                self.mix_result = mix.MixResult(errors={"duck": (
+                    f"Vaimennusta ei voi ohjata: {exc}")})
+                return
+
         def report(done: int, total: int, current: str, eta: float = 0.0) -> None:
             self.mix_progress.update({"done": done, "total": total,
                                       "current": current, "eta": round(eta)})
 
         try:
             result = mix.process(self.timeline, roles, self.settings.audio,
+                                 grid=grid, program_start=program_start,
                                  progress=report)
             with self.lock:
                 self.mix_result = result

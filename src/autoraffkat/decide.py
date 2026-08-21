@@ -57,6 +57,38 @@ def _open_runs(mask: np.ndarray, k: int) -> np.ndarray:
     return out
 
 
+def open_windows(on: np.ndarray, lookahead: float, hold: float,
+                 min_open: float) -> np.ndarray:
+    """Mistä mikki on auki, kun ``on`` on kynnyksen ylitys.
+
+    Kynnyksen ylitys sellaisenaan on kelvoton portin ohjaukseksi: se välkkyy
+    tavuvälien yli ja reagoi yksittäiseen yskäisyyn. Kolme muunnosta tekevät
+    siitä käyttökelpoisen, ja ne vastaavat kolmea säädintä:
+
+    * ``min_open`` pudottaa liian lyhyet jaksot — yskäisy ja naksahdus eivät
+      avaa mikkiä.
+    * ``lookahead`` avaa portin ennen puheen alkua. Tämä on mahdollista vain
+      koska käsittely on jälkikäteistä; reaaliaikainen portti ei voi avautua
+      ennen kuin ääni on jo tullut, ja siksi siltä katoaa sanojen alkuja.
+    * ``hold`` pitää portin auki puheen jälkeen, jolloin lauseen häntä ja
+      hengitys jäävät mukaan eikä väleihin tule pumppausta.
+
+    Silmukka kulkee jaksojen yli, ei näytteiden.
+    """
+    if on.size == 0:
+        return on
+    mask = _open_runs(on, _hops(min_open)) if min_open > 0 else on
+    before = _hops(lookahead) if lookahead > 0 else 0
+    after = _hops(hold) if hold > 0 else 0
+    if not (before or after):
+        return mask
+    out = np.zeros_like(mask)
+    for start, end, value in _runs(mask.astype(np.int8)):
+        if value:
+            out[max(0, start - before):min(mask.size, end + after)] = True
+    return out
+
+
 def _hops(seconds: float) -> int:
     """Sekunnit ruudukon askeliksi, aina vähintään yksi."""
     return max(1, int(round(seconds / HOP)))

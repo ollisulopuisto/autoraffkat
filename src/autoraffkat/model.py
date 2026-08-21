@@ -172,6 +172,19 @@ class AudioSettings:
     # tehdään kohinanpoisto ja restaurointi: ketjussa itsessään ei ole
     # kohinanvaimennusta, koska hyvä sellainen on liitännäinen.
     plugin_path: str = ""
+    # Toisen mikin vaimennus kun puhuja on hiljaa. Ohjaus tulee samasta
+    # puheentunnistuksesta kuin kuvan leikkaus, mutta omilla ajoillaan: kuva
+    # odottaa vahvistusaikaa ennen leikkausta, portin on avauduttava heti.
+    duck: bool = False
+    duck_db: float = -15.0          # kuinka paljon hiljemmalle, 0 = ei mitään
+    duck_lookahead: float = 0.15    # avaa näin paljon ennen puheen alkua, s
+    duck_hold: float = 0.40         # pidä auki näin kauan puheen jälkeen, s
+    duck_min_open: float = 0.20     # tätä lyhyempi jakso ei avaa porttia, s
+    # Kuinka lähellä kovinta mikin on oltava pysyäkseen auki. Tämä on se
+    # säädin joka erottaa puhujat: pelkkä kynnys ei riitä, koska molemmat
+    # mikit kuulevat molemmat puhujat.
+    duck_dominance_db: float = 6.0
+    duck_fade: float = 0.05         # liu'un pituus, s
     gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
     room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
     room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa
