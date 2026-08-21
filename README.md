@@ -6,6 +6,12 @@ is ever rendered.
 
 *[Suomenkielinen README](README.fi.md) · [Design notes](DESIGN.md)*
 
+![The track list drawn as a patch bay: three cameras on the left, two microphones on the right, each speaker's name once in the strip between them, with the preview bar and the cut list below.](screenshot.png)
+
+*One row per speaker: their camera, their name, their microphone. The bar below
+is the whole episode at a glance; the list under it is every cut the export
+will make.*
+
 ## Usage
 
 ```

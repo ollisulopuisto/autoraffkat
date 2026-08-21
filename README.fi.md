@@ -9,6 +9,12 @@ Automaattinen monikameraleikkaus. Final Cutista viety FCPXML sisään, uusi
 FCPXML ulos, jossa kuva vaihtuu sen mukaan kuka puhuu. Ei renderöintiä
 missään vaiheessa.
 
+![Raitalista kytkentätauluna: kolme kameraa vasemmalla, kaksi mikkiä oikealla, puhujan nimi kerran niiden välissä, ja alla esikatselupalkki ja leikkauslista.](screenshot.png)
+
+*Yksi rivi per puhuja: kamera, nimi ja mikki. Palkki alla on koko jakso
+yhdellä silmäyksellä, ja sen alla oleva lista on jokainen leikkaus jonka
+vienti tekee.*
+
 ## Käyttö
 
 ```
