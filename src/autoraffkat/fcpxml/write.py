@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import re
 from fractions import Fraction
-from urllib.parse import quote
+from urllib.request import pathname2url
 from xml.sax.saxutils import quoteattr
 
 from dataclasses import replace
@@ -30,8 +30,15 @@ class WriteError(Exception):
 
 
 def file_url(path: str) -> str:
-    """Tiedostopolku file-URLiksi, kun lähde-XML:ssä ei ollut ``src``-arvoa."""
-    return "file://" + quote(path)
+    """Tiedostopolku file-URLiksi, kun lähde-XML:ssä ei ollut ``src``-arvoa.
+
+    Windowsin polkua ei voi liittää ``file://``-etuliitteeseen sellaisenaan:
+    ``C:\\...`` päätyisi URLin netlociin ja polku jäisi tyhjäksi.
+    ``pathname2url`` hoitaa aseman ja kenoviivat ja antaa Windowsissa valmiin
+    ``///C:/...``-muodon, POSIXissa se on pelkkä ``quote``.
+    """
+    url = pathname2url(path)
+    return "file:" + url if url.startswith("//") else "file://" + url
 
 
 def sanitize_role(name: str) -> str:

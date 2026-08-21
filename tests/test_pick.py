@@ -1,6 +1,9 @@
 """Lähteen valinta. Ei palvelinta, ei mediaa — pelkkää hakemiston lukua."""
 
 import os
+import sys
+
+import pytest
 
 from autoraffkat import pick
 
@@ -86,6 +89,8 @@ def test_missing_directory_is_not_an_error(tmp_path):
     assert pick.candidates(str(tmp_path / "ei-ole")) == []
 
 
+@pytest.mark.skipif(sys.platform != "darwin",
+                    reason="Natiivi valintaikkuna on osascript, siis vain macOS")
 def test_browser_gets_the_picker_from_the_server(tmp_path, monkeypatch):
     """Selaimessa ei ole tiedostovalitsinta joka antaisi polun.
 
@@ -116,3 +121,20 @@ def test_browser_gets_the_picker_from_the_server(tmp_path, monkeypatch):
     # Peruttu valinta ei ole virhe eikä saa vaihtaa tiedostoa.
     monkeypatch.setattr(server_app.pick, "native", lambda *a, **k: None)
     assert client.post("/api/pick").json() == {"path": ""}
+
+
+def test_picker_says_so_when_there_is_none(tmp_path, monkeypatch):
+    """Muualla kuin macOSissa ikkunaa ei ole, ja siitä on kerrottava.
+
+    Selain saa ``unavailable``-lipun eikä tyhjää polkua: tyhjä näyttäisi
+    peruutetulta valinnalta, jolloin «Avaa XML…» olisi taas se nappi joka ei
+    tee mitään eikä kerro miksi.
+    """
+    from fastapi.testclient import TestClient
+
+    from autoraffkat.server.app import AppState, create_app
+
+    monkeypatch.setattr(sys, "platform", "win32")
+    source = _touch(str(tmp_path / "jakso" / "a.fcpxml"))
+    client = TestClient(create_app(AppState(xml_path=source)))
+    assert client.post("/api/pick").json() == {"path": "", "unavailable": True}

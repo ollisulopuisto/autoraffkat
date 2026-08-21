@@ -13,6 +13,8 @@ import subprocess
 import sys
 from xml.sax.saxutils import quoteattr
 
+from autoraffkat.fcpxml.write import file_url
+
 FPS = 25
 FRAME = "1/25s"
 
@@ -57,7 +59,7 @@ def _asset(rid: str, path: str, has_video: bool, has_audio: bool) -> str:
     if has_video:
         attrs += ['hasVideo="1"', 'videoSources="1"', 'format="r1"']
     return (f"    <asset {' '.join(attrs)}>\n"
-            f'      <media-rep kind="original-media" src={quoteattr("file://" + path)}/>\n'
+            f'      <media-rep kind="original-media" src={quoteattr(file_url(path))}/>\n'
             f"    </asset>")
 
 

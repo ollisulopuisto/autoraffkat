@@ -88,3 +88,31 @@ def test_multicam_records_its_parts(fixture_dir):
     assert [(mc.offset, mc.duration, mc.start) for mc in tl.multicams] == [
         (0, 18, 0), (18, 18, 18)]
     assert all(len(mc.angle_ids) == 5 for mc in tl.multicams)
+
+
+def test_windows_path_survives_the_url_round_trip(monkeypatch):
+    """Windowsin polku ei kelpaa file-URLiin sellaisenaan.
+
+    ``"file://" + r"C:\\..."`` luki koko polun URLin netlociksi ja jätti polun
+    tyhjäksi: yhtään mediatiedostoa ei löytynyt, ja vienti kaatui vasta
+    puuttuviin tiedostoihin. Muunnos on alustakohtainen, joten Windowsin
+    toteutus ajetaan tässä myös macOSissa — muuten regressio näkyisi vasta
+    CI:n Windows-ajossa.
+    """
+    import nturl2path
+
+    from autoraffkat.fcpxml import read as reader
+    from autoraffkat.fcpxml import write as writer
+
+    monkeypatch.setattr(writer, "pathname2url", nturl2path.pathname2url)
+    monkeypatch.setattr(reader, "url2pathname", nturl2path.url2pathname)
+
+    path = r"C:\Users\ohjaaja\jakso 2\host [mix].wav"
+    url = writer.file_url(path)
+    assert url == "file:///C:/Users/ohjaaja/jakso%202/host%20%5Bmix%5D.wav"
+    assert reader._src_to_path(url) == path
+
+    # Verkkolevy on ``file://palvelin/jako``: palvelin kuuluu polkuun, ei
+    # URLin isäntäkenttään jätettäväksi.
+    unc = r"\\arkisto\kuvat\host.mov"
+    assert reader._src_to_path(writer.file_url(unc)) == unc

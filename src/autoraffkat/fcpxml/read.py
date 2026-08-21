@@ -26,6 +26,7 @@ import re
 from dataclasses import dataclass, field
 from fractions import Fraction
 from urllib.parse import unquote, urlparse
+from urllib.request import url2pathname
 from xml.etree import ElementTree as ET
 
 from ..i18n import t
@@ -176,7 +177,11 @@ def _src_to_path(src: str) -> str:
         return ""
     if src.startswith("file://"):
         parsed = urlparse(src)
-        return unquote(parsed.path)
+        # Windowsissa polku on ``/C:/...`` ja se on käännettävä asemaksi ja
+        # kenoviivoiksi; POSIXissa ``url2pathname`` on pelkkä ``unquote``.
+        # Verkkolevy on ``file://palvelin/jako``, jolloin netloc kuuluu polkuun.
+        host = "" if parsed.netloc in ("", "localhost") else parsed.netloc
+        return url2pathname(f"//{host}{parsed.path}" if host else parsed.path)
     return unquote(src)
 
 
