@@ -1,0 +1,43 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # macOS, koska ffmpegin lisäksi testataan Finderin valintaa ja
+    # pikkukuvia. Final Cutin DTD:tä ei ajurilla ole, joten ne testit
+    # ohittuvat itsestään.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      # Node tarvitaan käyttöliittymän savutestiin. Ilman sitä se ohittuisi
+      # hiljaa, ja juuri se testi suojaa siltä virheluokalta jota Python ei näe.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install
+        run: uv sync --all-extras
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Check that the interface smoke test actually ran
+        run: |
+          uv run pytest tests/test_ui.py -q --no-header -rs \
+            | tee /tmp/ui.log
+          if grep -q "skipped" /tmp/ui.log; then
+            echo "Käyttöliittymän savutesti ohittui — node puuttuu ajurilta."
+            exit 1
+          fi

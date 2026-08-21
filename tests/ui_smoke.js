@@ -20,8 +20,15 @@ const vm = require('vm');
 
 const [staticDir, statePath, latestPath] = process.argv.slice(2);
 
+/* Kaikki luodut elementit talteen, jotta niiden käsittelijät voidaan
+   laukaista. Renderöinti yksin kattaa vain puolet koodista: klikkaukset ja
+   kentät ovat se toinen puoli, ja juuri sieltä löytyy viittaus muuttujaan
+   jota ei ole. */
+const created = [];
+
 function makeElement(tag) {
   const el = {
+    _handlers: {},
     tagName: (tag || 'div').toUpperCase(),
     children: [],
     dataset: {},
@@ -43,7 +50,9 @@ function makeElement(tag) {
     remove() {},
     setAttribute(name, value) { this.attributes[name] = value; },
     getAttribute(name) { return this.attributes[name]; },
-    addEventListener() {},
+    addEventListener(type, fn) {
+      (this._handlers[type] = this._handlers[type] || []).push(fn);
+    },
     removeEventListener() {},
     querySelectorAll() { return []; },
     querySelector() { return null; },
@@ -57,7 +66,29 @@ function makeElement(tag) {
     height: 120,
   };
   el.classList._set = new Set();
+  created.push(el);
   return el;
+}
+
+/* Laukaisee kaikki tallennetut käsittelijät. Poikkeukset kerätään, koska yksi
+   rikkinäinen käsittelijä ei saa estää muiden testaamista. */
+let fired = 0;
+
+function fireAll(report) {
+  const snapshot = created.slice();
+  for (const el of snapshot) {
+    for (const [type, handlers] of Object.entries(el._handlers)) {
+      for (const fn of handlers) {
+        fired += 1;
+        try {
+          fn.call(el, { target: el, preventDefault() {}, metaKey: false,
+                        ctrlKey: false, key: 'a' });
+        } catch (err) {
+          report(`${el.tagName}.${type}`, err);
+        }
+      }
+    }
+  }
 }
 
 const registry = new Map();
@@ -131,6 +162,28 @@ for (const name of ['i18n.js', 'app.js']) {
                   { filename: name });
 }
 
+/* Kattavuusmittari: jokainen ylätason funktio kääritään laskuriin. Näin
+   testi kertoo suoraan mitä se EI aja — uusi funktio jota kukaan ei kutsu on
+   juuri se paikka johon seuraava ajonaikainen virhe piiloutuu. */
+const calls = new Map();
+const NEVER_CALLED_OK = new Set([
+  'boot',        // ajetaan app.js:n latauksessa, ennen käärimistä
+  'setLang',     // kutsutaan suoraan testistä ennen käärimistä
+  'T',           // sama
+]);
+
+for (const name of Object.keys(context)) {
+  const value = context[name];
+  if (typeof value !== 'function' || !/^[a-z]/.test(name)) continue;
+  if (['fetch', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval',
+       'getComputedStyle', 'encodeURIComponent'].includes(name)) continue;
+  calls.set(name, 0);
+  context[name] = function wrapped(...args) {
+    calls.set(name, calls.get(name) + 1);
+    return value.apply(this, args);
+  };
+}
+
 let failures = 0;
 function run(label, fn) {
   try {
@@ -173,6 +226,14 @@ for (const lang of ['fi', 'en']) {
         throw new Error('payload puuttuu kenttiä');
       }
     });
+    /* Käsittelijät: klikkaukset, valinnat ja kenttien muutokset. Nämä ovat
+       koodia jota pelkkä piirto ei aja lainkaan. */
+    run(`${tag} käsittelijät`, () => {
+      let first = null;
+      fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
+      if (first) throw first;
+    });
+
     /* Käsittelyn ollessa kesken piirto menee eri haaraan. */
     fresh.mix = Object.assign({}, fresh.mix, {
       progress: { done: 1, total: 4, current: 'mic.wav', eta: 120, running: true },
@@ -182,8 +243,87 @@ for (const lang of ['fi', 'en']) {
   }
 }
 
+/* Virhehaarat: puuttuva tiedosto, verhokäyrävirhe, ongelmalista ja tyhjä
+   tulos. Nämä piirtyvät eri koodipolkua kuin onnistunut tila. */
+{
+  const broken = JSON.parse(JSON.stringify(state));
+  broken.tracks.forEach((t) => {
+    t.missing = true;
+    t.envelope_error = 'purku epäonnistui';
+    t.parts = (t.parts || []).map((p) => Object.assign({}, p, { missing: true }));
+  });
+  broken.mix = Object.assign({}, broken.mix, {
+    errors: ['jokin meni pieleen'], ready: 0, room: 0, gains: {},
+  });
+  broken.inherited_from = '/x/edellinen.autoraffkat.json';
+  context.__state = broken;
+  context.__latest = { ok: false, problems: ['puuttuu jotain'], preview: null };
+  vm.runInContext('state = __state; latest = __latest;', context);
+  run('virhetila renderTracks', () => context.renderTracks());
+  run('virhetila renderAudio', () => context.renderAudio());
+  run('virhetila renderHeader', () => context.renderHeader());
+  run('virhetila renderCuts', () => context.renderCuts());
+  run('virhetila renderLegend', () => context.renderLegend());
+  run('virhetila drawBar', () => context.drawBar());
+  run('virhetila käsittelijät', () => {
+    let first = null;
+    fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
+    if (first) throw first;
+  });
+}
+
+/* Asynkroniset polut: pyyntökierros, vienti ja edistymisen seuranta. Näitä
+   piirto ei aja lainkaan, ja juuri ne koskevat palvelinta. */
+async function asyncPaths() {
+  await step('send', () => context.send());
+  await step('exportXml', () => context.exportXml());
+  await step('runMix', () => context.runMix());
+  await step('resetSection(globals)', () => context.resetSection('globals'));
+  await step('resetSection(audio)', () => context.resetSection('audio'));
+  step('banner', () => { context.banner('viesti'); context.banner('virhe', true);
+                         context.banner(''); });
+  step('redrawAll', () => context.redrawAll());
+  step('watchMix', () => context.watchMix());
+  /* watchProgress haarautuu sen mukaan onko laskenta valmis. */
+  for (const ready of [true, false]) {
+    context.__state.progress = { done: 1, total: 4, current: 'x', ready };
+    vm.runInContext('state = __state;', context);
+    step(`watchProgress(ready=${ready})`, () => context.watchProgress());
+  }
+}
+
+async function step(label, fn) {
+  try {
+    await fn();
+  } catch (err) {
+    failures += 1;
+    console.error(`  ${label}: ${err.name}: ${err.message}`);
+  }
+}
+
+(async () => {
+await asyncPaths();
+
+const never = [...calls.entries()].filter(([n, c]) => c === 0 && !NEVER_CALLED_OK.has(n))
+  .map(([n]) => n);
+if (never.length) {
+  console.error('savutesti ei aja näitä funktioita: ' + never.join(', '));
+  console.error('lisää ne testiin tai NEVER_CALLED_OK-listaan perusteluineen');
+  process.exit(1);
+}
+
+/* Vartio itse vartijalle: jos käsittelijöitä ei laukea, testi ei testaa
+   niistä mitään ja menisi läpi tyhjänä. */
+const MIN_HANDLERS = 200;
+if (fired < MIN_HANDLERS) {
+  console.error(`vain ${fired} käsittelijää laukesi, odotettiin ${MIN_HANDLERS}+`);
+  process.exit(1);
+}
+
 if (failures) {
   console.error(`${failures} virhettä`);
   process.exit(1);
 }
-console.log('ui_smoke: ok');
+console.log(`ui_smoke: ok (${fired} käsittelijää, `
+            + `${calls.size} funktiota katettu)`);
+})();

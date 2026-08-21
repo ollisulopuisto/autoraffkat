@@ -133,9 +133,22 @@ render function in both languages, with audio processing on and off and with
 processing in progress. The state comes from the server for real
 (`_state_json`), so a field renamed at only one end fails here too.
 
-`test_smoke_catches_an_undefined_variable` guards the guard: it injects a
-broken reference and asserts the harness notices. A smoke test that passes
-everything protects nothing.
+Three things keep it honest, and none of them are decoration:
+
+* `test_smoke_catches_an_undefined_variable` injects a broken reference and
+  asserts the harness notices. A smoke test that passes everything protects
+  nothing.
+* The harness fires every registered event handler. Rendering alone runs about
+  half the file; clicks, selects and text fields are the other half, and that
+  is where an undefined variable hides.
+* Every top-level function is wrapped in a counter, and the run **fails** if
+  any was never called. Add a function without covering it and the test says
+  so by name. Anything genuinely unreachable goes in `NEVER_CALLED_OK` with a
+  reason.
+
+CI (`.github/workflows/tests.yml`) runs the suite on macOS with ffmpeg and
+Node, and fails if the interface smoke test skipped — a silent skip would
+leave exactly this class of bug unguarded.
 
 Note when writing the harness: `let state` in `app.js` is a lexical binding,
 not a property of the global object, so `context.state = ...` does not reach
