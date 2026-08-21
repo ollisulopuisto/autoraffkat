@@ -16,6 +16,11 @@ will make. Pictured: editing episode 53 of
 [Peter & Peter](https://www.youtube.com/@peterpeterhistoria), a Finnish show
 about history.*
 
+![The resulting multicam timeline in Final Cut Pro with cuts switched between camera angles and dialogue tracks attached below.](screenshot-fcpx.png)
+
+*The imported result in Final Cut Pro: an ordinary multicam timeline with all
+angles, cuts and dialogue roles in place.*
+
 * **The angles switch on the audio**, not on a rhythm: each speaker's
   microphone decides when their camera is on screen.
 * **Long turns and overlapping speech are rules you set once** — cut to the

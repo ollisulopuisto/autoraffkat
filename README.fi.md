@@ -16,6 +16,11 @@ yhdellä silmäyksellä, ja sen alla oleva lista on jokainen leikkaus jonka
 vienti tekee. Kuvassa leikataan historiaohjelma
 [Peter & Peterin](https://www.youtube.com/@peterpeterhistoria) jaksoa 53.*
 
+![Leikattu lopputulos Final Cut Prossa: monikameraleikkaus vaihtaa kuvakulmia puheen mukaan ja mikrofoniraidat ovat omilla laneillaan.](screenshot-fcpx.png)
+
+*Lopputulos tuotuna Final Cut Prohon: tavallinen monikameran aikajana, jossa
+kulmat, leikkaukset ja dialogiroolit ovat valmiina jatkoeditointia varten.*
+
 * **Kuva vaihtuu äänestä**, ei rytmistä: kunkin puhujan mikki päättää milloin
   hänen kameransa on ruudulla.
 * **Pitkä puheenvuoro ja päällekkäispuhe ovat sääntöjä**, jotka asetetaan
