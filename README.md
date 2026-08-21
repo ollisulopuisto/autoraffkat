@@ -199,8 +199,14 @@ sellaisenaan. Jos [automixer](../automixer) löytyy naapurista (tai
 painikkeesta «Käsittele ääni».
 
 Ketju: ylipäästö → normalisointi tavoiteäänekkyyteen → huippujen kompressointi
-→ tasaus → sihinänvaimennus → trimmi → rajoitin. Normalisointi on ensimmäisenä
-tarkoituksella: ilman sitä kompressorin kynnykset eivät ylity kertaakaan.
+→ tasaus → maiskausten poisto → trimmi → rajoitin. Normalisointi on
+ensimmäisenä tarkoituksella: ilman sitä kompressorin kynnykset eivät ylity
+kertaakaan.
+
+**Kohinanpoistoa ketjussa ei ole.** Ylipäästö vie jyrinän, maiskausten poisto
+huulinaksut, mutta laajakaistaista kohinaa ei vaimenneta millään. automixerissa
+se on tarkoitettu tehtäväksi ulkoisella VST3/AU-liitännäisellä, eikä
+autoraffkat kutsu sitä.
 
 Kaksi sääntöä pitävät kuvan ja äänen yhdessä:
 

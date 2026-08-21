@@ -167,7 +167,7 @@ class AudioSettings:
     target_lufs: float = -20.0
     peak_threshold_db: float = -12.0    # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
-    de_ess: bool = False
+    declick: bool = False        # maiskaukset ja huulinaksut pois
     gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
     room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
     room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa

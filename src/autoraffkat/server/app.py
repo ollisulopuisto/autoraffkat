@@ -184,8 +184,8 @@ class AppState:
         a = self.settings.audio
         if "enabled" in raw:
             a.enabled = bool(raw["enabled"])
-        if "de_ess" in raw:
-            a.de_ess = bool(raw["de_ess"])
+        if "declick" in raw:
+            a.declick = bool(raw["declick"])
         for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
                      "leveler_threshold_db", "gain_db", "room_db"):
             if name in raw:

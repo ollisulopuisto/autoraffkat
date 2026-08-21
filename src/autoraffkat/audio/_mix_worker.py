@@ -57,7 +57,7 @@ def _chain(processor, settings, gain_db, speech):
         chain.append(processor.CompressorProcessor(
             threshold_db=settings.get("leveler_threshold_db", -18.0),
             ratio=1.5, window_sec=0.3))
-        if settings.get("de_ess"):
+        if settings.get("declick"):
             chain.append(processor.DeSmackProcessor())
     if gain_db:
         chain.append(processor.GainProcessor(gain_db))

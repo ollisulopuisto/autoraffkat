@@ -344,10 +344,10 @@ function renderAudio() {
   ess.className = 'check';
   const essBox = document.createElement('input');
   essBox.type = 'checkbox';
-  essBox.checked = !!audio.de_ess;
-  essBox.addEventListener('change', () => { audio.de_ess = essBox.checked; schedule(); });
+  essBox.checked = !!audio.declick;
+  essBox.addEventListener('change', () => { audio.declick = essBox.checked; schedule(); });
   ess.append(essBox, Object.assign(document.createElement('span'),
-    { textContent: 'Sihinänvaimennus' }));
+    { textContent: 'Maiskausten poisto' }));
   host.append(ess);
 
   /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana ovat
