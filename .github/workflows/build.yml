@@ -53,10 +53,9 @@ jobs:
       - name: Build app and disk image
         run: uv run python scripts/build_app.py --dmg
 
-      # Mitä pakettiin oikeasti päätyi. Niputettu ffmpeg tulee ulkopuolelta
-      # eikä ole välttämättä samaa arkkitehtuuria kuin sovellus, ja
-      # allekirjoitus voi rikkoutua kopioinnissa. Kumpikin selviäisi ilman
-      # tätä vasta käyttäjän koneelta.
+      # Mitä pakettiin oikeasti päätyi. Niputettu ffmpeg tulee ulkopuolelta ja
+      # allekirjoitus voi rikkoutua kopioinnissa; kumpikin selviäisi ilman tätä
+      # vasta käyttäjän koneelta. Arkkitehtuurien pitää täsmätä.
       - name: Report what is inside
         id: inside
         run: |

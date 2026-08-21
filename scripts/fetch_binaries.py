@@ -7,6 +7,7 @@ Tukee macOS- ja Windows-alustoja.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import platform
 import shutil
@@ -14,23 +15,53 @@ import sys
 import tempfile
 import urllib.request
 import zipfile
-import tarfile
 from pathlib import Path
 
-# Tunnetut luotettavat staattiset jakelulähteet
-BIN_SOURCES = {
-    "darwin-arm64": {
-        "ffmpeg": "https://evermeet.cx/ffmpeg/getrelease/zip",
-        "ffprobe": "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip",
-    },
-    "darwin-x86_64": {
-        "ffmpeg": "https://evermeet.cx/ffmpeg/getrelease/zip",
-        "ffprobe": "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip",
-    },
-    "windows-x86_64": {
-        "archive": "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip",
-    },
+# macOS-binäärit tulevat `ffmpeg-static`-projektin julkaisuista. Sitä käyttää
+# samanniminen npm-paketti, joten sitä ladataan päivittäin miljoonia kertoja —
+# eli se on jotain muuta kuin yhden ihmisen kotisivu.
+#
+# Syy vaihtoon: evermeet.cx julkaisee vain x86_64-käännöksiä. Apple Siliconilla
+# sellainen toimii vain Rosettan kautta, ja koko työkalun hitain vaihe on juuri
+# ffmpeg. Rosettaa ei myöskään ole valmiiksi asennettuna, joten paketti pyysi
+# ensimmäisellä ajolla asentamaan sen — tai jäi ilman verhokäyriä.
+#
+# Versio on naulattu ja tarkistussummat mukana. Käännösten pitää olla samat
+# koneesta ja päivästä toiseen, eikä ulkopuolisen palvelimen vaihtama tiedosto
+# saa päätyä pakettiin huomaamatta.
+MACOS_RELEASE = "b6.1.1"
+MACOS_BASE = ("https://github.com/eugeneware/ffmpeg-static/releases/download/"
+              f"{MACOS_RELEASE}")
+MACOS_SHA256 = {
+    ("arm64", "ffmpeg"): "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
+    ("arm64", "ffprobe"): "bb2db6f5d8cef919da12fbf592119a987202a8c060a886f3cab091f9cab90b64",
+    ("x86_64", "ffmpeg"): "ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894",
+    ("x86_64", "ffprobe"): "fa3add0ce901f7241abe0dfc0155d958fc834aca3f8ce61f87cc712ae669c1e0",
 }
+
+WINDOWS_ARCHIVE = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+
+
+def _verify(path: Path, expected: str) -> None:
+    """Tarkistussumma. Väärä tiedosto ei saa päätyä pakettiin hiljaa."""
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    if digest != expected:
+        raise SystemExit(
+            f"Tarkistussumma ei täsmää: {path.name}\n  odotettu {expected}\n  saatu    {digest}")
+
+
+def _arch_of(path: Path) -> str:
+    """Mach-O-binäärin arkkitehtuuri, tai '?' jos sitä ei saa selville.
+
+    Luetaan otsikosta eikä `file`-komennolla, jotta tämä toimii myös siellä
+    missä sitä ei ole.
+    """
+    with open(path, "rb") as fh:
+        head = fh.read(8)
+    if len(head) < 8 or head[:4] not in (b"\xcf\xfa\xed\xfe", b"\xce\xfa\xed\xfe"):
+        return "?"
+    cpu = int.from_bytes(head[4:8], "little")
+    return {0x0100000C: "arm64", 0x01000007: "x86_64"}.get(cpu, "?")
 
 
 def download_file(url: str, dest: Path) -> None:
@@ -55,23 +86,24 @@ def fetch_binaries(target_os: str | None = None, output_dir: Path | None = None)
         tmp_path = Path(tmp)
 
         if "darwin" in sys_name or "mac" in sys_name:
-            # macOS
+            asset_arch = "arm64" if arch == "arm64" else "x64"
             for tool in ("ffmpeg", "ffprobe"):
                 tool_dest = dest_dir / tool
                 if tool_dest.exists():
-                    print(f"{tool} on jo olemassa kohteessa {tool_dest}")
-                    continue
+                    if _arch_of(tool_dest) == arch:
+                        print(f"{tool} on jo olemassa kohteessa {tool_dest}")
+                        continue
+                    # Väärän arkkitehtuurin binääri on pahempi kuin puuttuva:
+                    # se toimii kääntäjän koneella ja hajoaa käyttäjän koneella.
+                    print(f"{tool} on väärää arkkitehtuuria, haetaan uudestaan")
+                    tool_dest.unlink()
 
-                url = f"https://evermeet.cx/ffmpeg/getrelease/{tool if tool == 'ffprobe' else ''}/zip"
-                zip_path = tmp_path / f"{tool}.zip"
-                download_file(url, zip_path)
-                with zipfile.ZipFile(zip_path, "r") as z:
-                    z.extractall(tmp_path)
-                extracted_tool = tmp_path / tool
-                if extracted_tool.exists():
-                    shutil.copy2(extracted_tool, tool_dest)
-                    tool_dest.chmod(0o755)
-                    print(f"Asennettu: {tool_dest}")
+                temp = tmp_path / tool
+                download_file(f"{MACOS_BASE}/{tool}-darwin-{asset_arch}", temp)
+                _verify(temp, MACOS_SHA256[(arch, tool)])
+                shutil.copy2(temp, tool_dest)
+                tool_dest.chmod(0o755)
+                print(f"Asennettu: {tool_dest}  ({_arch_of(tool_dest)})")
 
         elif "win" in sys_name:
             # Windows
@@ -81,7 +113,7 @@ def fetch_binaries(target_os: str | None = None, output_dir: Path | None = None)
                 print(f"Windows-binäärit ovat jo olemassa kohteessa {dest_dir}")
                 return dest_dir
 
-            zip_url = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
+            zip_url = WINDOWS_ARCHIVE
             zip_path = tmp_path / "ffmpeg.zip"
             download_file(zip_url, zip_path)
             with zipfile.ZipFile(zip_path, "r") as z:

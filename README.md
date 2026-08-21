@@ -81,10 +81,10 @@ published by CI from a `v*` tag. It is not notarised — that needs a paid Apple
 Developer ID — so the first launch takes a right-click on the app and "Open",
 or `xattr -d com.apple.quarantine autoraffkat.app`.
 
-The bundled ffmpeg is an x86_64 build, so macOS may ask to install Rosetta the
-first time envelopes are computed. Intel Macs need a package of their own:
-GitHub no longer offers free Intel runners, so build it on an Intel machine
-with `scripts/build_app.py --dmg`.
+Everything in the package is arm64, ffmpeg included, so there is no Rosetta
+step. Intel Macs need a package of their own: GitHub no longer offers free
+Intel runners, so build it on an Intel machine with `scripts/build_app.py
+--dmg`, which fetches the matching Intel binaries by itself.
 
 ### Install from source
 
@@ -107,7 +107,10 @@ Pushing a `v*` tag runs the same two commands on CI and publishes the disk
 image to Releases; see `.github/workflows/build.yml`.
 
 The build bundles static ffmpeg and ffprobe binaries, downloading them into
-`bin/` on the first run. `scripts/make_dmg.py` packs an already-built app on
+`bin/` on the first run from [ffmpeg-static](https://github.com/eugeneware/ffmpeg-static)
+at a pinned version with SHA-256 checks. It fetches the architecture it is
+running on, and replaces a binary of the wrong one — a mismatch works on the
+build machine and fails on the user's. `scripts/make_dmg.py` packs an already-built app on
 its own; it copies with `ditto` rather than a plain file copy, because the
 signature covers extended attributes and symlinks and a plain copy breaks it
 in a way that only shows up on somebody else's machine.

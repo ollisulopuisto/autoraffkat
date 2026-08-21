@@ -84,10 +84,10 @@ maksullinen Apple Developer ID — joten ensimmäisellä avauksella tarvitaan oi
 klikkaus paketin päällä ja «Avaa», tai `xattr -d com.apple.quarantine
 autoraffkat.app`.
 
-Mukana tuleva ffmpeg on x86_64-käännös, joten macOS voi pyytää asentamaan
-Rosettan ensimmäisellä verhokäyrien laskennalla. Intel-Macille tarvitaan oma
-paketti: GitHubilla ei ole enää ilmaisia Intel-ajureita, joten se käännetään
-Intel-koneella komennolla `scripts/build_app.py --dmg`.
+Paketissa kaikki on arm64:ää, myös ffmpeg, joten Rosettaa ei tarvita.
+Intel-Macille tarvitaan oma paketti: GitHubilla ei ole enää ilmaisia
+Intel-ajureita, joten se käännetään Intel-koneella komennolla
+`scripts/build_app.py --dmg`, joka hakee itse oikean arkkitehtuurin binäärit.
 
 ### Asennus lähteestä
 
@@ -107,7 +107,11 @@ uv run python scripts/build_app.py --dmg    # …ja dist/autoraffkat.dmg
 levykuvan Releasesiin; katso `.github/workflows/build.yml`.
 
 Käännös niputtaa mukaan staattiset ffmpeg- ja ffprobe-binäärit ja hakee ne
-`bin/`-hakemistoon ensimmäisellä kerralla. `scripts/make_dmg.py` pakkaa jo
+`bin/`-hakemistoon ensimmäisellä kerralla
+[ffmpeg-staticista](https://github.com/eugeneware/ffmpeg-static) naulattuna
+versiona tarkistussummineen. Haku kohdistuu siihen arkkitehtuuriin jolla
+ajetaan, ja väärän arkkitehtuurin binääri korvataan: se toimisi
+kääntäjän koneella ja hajoaisi käyttäjän koneella. `scripts/make_dmg.py` pakkaa jo
 käännetyn paketin erikseen. Se kopioi `ditto`lla eikä tavallisella
 tiedostokopiolla: allekirjoitus kattaa myös laajennetut attribuutit ja
 symlinkit, ja tavallinen kopio rikkoo sen niin että vika näkyy vasta toisen
