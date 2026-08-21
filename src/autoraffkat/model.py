@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import os
 from dataclasses import dataclass, field, asdict
 from fractions import Fraction
 
@@ -74,6 +73,8 @@ class MediaItem:
     asset_id: str = ""             # lähde-XML:n resurssi-id
     format_id: str = ""
     placements: list[Placement] = field(default_factory=list)
+    angle_ids: list[str] = field(default_factory=list)   # multicamin angleID:t
+    angle_name: str = ""           # kulman nimi, "" jos ei multicam
 
     @property
     def timeline_start(self) -> Fraction:
@@ -95,24 +96,6 @@ class MediaItem:
         if p is None:
             return None
         return p.source_at(seconds) - self.asset_start
-
-    def to_json(self) -> dict:
-        return {
-            "key": self.key,
-            "name": self.name,
-            "path": self.path,
-            "missing": bool(self.path) and not os.path.exists(self.path),
-            "has_video": self.has_video,
-            "has_audio": self.has_audio,
-            "width": self.width,
-            "height": self.height,
-            "fps": (round(float(1 / self.frame_duration), 3)
-                    if self.frame_duration else None),
-            "audio_channels": self.audio_channels,
-            "timeline_start": float(self.timeline_start),
-            "timeline_end": float(self.timeline_end),
-            "placements": len(self.placements),
-        }
 
 
 @dataclass

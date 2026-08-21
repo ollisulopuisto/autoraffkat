@@ -151,11 +151,56 @@ Tämä koskee sekä liitettyjä klippejä että `sync-clip`in sisältöä, ja se
 miksi `write.py` antaa mikkien liitetyille klipeille offsetiksi ensimmäisen
 spine-klipin `start`-arvon eikä nollaa.
 
+### Monikamera
+
+`<mc-clip>` on isäntä, sisältö on `<media><multicam>`:in kulmissa, ja kulmien
+aikapohjan nollakohta on multicamin `tcStart`. Sama sääntö siis pätee, mutta
+yhdellä lisäyksellä: **kulman sisältö on rajattava `mc-clip`:n kestoon**.
+Kulma ulottuu koko multicamin yli, joten ilman rajausta kaksi osaa samasta
+multicamista tuottaisi päällekkäiset esiintymät, verhokäyrä kohdistuisi
+väärään kohtaan ja peitto näyttäisi kuvaa siellä missä sitä ei ole. Tämä on
+`_walk`:n `bounds`-parametri, ja se koskee myös `ref-clip`iä.
+
+### Raita, ei media
+
+Roolituksen yksikkö on **raita** (`Timeline.tracks`), ei media. Tavallisessa
+aikajanassa ero ei näy — jokainen media on oma raitansa ja avain on
+tiedostonimi kuten ennen — mutta monikamerassa sama kulma on eri tiedosto joka
+osassa, ja ne kuuluvat samaan rooliin, samaan säätimeen ja samaan puhujaan.
+
+Ilman tätä `Roles.wide_key` ja `Roles.closes` pitäisi kaikki muuttaa listoiksi
+ja jokainen niitä lukeva kohta osaisi käsitellä monta avainta. Raita hoitaa
+saman yhdessä paikassa: päätöskerros näkee edelleen yhden avaimen kuvaa
+kohden, ja peitto on raidan osien yhdiste.
+
+Ryhmittely tapahtuu kulman nimellä (`"1"`, `"nyman a Track2"`), koska se on
+leikkaajan oma merkintä siitä että kyse on samasta kamerasta. Avain sen sijaan
+johdetaan tiedostonimistä, koska nimet ja `angleID`:t vaihtuvat viennistä
+toiseen. Kahta saman multicamin kulmaa ei koskaan yhdistetä, vaikka nimet
+normalisoituisivat samoiksi.
+
 ## Kirjoitus
 
 Yksi spine, yksi klippi per kuva. Kameroiden oma ääni pois
 `srcEnable="video"`. Mikit liitettyinä klippeinä ensimmäiseen spine-klippiin
 laneilla −1, −2, … rooleilla `dialogue.<puhuja>`.
+
+### Monikameran kirjoitus
+
+Monikameralähteestä ulos tulee `<mc-clip>` per kuva: kuvakulma
+`srcEnable="video"`, mikkikulmat `srcEnable="audio"` omilla
+`dialogue.<puhuja>`-rooleillaan, kameran oma ääni `active="0"`. Tulos on
+natiivi monikameraleikkaus, joten kuvakulman voi vaihtaa Final Cutissa
+jälkikäteen — littana leikkauksessa se ei enää onnistu.
+
+Resurssit **kopioidaan lähde-XML:stä sellaisenaan** eikä rakenneta uudestaan.
+Multicamin kulmarakenne, `angleID`:t ja assettien keskinäinen synkkaus ovat
+juuri se osa jota ei saa muuttaa, ja kopio on ainoa tapa taata se.
+
+Kuva ei saa jatkua osasta toiseen: seuraava osa on eri `<mc-clip>` eri
+`angleID`:illä. Siksi kvantisoidut jaksot pilkotaan vielä osien rajoilla
+(`_split_spans`), ja jokainen pala saa oman `start`-arvonsa oman osansa
+aikapohjassa.
 
 Kvantisointi (`_quantize`) on tarkempi kuin miltä näyttää. Se kulkee jaksot
 läpi eteenpäin ja pitää kirjaa kursorista, joka takaa että jokainen kuva saa

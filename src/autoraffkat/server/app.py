@@ -23,7 +23,8 @@ from .. import project
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..decide import decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
-from ..fcpxml.write import WriteError, build_fcpxml, write_fcpxml
+from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
+                            write_fcpxml)
 from ..model import (OVERLAP_RULES, ROLES, ROLE_MIC, Globals, TrackConfig)
 from ..preview import build as build_preview
 
@@ -71,18 +72,27 @@ class AppState:
         threading.Thread(target=self._analyze, daemon=True).start()
 
     def _seed_defaults(self) -> None:
-        """Ensimmäisellä avauksella arvataan roolit nimien perusteella."""
+        """Ensimmäisellä avauksella arvataan roolit nimien perusteella.
+
+        Puhujaehdotus tulee mikkitiedoston ensimmäisestä sanasta, koska
+        äänitteet nimetään käytännössä aina puhujan mukaan. Kamerat jäävät
+        nimeämättä: monikamerassa kulmat ovat ``1``, ``2``, ``3``, eikä niistä
+        voi päätellä mitään.
+        """
         assert self.timeline is not None
         if self.settings.tracks:
-            for item in self.timeline.media:
-                self.settings.config_for(item.key)
+            for track in self.timeline.tracks:
+                self.settings.config_for(track.key)
             return
-        for item in self.timeline.media:
-            cfg = self.settings.config_for(item.key)
-            lowered = item.name.lower()
-            if item.has_audio and not item.has_video:
+        for track in self.timeline.tracks:
+            cfg = self.settings.config_for(track.key)
+            lowered = track.name.lower()
+            if track.has_audio and not track.has_video:
                 cfg.role = ROLE_MIC
-            elif item.has_video and any(w in lowered for w in ("wide", "laaja", "master")):
+                first = track.name.split()[0] if track.name.split() else ""
+                if first.isalpha():
+                    cfg.speaker = first.capitalize()
+            elif track.has_video and any(w in lowered for w in ("wide", "laaja", "master")):
                 cfg.role = "wide"
 
     def _analyze(self) -> None:
@@ -145,10 +155,12 @@ class AppState:
         started = time.perf_counter()
         roles = resolve_roles(self.timeline, self.settings.tracks)
         problems = list(roles.problems)
-        for key, message in self.analysis.errors.items():
-            cfg = self.settings.tracks.get(key)
-            if cfg and cfg.role == ROLE_MIC:
-                problems.append(message)
+        for track in self.timeline.tracks:
+            cfg = self.settings.tracks.get(track.key)
+            if not cfg or cfg.role != ROLE_MIC:
+                continue
+            problems += [self.analysis.errors[k] for k in track.media_keys
+                         if k in self.analysis.errors]
         if problems:
             return {"ok": False, "problems": problems, "ms": 0.0}
         try:
@@ -177,25 +189,54 @@ class AppState:
         }
 
 
+def _track_json(state: AppState, track) -> dict:
+    """Yksi raita käyttöliittymälle: rooli, säätimet ja osat.
+
+    Monikamerassa raita on sama kulma useassa osassa, joten mitat ja
+    varoitukset kootaan osista. Käyttöliittymä näyttää yhden rivin, ei kuutta.
+    """
+    assert state.timeline is not None
+    items = state.timeline.track_media(track.key)
+    span = state.timeline.track_span(track.key) or (0, 0)
+    first = items[0] if items else None
+    errors = [state.analysis.errors.get(m.key, "") for m in items] if state.analysis else []
+    return {
+        "key": track.key,
+        "name": track.name,
+        "path": first.path if first else "",
+        "missing": any(m.path and not os.path.exists(m.path) for m in items),
+        "has_video": track.has_video,
+        "has_audio": track.has_audio,
+        "width": first.width if first else 0,
+        "height": first.height if first else 0,
+        "fps": (round(float(1 / first.frame_duration), 3)
+                if first and first.frame_duration else None),
+        "audio_channels": first.audio_channels if first else 0,
+        "timeline_start": float(span[0]),
+        "timeline_end": float(span[1]),
+        "parts": [{"name": m.name, "path": m.path,
+                   "missing": bool(m.path) and not os.path.exists(m.path)}
+                  for m in items],
+        "angle_name": first.angle_name if first else "",
+        "config": state.settings.config_for(track.key).to_json(),
+        "envelope_error": next((e for e in errors if e), ""),
+    }
+
+
 def _state_json(state: AppState) -> dict:
-    """Koko tila käyttöliittymälle: mediat, roolit, säätimet ja edistyminen."""
+    """Koko tila käyttöliittymälle: raidat, roolit, säätimet ja edistyminen."""
     timeline = state.timeline
-    media = []
-    if timeline is not None:
-        for item in timeline.media:
-            entry = item.to_json()
-            entry["config"] = state.settings.config_for(item.key).to_json()
-            entry["envelope_error"] = (state.analysis.errors.get(item.key, "")
-                                       if state.analysis else "")
-            media.append(entry)
+    tracks = ([_track_json(state, t) for t in timeline.tracks]
+              if timeline is not None else [])
     return {
         "xml_path": state.xml_path,
         "settings_path": project.settings_path(state.xml_path),
         "output_path": project.default_output_path(state.xml_path),
         "name": timeline.name if timeline else "",
         "kind": timeline.kind if timeline else "",
+        "parts": len(timeline.multicams) if timeline else 0,
         "fps": (round(float(1 / timeline.frame_duration), 3) if timeline else None),
-        "media": media,
+        "tracks": tracks,
         "globals": state.settings.globals.to_json(),
         "progress": state.progress,
         "error": state.load_error,
@@ -271,12 +312,21 @@ def create_app(state: AppState) -> FastAPI:
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
                 raise HTTPException(400, "Vienti osuisi lähde-XML:n päälle.")
             try:
-                xml = build_fcpxml(
-                    {m.key: m for m in state.timeline.media},
-                    decision.segments, mic_tracks,
-                    state.timeline.frame_duration, program_start, program_end,
-                    state.settings.globals.project_name,
-                )
+                if state.timeline.multicams:
+                    # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman
+                    # voi vaihtaa Final Cutissa jälkikäteen.
+                    xml = build_multicam_fcpxml(
+                        state.timeline, decision.segments, mic_tracks,
+                        program_start, program_end,
+                        state.settings.globals.project_name,
+                    )
+                else:
+                    xml = build_fcpxml(
+                        {m.key: m for m in state.timeline.media},
+                        decision.segments, mic_tracks,
+                        state.timeline.frame_duration, program_start, program_end,
+                        state.settings.globals.project_name,
+                    )
                 write_fcpxml(out_path, xml)
             except (WriteError, OSError) as exc:
                 raise HTTPException(400, str(exc)) from exc

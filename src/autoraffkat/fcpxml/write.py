@@ -314,3 +314,171 @@ def write_fcpxml(path: str, xml: str) -> str:
     with open(path, "w", encoding="utf-8") as fh:
         fh.write(xml)
     return path
+
+
+# ------------------------------------------------------------------ multicam
+
+
+def _boundaries(timeline, program_start: Fraction, frame_duration: Fraction,
+                program_frames: int) -> list[int]:
+    """Osien rajat kehyksinä ohjelman alusta.
+
+    Kuva ei saa jatkua osasta toiseen: seuraava osa on eri ``<mc-clip>`` eri
+    angleID:illä, joten leikkaus on pakko katkaista rajalle.
+    """
+    marks = set()
+    for mc in timeline.multicams:
+        for edge in (mc.offset, mc.end):
+            frame = to_frames(edge - program_start, frame_duration)
+            if 0 < frame < program_frames:
+                marks.add(frame)
+    return sorted(marks)
+
+
+def _split_spans(spans, marks: list[int]):
+    """Pilkkoo kehysvälit osien rajoilla."""
+    out = []
+    for segment, a, b in spans:
+        cursor = a
+        for mark in marks:
+            if a < mark < b:
+                out.append((segment, cursor, mark))
+                cursor = mark
+        out.append((segment, cursor, b))
+    return [(s, x, y) for s, x, y in out if y > x]
+
+
+def _mc_sources(video_angle: str, audio_angles: list[tuple[str, str]],
+                roles: dict[str, str]) -> list[str]:
+    """``<mc-source>``-rivit: yksi kuva, loput ääntä omilla rooleillaan.
+
+    Kuvakulman oma ääni kytketään pois samalla tavalla kuin Final Cut sen
+    kirjoittaa: rooli jää näkyviin mutta ``active="0"``.
+    """
+    lines: list[str] = []
+    if video_angle:
+        role = roles.get(video_angle, "dialogue.dialogue-1")
+        lines += [
+            f'              <mc-source angleID={quoteattr(video_angle)} srcEnable="video">',
+            f'                <audio-role-source role={quoteattr(role)} active="0"/>',
+            "              </mc-source>",
+        ]
+    for angle_id, speaker in audio_angles:
+        role = f"dialogue.{sanitize_role(speaker)}"
+        lines += [
+            f'              <mc-source angleID={quoteattr(angle_id)} srcEnable="audio">',
+            f'                <audio-role-source role={quoteattr(role)}/>',
+            "              </mc-source>",
+        ]
+    return lines
+
+
+def _source_resources(path: str) -> tuple[str, str, str]:
+    """Lähde-XML:n ``<resources>`` sellaisenaan, versio ja sekvenssin formaatti.
+
+    Multicam-määrittelyä ei rakenneta uudestaan vaan se kopioidaan: kulmien
+    angleID:t ja assettien synkkaus ovat juuri se osa, jota ei saa muuttaa.
+    """
+    from xml.etree import ElementTree as ET
+
+    tree = ET.parse(path)
+    root = tree.getroot()
+    resources = root.find("resources")
+    if resources is None:
+        raise WriteError("Lähde-XML:stä ei löydy <resources>-lohkoa.")
+    sequence = root.find(".//sequence")
+    seq_format = sequence.get("format", "") if sequence is not None else ""
+    body = ET.tostring(resources, encoding="unicode")
+    return body, root.get("version", "1.10"), seq_format
+
+
+def build_multicam_fcpxml(
+    timeline,
+    segments: list[Segment],
+    mic_tracks: list[tuple[str, str]],
+    program_start: Fraction,
+    program_end: Fraction,
+    project_name: str = "Raakaleikkaus",
+) -> str:
+    """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
+
+    Tulos on natiivi monikameraleikkaus, ei littana: kuvakulman voi vaihtaa
+    Final Cutissa jälkikäteen kulmanäkymästä. Resurssit tulevat lähde-XML:stä
+    sellaisenaan, joten multicamin sisäinen synkkaus säilyy bittiä myöten.
+    """
+    if not segments:
+        raise WriteError("Leikkauslista on tyhjä.")
+    if not timeline.multicams:
+        raise WriteError("Aikajanalla ei ole monikameraklippejä.")
+
+    frame_duration = timeline.frame_duration
+    program_frames = to_frames(program_end - program_start, frame_duration)
+    if program_frames <= 0:
+        raise WriteError("Ohjelman kesto on nolla.")
+
+    spans = _quantize(segments, program_start, program_frames, frame_duration)
+    spans = _split_spans(spans, _boundaries(timeline, program_start,
+                                            frame_duration, program_frames))
+    if not spans:
+        raise WriteError("Leikkauskohdat kutistuivat tyhjiksi.")
+
+    angles_of = {t.key: t.angle_ids for t in timeline.tracks}
+    resources, version, seq_format = _source_resources(timeline.source_path)
+
+    body: list[str] = []
+    for index, (seg, a, b) in enumerate(spans):
+        at = program_start + frame_duration * a
+        mc = timeline.multicam_at(at)
+        if mc is None:
+            # Osien välinen aukko: sisältöä ei ole, mutta spine ei saa katketa.
+            body.append(f'            <gap name="Gap" '
+                        f'offset="{frames_str(a, frame_duration)}" start="0s" '
+                        f'duration="{frames_str(b - a, frame_duration)}"/>')
+            continue
+
+        own = set(mc.angle_ids)
+        video_angle = next((x for x in angles_of.get(seg.angle, []) if x in own), "")
+        audio_angles = []
+        for key, speaker in mic_tracks:
+            angle_id = next((x for x in angles_of.get(key, []) if x in own), "")
+            if angle_id and angle_id != video_angle:
+                audio_angles.append((angle_id, speaker))
+
+        start_frames = to_frames(mc.source_at(at), frame_duration)
+        attrs = [
+            f'ref={quoteattr(mc.media_id)}',
+            f'offset="{frames_str(a, frame_duration)}"',
+            f"name={quoteattr(f'{seg.label} {index + 1:02d}')}",
+            f'start="{frames_str(start_frames, frame_duration)}"',
+            f'duration="{frames_str(b - a, frame_duration)}"',
+            'tcFormat="NDF"',
+        ]
+        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles)
+        if sources:
+            body.append("            <mc-clip " + " ".join(attrs) + ">")
+            body += sources
+            body.append("            </mc-clip>")
+        else:
+            body.append("            <mc-clip " + " ".join(attrs) + "/>")
+
+    out = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        "<!DOCTYPE fcpxml>",
+        f'<fcpxml version="{version}">',
+        "  " + resources.strip(),
+        "  <library>",
+        f"    <event name={quoteattr(project_name)}>",
+        f"      <project name={quoteattr(project_name)}>",
+        f'        <sequence format="{seq_format}" '
+        f'duration="{frames_str(program_frames, frame_duration)}" '
+        'tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">',
+        "          <spine>",
+        *body,
+        "          </spine>",
+        "        </sequence>",
+        "      </project>",
+        "    </event>",
+        "  </library>",
+        "</fcpxml>",
+    ]
+    return "\n".join(out) + "\n"

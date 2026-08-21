@@ -49,3 +49,42 @@ def test_no_timeline(tmp_path):
     path.write_text('<?xml version="1.0"?><fcpxml version="1.10"><resources/></fcpxml>')
     with pytest.raises(ReadError):
         read_fcpxml(str(path))
+
+
+def test_multicam_groups_angles_across_parts(fixture_dir):
+    """Kaksi osaa, viisi kulmaa: kymmenen assettia mutta viisi raitaa."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    assert tl.kind == "multicam"
+    assert len(tl.media) == 10
+    assert [t.key for t in tl.tracks] == [
+        "WIDE", "CLOSE_A", "CLOSE_B", "olli Track1", "vieras Track2"]
+    for track in tl.tracks:
+        assert len(track.media_keys) == 2, track.key
+        # Raidan väli kattaa molemmat osat, ei vain jälkimmäistä.
+        assert tl.track_span(track.key) == (0, 36)
+
+
+def test_multicam_content_is_clipped_to_its_part(fixture_dir):
+    """Kulman sisältö on koko multicamin pituinen, mc-clip rajaa sen."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    by_key = tl.media_by_key()
+    first, second = by_key["WIDE 01.mp4"], by_key["WIDE 02.mp4"]
+    assert [(p.offset, p.duration) for p in first.placements] == [(0, 18)]
+    assert [(p.offset, p.duration) for p in second.placements] == [(18, 18)]
+    # Osat eivät saa mennä päällekkäin, muuten verhokäyrä kohdistuisi väärin.
+    assert first.timeline_end == second.timeline_start
+
+
+def test_multicam_angle_gap_shifts_source_time(fixture_dir):
+    """Kulman alussa oleva aukko siirtää lähdeaikaa, ei aikajanaa."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    wide = tl.media_by_key()["WIDE 02.mp4"]          # osassa B sekunnin aukko
+    assert wide.file_time_at(Fraction(18)) == 18
+    assert wide.file_time_at(Fraction(30)) == 30
+
+
+def test_multicam_records_its_parts(fixture_dir):
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    assert [(mc.offset, mc.duration, mc.start) for mc in tl.multicams] == [
+        (0, 18, 0), (18, 18, 18)]
+    assert all(len(mc.angle_ids) == 5 for mc in tl.multicams)

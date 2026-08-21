@@ -25,3 +25,8 @@ packages = ["src/autoraffkat"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+]

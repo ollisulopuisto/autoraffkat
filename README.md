@@ -35,15 +35,28 @@ uv sync            # tai: pip install -e .
 
 ## Sisäänluku
 
-Tuetaan kahta lähdettä:
+Tuetaan kolmea lähdettä:
 
 * **synkronoitu klippi** (`sync-clip`), jonka sisällä kamerat ja mikit ovat
 omilla laneillaan
 * **projektin aikajana** (`project` > `sequence` > `spine`), jossa kamerat ja
 mikit on aseteltu käsin
+* **monikameraklippi** (`mc-clip`), jonka kamerat ja mikit ovat kulmina
 
 Synkkaus luetaan XML:stä, ei lasketa. Ruutunopeus otetaan sekvenssin tai
 video-assetin formaatista.
+
+### Monikamera ja osat
+
+Pitkä nauhoitus on tavallisesti spinellä useampana monikameraklippinä — osa A,
+osa B — ja jokaisessa osassa sama kamera on oma tiedostonsa. Kolme kameraa
+kahdessa osassa on kuusi tiedostoa mutta kolme **raitaa**: roolit, säätimet ja
+leikkaus kulkevat raidoittain, ja raita kootaan kulman nimen perusteella.
+
+Raidan avain johdetaan tiedostonimien yhteisestä osasta
+(`STATUS CAM 1 01` + `STATUS CAM 1 02` → `STATUS CAM 1`), koska kulmien nimet
+ja `angleID`:t vaihtuvat viennistä toiseen mutta tiedostot eivät. Näin
+tallennetut roolit kelpaavat vielä uuden viennin jälkeenkin.
 
 ## Säätimet
 
@@ -81,8 +94,8 @@ laukaise sääntöä.
 src/autoraffkat/
   timeline.py        FCPXML:n rationaaliaika (Fraction)
   model.py           mediat, roolit, asetukset, leikkaukset
-  fcpxml/read.py     sync-clip ja projektin spine sisään
-  fcpxml/write.py    uusi projekti ulos
+  fcpxml/read.py     sync-clip, spine ja monikamera sisään
+  fcpxml/write.py    uusi projekti ulos, littana tai monikamerana
   audio/envelope.py  ffmpeg + RMS, levyvälimuisti          HIDAS
   analysis.py        verhokäyrät aikajanan ruudukolle
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
@@ -143,8 +156,11 @@ ettei aikajanalle jää aukkoja eikä päällekkäisyyksiä. Kaikki aika kulkee
 
 ## Rajaukset
 
-Videon toisto, aaltomuodon piirto ja monikameraklippirakenne eivät kuulu tähän
-versioon.
+Videon toisto ja aaltomuodon piirto eivät kuulu tähän versioon.
+
+Monikameralähteestä ulos tulee monikameraleikkaus, tavallisesta lähteestä
+littana leikkaus. Kummankin muodon valinta tapahtuu lähteen mukaan, eikä
+kesken leikkauksen voi vaihtaa.
 
 ## Testit
 

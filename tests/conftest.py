@@ -25,6 +25,8 @@ def fixture_dir(tmp_path_factory):
     # Ilman ffmpegiä kirjoitetaan pelkät XML:t; lukija ei tarvitse mediaa.
     make_fixture.write_sync_clip_xml(str(target / "sync.fcpxml"), media)
     make_fixture.write_project_xml(str(target / "project.fcpxml"), media)
+    make_fixture.write_multicam_xml(str(target / "multicam.fcpxml"),
+                                    make_fixture.make_parts(str(target), media))
     return target
 
 

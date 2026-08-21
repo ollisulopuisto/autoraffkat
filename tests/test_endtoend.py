@@ -152,3 +152,92 @@ def test_no_wide_is_reported(scratch_xml):
     result = client.post("/api/settings", json=payload).json()
     assert not result["ok"]
     assert any("laajaksi" in problem for problem in result["problems"])
+
+
+# ------------------------------------------------------------------ multicam
+
+
+def _multicam_tracks():
+    """Roolit raita-avaimilla: kulma on yksi raita, vaikka osia on kaksi."""
+    return {
+        "WIDE": TrackConfig(role=ROLE_WIDE),
+        "CLOSE_A": TrackConfig(role=ROLE_CLOSE, speaker="Olli"),
+        "CLOSE_B": TrackConfig(role=ROLE_CLOSE, speaker="Vieras"),
+        "olli Track1": TrackConfig(role=ROLE_MIC, speaker="Olli"),
+        "vieras Track2": TrackConfig(role=ROLE_MIC, speaker="Vieras"),
+    }
+
+
+@needs_ffmpeg
+def test_multicam_speech_selects_the_right_camera(fixture_dir):
+    """Sama tarkistus kuin synkkaklipille, mutta puhe jatkuu osien yli."""
+    timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    analysis = analyze(timeline)
+    assert not analysis.errors
+    tracks = _multicam_tracks()
+    grid, start, end = build_grid(analysis, tracks, resolve_roles(timeline, tracks))
+    # Ohjelma kattaa molemmat osat, ei vain jälkimmäistä.
+    assert float(start) == 0.0 and float(end) > 30.0
+    decision = decide(grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3,
+                                    min_overlap=0.4))
+    to_timeline = source_to_timeline(timeline, "olli a Track1.wav")
+
+    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Olli"),
+                                   (SPEECH_B, SPEECH_A, "Vieras")):
+        for lo, hi in spans:
+            mid = (lo + hi) / 2
+            if any(o0 < mid < o1 for o0, o1 in other):
+                continue
+            at = to_timeline(mid)
+            if not (float(start) + 1 < at < float(end) - 1):
+                continue
+            assert angle_at(decision.segments, at) == expected, f"kohta {mid}"
+
+
+@needs_ffmpeg
+def test_multicam_server_round_trip(scratch_xml):
+    """Sama silmukka kuin käyttöliittymässä, monikameralähteellä."""
+    source = scratch_xml("multicam.fcpxml")
+    state = AppState(xml_path=str(source))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+    assert state.progress["ready"], "verhokäyrät eivät valmistuneet"
+
+    client = TestClient(create_app(state))
+    fetched = client.get("/api/state").json()
+    assert fetched["kind"] == "multicam"
+    assert fetched["parts"] == 2
+    assert len(fetched["tracks"]) == 5
+    assert all(len(t["parts"]) == 2 for t in fetched["tracks"])
+
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": Globals(min_shot=1.5, lead=0.15, confirm=0.3,
+                           min_overlap=0.4, project_name="Monikamera").to_json(),
+    }
+    result = client.post("/api/settings", json=payload).json()
+    assert result["ok"], result.get("problems")
+    assert len(result["segments"]) > 4
+
+    exported = client.post("/api/export", json=payload).json()
+    assert exported["ok"]
+    written = ET.parse(exported["path"]).getroot()
+    clips = written.findall(".//spine/mc-clip")
+    assert clips, "vienti ei tuottanut monikameraklippejä"
+    # Rajaylitykset pilkkoutuvat, joten klippejä on vähintään yhtä monta.
+    assert len(clips) >= exported["cuts"]
+    assert {c.get("ref") for c in clips} == {"mA", "mB"}
+
+
+def test_multicam_defaults_guess_speakers_from_mic_names(scratch_xml):
+    """Mikin ensimmäinen sana on käytännössä aina puhujan nimi."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    assert state.settings.tracks["olli Track1"].role == "mic"
+    assert state.settings.tracks["olli Track1"].speaker == "Olli"
+    assert state.settings.tracks["vieras Track2"].speaker == "Vieras"
+    # Kameroita ei arvata: kulmat ovat 1, 2, 3 eikä niistä näe mitään.
+    assert state.settings.tracks["CLOSE_A"].role == "unused"

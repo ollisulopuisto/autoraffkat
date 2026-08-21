@@ -26,6 +26,18 @@ jonka nollakohta on isännän `start`. Lapsen absoluuttinen paikka on siis
 liitettyjä klippejä että sync-clipin sisältöä, ja se on `fcpxml/read.py`:n
 `_walk`-funktion koko idea.
 
+Monikamerassa lisäksi: kulman sisältö on rajattava `mc-clip`:n kestoon
+(`_walk`:n `bounds`), koska kulma ulottuu koko multicamin yli ja sama multicam
+voi olla spinellä kahdesti.
+
+## Raita ei ole media
+
+Roolituksen yksikkö on `Timeline.tracks`, ei `Timeline.media`. Monikamerassa
+sama kulma on eri tiedosto joka osassa mutta yksi raita. Kaikki mikä lukee
+rooleja, säätimiä tai `Segment.angle`ia puhuu raita-avaimista. Ilman tätä
+`Roles.wide_key` ja `closes` olisivat listoja ja jokainen niitä lukeva kohta
+joutuisi käsittelemään monta avainta.
+
 ## Herkkyys ja vahvistus eivät ole sama asia
 
 Herkkyys on kynnys pohjakohinan yli, joten vahvistus ei siirrä sitä — pohja
@@ -38,6 +50,11 @@ päällekkäispuheessa. Jos tämän muuttaa, säätimet alkavat vaikuttaa toisii
 tunnetuissa kohdissa (`SPEECH_A`, `SPEECH_B`). Projektifixture alkaa lähteen
 sekunnista 1, synkkaklippi nollasta — vertailussa on käytettävä
 `source_to_timeline`-muunnosta, ei raakoja lukuja.
+
+`multicam.fcpxml` on sama aineisto kahtena osana: osien tiedostot ovat
+kopioita, koska ryhmittely katsoo tiedostonimeä eikä sisältöä. Siinä
+aikajanan hetki vastaa tiedoston hetkeä, joten `source_to_timeline` antaa
+identiteetin — eri kuin projektifixturessa.
 
 Asetukset kirjoitetaan XML:n viereen, joten testit jotka vievät tai tallentavat
 tarvitsevat `scratch_xml`-fixturen, eivät jaettua `fixture_dir`iä.

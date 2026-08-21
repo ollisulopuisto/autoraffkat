@@ -66,15 +66,23 @@ def align(item: MediaItem, envelope: np.ndarray, program_start: Fraction,
     return out, valid
 
 
-def availability(item: MediaItem, program_start: Fraction, n: int) -> np.ndarray:
-    """Missä ruudukon kohdissa medialla on kuvaa."""
+def availability(items: MediaItem | list[MediaItem], program_start: Fraction,
+                 n: int) -> np.ndarray:
+    """Missä ruudukon kohdissa raidalla on kuvaa.
+
+    Raita voi koostua useasta assetista — monikamerassa sama kulma on oma
+    tiedostonsa joka osassa — joten peitto on niiden yhdiste.
+    """
+    if isinstance(items, MediaItem):
+        items = [items]
     mask = np.zeros(n, dtype=bool)
     start_f = float(program_start)
-    for p in item.placements:
-        i0 = max(0, int(np.ceil((float(p.offset) - start_f) / HOP)))
-        i1 = min(n, int(np.floor((float(p.end) - start_f) / HOP)))
-        if i1 > i0:
-            mask[i0:i1] = True
+    for item in items:
+        for p in item.placements:
+            i0 = max(0, int(np.ceil((float(p.offset) - start_f) / HOP)))
+            i1 = min(n, int(np.floor((float(p.end) - start_f) / HOP)))
+            if i1 > i0:
+                mask[i0:i1] = True
     return mask
 
 
@@ -139,7 +147,11 @@ def analyze(timeline: Timeline, progress=None, keys: list[str] | None = None) ->
 
 @dataclass
 class Roles:
-    """Roolituksesta johdettu rakenne."""
+    """Roolituksesta johdettu rakenne.
+
+    Avaimet ovat raita-avaimia (``Timeline.tracks``), eivät media-avaimia:
+    monikamerassa yksi raita kokoaa saman kulman kaikista osista.
+    """
 
     wide_key: str = ""
     speakers: list[str] = field(default_factory=list)
@@ -156,28 +168,28 @@ def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
     edellinen tulos katoaa.
     """
     roles = Roles()
-    for item in timeline.media:
-        cfg = tracks.get(item.key)
+    for track in timeline.tracks:
+        cfg = tracks.get(track.key)
         if cfg is None:
             continue
         if cfg.role == ROLE_WIDE and not roles.wide_key:
-            roles.wide_key = item.key
+            roles.wide_key = track.key
         elif cfg.role == ROLE_MIC:
             name = cfg.speaker.strip()
             if not name:
-                roles.problems.append(f"Mikille «{item.name}» ei ole puhujaa.")
+                roles.problems.append(f"Mikille «{track.name}» ei ole puhujaa.")
                 continue
             if name not in roles.speakers:
                 roles.speakers.append(name)
-            roles.mics.setdefault(name, []).append(item.key)
+            roles.mics.setdefault(name, []).append(track.key)
         elif cfg.role == ROLE_CLOSE:
             name = cfg.speaker.strip()
             if not name:
-                roles.problems.append(f"Lähikuvalle «{item.name}» ei ole puhujaa.")
+                roles.problems.append(f"Lähikuvalle «{track.name}» ei ole puhujaa.")
                 continue
             if name not in roles.speakers:
                 roles.speakers.append(name)
-            roles.closes[name] = item.key
+            roles.closes[name] = track.key
 
     if not roles.wide_key:
         roles.problems.append("Valitse yksi media laajaksi kuvaksi.")
@@ -190,15 +202,19 @@ def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
 
 
 def program_range(timeline: Timeline, roles: Roles) -> tuple[Fraction, Fraction]:
-    """Ohjelman rajat: laaja kuva ja mikit rajaavat, lähikuvat eivät."""
-    by_key = {m.key: m for m in timeline.media}
-    needed = [by_key[roles.wide_key]] if roles.wide_key in by_key else []
+    """Ohjelman rajat: laaja kuva ja mikit rajaavat, lähikuvat eivät.
+
+    Raidan väli on ensimmäisestä osasta viimeiseen. Kahdessa osassa kuvattu
+    mikki alkaa siis osan A alusta eikä osan B alusta, vaikka jälkimmäinen
+    onkin oma assettinsa.
+    """
+    spans = [timeline.track_span(roles.wide_key)] if roles.wide_key else []
     for keys in roles.mics.values():
-        needed += [by_key[k] for k in keys if k in by_key]
-    if not needed:
+        spans += [timeline.track_span(k) for k in keys]
+    spans = [s for s in spans if s is not None]
+    if not spans:
         return timeline.start, timeline.end
-    return (max(m.timeline_start for m in needed),
-            min(m.timeline_end for m in needed))
+    return max(s[0] for s in spans), min(s[1] for s in spans)
 
 
 def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
@@ -214,7 +230,6 @@ def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
             "Tarkista roolit ja lähde-XML:n synkkaus."
         )
     n = int(span / HOP)
-    by_key = analysis.media_by_key()
 
     lanes: list[SpeakerLanes] = []
     for name in roles.speakers:
@@ -224,23 +239,25 @@ def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
         level = np.full(n, FLOOR_DB, dtype=np.float32)
         on = np.zeros(n, dtype=bool)
         for key in mic_keys:
-            item = by_key.get(key)
-            if item is None:
-                continue
             cfg = tracks.get(key, TrackConfig())
-            db, valid, floor = analysis.aligned(item, program_start, n)
-            if not valid.any():
-                continue
-            # Herkkyys on kynnys pohjakohinan yli; vahvistus siirtää sekä
-            # signaalin että pohjan, joten se ei vaikuta kynnykseen — vain
-            # mikkien keskinäiseen vertailuun päällekkäispuheessa.
-            on |= valid & (db > floor + cfg.sensitivity_db)
-            level = np.maximum(level, db + cfg.gain_db)
+            # Raidan osat ovat eri tiedostoja mutta sama mikki: sama säädin,
+            # sama puhuja, eri kohta aikajanaa.
+            for item in timeline.track_media(key):
+                db, valid, floor = analysis.aligned(item, program_start, n)
+                if not valid.any():
+                    continue
+                # Herkkyys on kynnys pohjakohinan yli; vahvistus siirtää sekä
+                # signaalin että pohjan, joten se ei vaikuta kynnykseen — vain
+                # mikkien keskinäiseen vertailuun päällekkäispuheessa.
+                on |= valid & (db > floor + cfg.sensitivity_db)
+                level = np.maximum(level, db + cfg.gain_db)
 
         close_key = roles.closes.get(name)
         avail = None
-        if close_key and close_key in by_key:
-            avail = availability(by_key[close_key], program_start, n)
+        if close_key:
+            items = timeline.track_media(close_key)
+            if items:
+                avail = availability(items, program_start, n)
         lanes.append(SpeakerLanes(name=name, level=level, on=on,
                                   close_key=close_key, available=avail))
 

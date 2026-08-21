@@ -143,6 +143,143 @@ def write_project_xml(path: str, media: dict) -> None:
         fh.write("\n".join(body) + "\n")
 
 
+# Monikamerafixture: sama aineisto kahtena osana, kuten oikeassa projektissa.
+# Osat ovat kopioita, ei uusia enkoodauksia — ryhmittely katsoo tiedostonimeä
+# eikä sisältöä, ja purku on jo kerran testattu.
+PART_FILES = {
+    "wide": ("WIDE 01.mp4", "WIDE 02.mp4"),
+    "close_a": ("CLOSE_A 01.mp4", "CLOSE_A 02.mp4"),
+    "close_b": ("CLOSE_B 01.mp4", "CLOSE_B 02.mp4"),
+    "mic_a": ("olli a Track1.wav", "olli b Track1.wav"),
+    "mic_b": ("vieras a Track2.wav", "vieras b Track2.wav"),
+}
+# Kulmien nimet osittain: kamerat numeroina, mikit puhujan mukaan.
+ANGLE_NAMES = (
+    ("wide", "1", "1"),
+    ("close_a", "2", "2"),
+    ("close_b", "3", "3"),
+    ("mic_a", "olli a Track1", "olli b Track1"),
+    ("mic_b", "vieras a Track2", "vieras b Track2"),
+)
+SPLIT = DURATION / 2
+
+
+def make_parts(target_dir: str, media: dict) -> dict:
+    """Kopioi jokaisen median kahdeksi osaksi. Palauttaa polut."""
+    import shutil
+    parts: dict[str, tuple[str, str]] = {}
+    for role, names in PART_FILES.items():
+        made = []
+        for name in names:
+            path = os.path.join(target_dir, name)
+            if not os.path.exists(path):
+                # Ilman ffmpegiä lähdettä ei ole; lukija ei tarvitse sisältöä.
+                if os.path.exists(media[role]):
+                    shutil.copy(media[role], path)
+                else:
+                    open(path, "wb").close()
+            made.append(path)
+        parts[role] = (made[0], made[1])
+    return parts
+
+
+def _angle(name: str, angle_id: str, ref: str, gap: float = 0.0) -> list[str]:
+    """Yksi ``<mc-angle>``. ``gap`` siirtää sisältöä multicamin aikapohjassa."""
+    frames = int(DURATION * FPS)
+    lines = [f'        <mc-angle name={quoteattr(name)} angleID="{angle_id}">']
+    if gap:
+        g = int(gap * FPS)
+        lines.append(f'          <gap name="Gap" offset="0s" start="3600s" '
+                     f'duration="{g}/25s"/>')
+        lines.append(f'          <asset-clip ref="{ref}" offset="{g}/25s" '
+                     f'name={quoteattr(name)} start="{g}/25s" '
+                     f'duration="{frames - g}/25s"/>')
+    else:
+        lines.append(f'          <asset-clip ref="{ref}" offset="0s" '
+                     f'name={quoteattr(name)} start="0s" duration="{frames}/25s"/>')
+    lines.append("        </mc-angle>")
+    return lines
+
+
+def write_multicam_xml(path: str, parts: dict) -> None:
+    """Projekti, jonka spinellä on kaksi monikameraklippiä peräkkäin.
+
+    Osa A on aikajanan alkupuolisko, osa B loppupuolisko, ja molemmat käyttävät
+    lähdettä samasta kohdasta kuin aikajana etenee — aikajanan hetki vastaa
+    siis tiedoston hetkeä, kuten synkkaklippifixturessa.
+    """
+    frames = int(DURATION * FPS)
+    half = int(SPLIT * FPS)
+    resources = [
+        f'    <format id="r1" name="FFVideoFormat1080p25" frameDuration="{FRAME}" '
+        'width="1920" height="1080"/>',
+    ]
+    rid = 100
+    for index, letter in enumerate("AB"):
+        angles: list[str] = []
+        for role, name_a, name_b in ANGLE_NAMES:
+            rid += 1
+            file_path = parts[role][index]
+            resources.append(_asset(f"r{rid}", file_path,
+                                    file_path.endswith(".mp4"),
+                                    file_path.endswith(".wav")))
+            # Osassa B yhdellä kulmalla on aukko alussa, jotta kulman sisäinen
+            # aikapohja tulee testattua eikä vain triviaali nollatapaus.
+            gap = 1.0 if (letter == "B" and role == "wide") else 0.0
+            angles += _angle(name_a if letter == "A" else name_b,
+                             f"{letter}{index}{role}", f"r{rid}", gap)
+        resources.append(
+            f'    <media id="m{letter}" name={quoteattr(letter + "-osa")}>\n'
+            f'      <multicam format="r1" tcStart="0s" tcFormat="NDF">\n'
+            + "\n".join(angles) + "\n"
+            "      </multicam>\n"
+            "    </media>")
+
+    def mc_sources(letter: str) -> str:
+        out = []
+        for role, name_a, name_b in ANGLE_NAMES:
+            index = 0 if letter == "A" else 1
+            aid = f"{letter}{index}{role}"
+            enable = "video" if role == "wide" else "audio"
+            if role in ("close_a", "close_b"):
+                continue
+            out.append(f'              <mc-source angleID="{aid}" srcEnable="{enable}">\n'
+                       f'                <audio-role-source role="dialogue.dialogue-1"/>\n'
+                       "              </mc-source>")
+        return "\n".join(out)
+
+    body = [
+        '<?xml version="1.0" encoding="UTF-8"?>',
+        "<!DOCTYPE fcpxml>",
+        '<fcpxml version="1.10">',
+        "  <resources>",
+        *resources,
+        "  </resources>",
+        "  <library>",
+        '    <event name="Testi">',
+        '      <project name="Monikamera">',
+        f'        <sequence format="r1" duration="{frames}/25s" tcStart="0s" '
+        'tcFormat="NDF" audioLayout="stereo" audioRate="48k">',
+        "          <spine>",
+        f'            <mc-clip ref="mA" offset="0s" name="A-osa" start="0s" '
+        f'duration="{half}/25s" tcFormat="NDF">',
+        mc_sources("A"),
+        "            </mc-clip>",
+        f'            <mc-clip ref="mB" offset="{half}/25s" name="B-osa" '
+        f'start="{half}/25s" duration="{frames - half}/25s" tcFormat="NDF">',
+        mc_sources("B"),
+        "            </mc-clip>",
+        "          </spine>",
+        "        </sequence>",
+        "      </project>",
+        "    </event>",
+        "  </library>",
+        "</fcpxml>",
+    ]
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write("\n".join(body) + "\n")
+
+
 def build(target_dir: str) -> dict:
     os.makedirs(target_dir, exist_ok=True)
     media = {
@@ -160,9 +297,12 @@ def build(target_dir: str) -> dict:
         _bursts(media["mic_b"], SPEECH_B, 330, 0.30)
     sync_xml = os.path.join(target_dir, "sync.fcpxml")
     project_xml = os.path.join(target_dir, "project.fcpxml")
+    multicam_xml = os.path.join(target_dir, "multicam.fcpxml")
     write_sync_clip_xml(sync_xml, media)
     write_project_xml(project_xml, media)
-    return {"media": media, "sync": sync_xml, "project": project_xml}
+    write_multicam_xml(multicam_xml, make_parts(target_dir, media))
+    return {"media": media, "sync": sync_xml, "project": project_xml,
+            "multicam": multicam_xml}
 
 
 if __name__ == "__main__":
@@ -170,3 +310,4 @@ if __name__ == "__main__":
     info = build(target)
     print(info["sync"])
     print(info["project"])
+    print(info["multicam"])

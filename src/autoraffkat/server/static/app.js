@@ -107,11 +107,11 @@ function renderTracks() {
   const host = $('track-list');
   host.textContent = '';
   const names = new Set();
-  state.media.forEach((m) => { if (m.config.speaker) names.add(m.config.speaker); });
+  state.tracks.forEach((m) => { if (m.config.speaker) names.add(m.config.speaker); });
   $('speaker-names').innerHTML = [...names]
     .map((n) => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
 
-  state.media.forEach((media) => {
+  state.tracks.forEach((media) => {
     const row = document.createElement('div');
     row.className = 'track';
     if (media.config.role === 'mic') row.classList.add('is-mic');
@@ -120,14 +120,18 @@ function renderTracks() {
     const name = document.createElement('div');
     name.className = 'name';
     name.textContent = media.name;
-    name.title = media.path || media.name;
+    /* Monikamerassa raita on sama kulma useassa osassa, joten koko
+       tiedostolista kuuluu vihjeeseen — nimi yksin ei kerro mistä on kyse. */
+    name.title = (media.parts || []).map((p) => p.path || p.name).join('\n')
+      || media.path || media.name;
     const tags = document.createElement('div');
     tags.className = 'tags';
     const bits = [];
     if (media.has_video) bits.push(`kuva ${media.width}×${media.height}`);
     if (media.has_audio) bits.push(`ääni ${media.audio_channels} kan.`);
     if (media.fps) bits.push(`${media.fps} fps`);
-    if (media.placements > 1) bits.push(`${media.placements} palaa`);
+    if (media.angle_name) bits.push(`kulma ${media.angle_name}`);
+    if ((media.parts || []).length > 1) bits.push(`${media.parts.length} osaa`);
     tags.textContent = bits.join(' · ');
     left.append(name, tags);
 
@@ -171,9 +175,10 @@ function renderTracks() {
     }
 
     if (media.missing) {
+      const gone = (media.parts || []).filter((p) => p.missing).map((p) => p.path);
       const warn = document.createElement('div');
       warn.className = 'warn';
-      warn.textContent = 'Tiedostoa ei löydy levyltä: ' + media.path;
+      warn.textContent = 'Tiedostoa ei löydy levyltä: ' + (gone.join(', ') || media.path);
       row.append(warn);
     } else if (media.envelope_error) {
       const warn = document.createElement('div');
@@ -341,7 +346,7 @@ function renderCuts() {
    vientiin, joten vienti käyttää varmasti sitä mitä ruudulla näkyy. */
 function payload() {
   const tracks = {};
-  state.media.forEach((m) => { tracks[m.key] = m.config; });
+  state.tracks.forEach((m) => { tracks[m.key] = m.config; });
   return { tracks, globals: state.globals };
 }
 
@@ -419,9 +424,12 @@ async function exportXml() {
 
 function renderHeader() {
   $('project-name').textContent = state.name || '—';
-  const kind = state.kind === 'project' ? 'projekti' : 'synkkaklippi';
-  $('project-meta').textContent =
-    `${kind} · ${state.fps ?? '?'} fps · ${state.media.length} mediaa`;
+  const kinds = { project: 'projekti', 'sync-clip': 'synkkaklippi',
+                  multicam: 'monikamera' };
+  const bits = [kinds[state.kind] || state.kind, `${state.fps ?? '?'} fps`,
+                `${state.tracks.length} raitaa`];
+  if (state.parts > 1) bits.push(`${state.parts} osaa`);
+  $('project-meta').textContent = bits.join(' · ');
   $('paths').textContent =
     `Vienti: ${state.output_path}\nAsetukset: ${state.settings_path}`;
 }
@@ -434,8 +442,8 @@ function watchProgress() {
   progressTimer = setInterval(async () => {
     const data = await (await fetch('/api/state')).json();
     state.progress = data.progress;
-    state.media.forEach((m) => {
-      const fresh = data.media.find((x) => x.key === m.key);
+    state.tracks.forEach((m) => {
+      const fresh = data.tracks.find((x) => x.key === m.key);
       if (fresh) m.envelope_error = fresh.envelope_error;
     });
     const p = data.progress;
