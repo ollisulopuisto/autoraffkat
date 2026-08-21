@@ -17,3 +17,10 @@ out/
 # Käsitelty ääni median vieressä.
 * [mix].wav
 * [room].wav
+# Varmuuskopio- ja väliaikaistiedostot
+*~
+*.bak
+*.backup
+*.swp
+*.swo
+*.tmp

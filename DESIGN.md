@@ -1,402 +1,423 @@
-# Rakenne
+# Design notes
 
-Tämä kuvaa miksi koodi on jaettu niin kuin se on. `README.md` kertoo miten
-sovellusta käytetään, `CLAUDE.md` mitä ei saa rikkoa.
+Why the code is split the way it is. `README.md` covers how to use the
+application, `CLAUDE.md` what must not be broken.
 
-## Vaatimus joka määrää kaiken
+*[Suomeksi](DESIGN.fi.md)*
 
-Käyttäjän silmukka on:
+## The requirement that determines everything
 
-1. synkkaa Final Cutissa, vie XML
-2. nimeä raidat, säädä liukusäätimiä
-3. vie XML, tuo Final Cutiin, katso
-4. jos ei kelpaa, takaisin kohtaan 2
+The user's loop is:
 
-Kohdan 2 säädön ja kohdan 3 viennin väliin saa jäädä sekunti. Kaksi tuntia
-materiaalia on 360 000 analyysiaskelta, ja äänen purku ffmpegillä kestää
-minuutteja. Kumpaakaan ei siis saa tehdä säädön yhteydessä. Tästä seuraa koko
-muu rakenne.
+1. sync in Final Cut, export the XML
+2. name the tracks, move the sliders
+3. export the XML, import into Final Cut, watch
+4. if it isn't right, back to step 2
 
-## Kerrokset
+Between the adjustment in step 2 and the export in step 3 there is room for
+about one second. Two hours of material is 360 000 analysis steps, and
+decoding the audio with ffmpeg takes minutes. Neither can happen while
+adjusting. Every other structural decision follows from that.
+
+## Layers
 
 ```
    FCPXML  ──►  fcpxml/read.py  ──►  Timeline (MediaItem + Placement)
                                           │
                     ┌─────────────────────┴──────────────────────┐
                     │                                            │
-              audio/envelope.py                             käyttäjän roolit
-              ffmpeg + RMS 20 ms                            ja säätimet
-              levyvälimuisti                                     │
-              SEKUNTEJA                                          │
+              audio/envelope.py                            the user's roles
+              ffmpeg + RMS 20 ms                           and controls
+              disk cache                                        │
+              SECONDS                                           │
                     │                                            │
                     └──────────►  analysis.py  ◄─────────────────┘
-                                  kohdistus ruudukolle
-                                  MILLISEKUNTEJA
+                                  align onto the grid
+                                  MILLISECONDS
                                           │
                                           ▼
                                      decide.py
-                                     kynnykset, kestot, päällekkäispuhe
-                                     MILLISEKUNTEJA
+                                     thresholds, durations, overlap
+                                     MILLISECONDS
                                           │
                           ┌───────────────┴───────────────┐
                           ▼                               ▼
                     preview.py                     fcpxml/write.py
-                    palkki selaimeen               uusi projekti
+                    bar for the browser            new project
 ```
 
-Raja kulkee `envelope.py`:n ja `analysis.py`:n välissä. Kaikki sen alapuolinen
-ajetaan uudestaan joka kerta kun liukusäädintä liikautetaan.
+The boundary runs between `envelope.py` and `analysis.py`. Everything below it
+is re-run every time a slider moves.
 
-Mitattu kahden tunnin syötteellä: `decide.py` 11 ms (sääntö *laaja*), 38 ms
-(sääntö *vahvempi voittaa*, jossa on ylimääräinen lajittelu puhujien yli).
-Palvelimen koko kierros fixturella 4,5 ms.
+Measured on a two-hour input: `decide.py` 11 ms (rule *wide*), 38 ms (rule
+*louder wins*, which adds a sort across speakers). A full server round trip on
+the fixture is 4.5 ms.
 
-## Verhokäyrä
+## The envelope
 
-`envelope.py` purkaa äänen ffmpegillä monoksi 8 kHz:iin ja laskee RMS:n 20 ms
-välein desibeleinä. 8 kHz riittää puheen energialle ja neljännestää purkuajan
-verrattuna 48 kHz:iin; taajuusvaste ei kiinnosta, koska päätös katsoo vain
-tasoa.
+`envelope.py` decodes the audio with ffmpeg to mono at 8 kHz and computes RMS
+in decibels every 20 ms. 8 kHz is plenty for speech energy and quarters the
+decode time compared with 48 kHz; frequency response is irrelevant because the
+decision only looks at level.
 
-Purku tehdään virtana 82 sekunnin paloissa, joten kahden tunnin tiedosto ei
-varaa 230 megatavua muistia. Tulos on 360 000 float32-arvoa eli 1,4 MB.
+Decoding is streamed in 82-second chunks, so a two-hour file never allocates
+230 MB. The result is 360 000 float32 values, or 1.4 MB.
 
-Käyrä indeksoidaan **tiedoston alusta**, ei aikajanasta. Näin sama välimuisti
-kelpaa vaikka klippi siirtyisi aikajanalla tai sama tiedosto esiintyisi
-useassa projektissa. Aikajanalle siirto tapahtuu vasta `analysis.align`:ssa.
+The curve is indexed **from the start of the file**, not the timeline. The same
+cache then stays valid when a clip moves on the timeline or the same file
+appears in several projects. The shift onto the timeline happens later, in
+`analysis.align`.
 
-Välimuistin avain on polku, tiedoston koko, muokkausaika ja laskennan
-parametrit. Korvattu tiedosto ei siis osu vanhaan käyrään.
+The cache key is the path, file size, modification time and the analysis
+parameters. A replaced file therefore never hits a stale curve.
 
-## Kohdistus
+## Alignment
 
-`analysis.align` muuntaa käyrän aikajanan ruudukolle. Media voi esiintyä
-aikajanalla useammassa palassa (`MediaItem.placements`), joten kohdistus
-tehdään palasittain: kunkin palan sisällä kuvaus on lineaarinen, joten se on
-yksi `np.arange` ja yksi indeksointi.
+`analysis.align` maps the curve onto the timeline grid. A media file can appear
+on the timeline in several pieces (`MediaItem.placements`), so alignment is
+done piece by piece: within each piece the mapping is linear, so it is one
+`np.arange` and one indexing operation.
 
-Samalla syntyy `valid`-maski, joka kertoo missä ruudukon kohdissa mediaa
-ylipäätään on. Ilman sitä puuttuva alue näyttäisi hiljaisuudelta, mikä ei ole
-sama asia.
+The same pass produces a `valid` mask marking where the grid has any media at
+all. Without it, a missing region would look like silence, which is not the
+same thing.
 
-## Herkkyys ja vahvistus
+## Sensitivity and gain
 
-Herkkyys on kynnys **pohjakohinan yli**, ei absoluuttinen desibeliarvo:
-
-```
-on = db > pohjakohina + herkkyys
-```
-
-Vahvistus lisätään desibeleihin, mutta myös pohjakohina siirtyy saman verran,
-joten vahvistus supistuu pois yllä olevasta ehdosta. Se vaikuttaa siis vain
-siihen, kumpi mikki katsotaan kovemmaksi:
+Sensitivity is a threshold **above the noise floor**, not an absolute decibel
+value:
 
 ```
-taso = db + vahvistus          # vain päällekkäispuheen vertailuun
+on = db > floor + sensitivity
 ```
 
-Tämä on tahallista. Jos vahvistus vaikuttaisi myös kynnykseen, kaksi säädintä
-tekisi osittain samaa asiaa ja säätäminen muuttuisi arvailuksi.
-
-Pohjakohina on aineiston 20. persentiili. Se lasketaan kerran kohdistuksen
-yhteydessä ja jää välimuistiin, koska se ei riipu säätimistä.
-
-## Päätös
-
-`decide.py` ei silmukoi näytteiden yli. Ensin numpy tuottaa `want`-taulukon —
-kunkin hetken toivottu kuva ilman kestorajoituksia — ja sitten silmukka kulkee
-sen **jaksojen** (`_runs`) yli. Kahden tunnin aineistossa jaksoja on tuhansia,
-näytteitä satojatuhansia.
-
-Järjestys:
-
-1. **Vahvistusaika.** Puhejaksot jotka ovat lyhyempiä kuin vahvistusaika
-   pudotetaan (`_open_runs`). Alle vahvistusajan mittaiset tauot täytetään
-   (`_close_gaps`), jotta sanavälit eivät pilko jaksoa.
-2. **Yksi äänessä** → hänen lähikuvansa.
-3. **Useampi äänessä.** Jos päällekkäisyys on lyhyempi kuin `min_overlap`, se
-   ei ole päällekkäispuhetta vaan myötäilyä: valitaan kovempi eikä laukaista
-   sääntöä. Muuten sovelletaan valittua sääntöä.
-4. **Puhuja ilman lähikuvaa** → laaja. **Lähikuva jota ei ole aikajanalla
-   tässä kohtaa** → pidä nykyinen.
-5. **Kestorajoitukset** jaksosilmukassa: ennakko siirtää leikkausta taaksepäin,
-   lyhin kuvan kesto estää sitä osumasta liian lähelle edellistä. Jos molemmat
-   yhdessä työntävät leikkauksen jakson yli, leikkausta ei tehdä.
-6. **Pitkä puheenvuoro** jälkikäsittelynä (`_force_wide`).
-
-### Pitkä puheenvuoro
-
-Kohdat 1–5 tuottavat oikean kuvan mutta eivät rytmiä: yksinpuhelu antaa yhden
-lähikuvan niin pitkäksi kuin puhe kestää, ja katsojalle se on minuutti samaa
-kasvokuvaa. Kun sama puhuja on pitänyt lattiaa `wide_every` sekuntia, kuva
-vaihtuu laajaan.
-
-Jatkoja on kaksi, koska ne ovat eri asia leikkauksellisesti eikä kumpikaan ole
-aina oikein. **Palaa puhujaan** antaa laajan kestää `wide_hold` ja palaa samaan
-kuvaan; rytmi pysyy puhujassa, ja se sopii keskustelulle jossa monologi on
-poikkeus. **Jää laajaan** pitää laajan seuraavaan puheenvuoroon asti; pitkä
-yksinpuhelu näyttää tilanteelta eikä kasvokuvalta, ja leikkauksia tulee
-selvästi vähemmän. Valinta on makua, joten se on säädin eikä vakio.
-
-Tämä ajetaan vasta valmiille leikkauslistalle eikä `want`-taulukkoon. Se on
-rytmisääntö eikä havainto siitä kuka puhuu, eikä se saa sekaantua kynnyksiin:
-`want` kertoo edelleen kenen vuoro on, ja `_force_wide` päättää erikseen
-näytetäänkö se.
-
-Laajan kesto nostetaan aina vähintään lyhimpään kuvan kestoon. Muuten säädin
-tuottaisi välähdyksiä, joita mikään muu sääntö ei päästäisi läpi — ja
-vähimmäiskesto on koko päätöksen tiukin lupaus.
-
-## Aika
-
-Kaikki XML:stä luettu ja XML:ään kirjoitettu aika on `Fraction`. Syy näkyy
-testissä `test_quantize_is_exact_over_many_frames`: 29,97 fps:n kehyksen kesto
-on 1001/30000 sekuntia, ja liukulukuna 216 000 kehyksen yli kertyvä virhe
-riittää siirtämään leikkauksen väärään kehykseen. Aikajanalle jäisi aukkoja,
-ja Final Cut näyttää aukot mustana.
-
-Liukuluku kelpaa vain analyysikerroksessa, jossa 20 ms:n ruudukko on joka
-tapauksessa karkeampi kuin kehys.
-
-### FCPXML:n aikasemantiikka
-
-Klipin `offset` on **isännän paikallisessa aikapohjassa**, jonka nollakohta on
-isännän `start`. Lapsen absoluuttinen paikka aikajanalla on siis:
+Gain is added to the decibels, but the noise floor moves by the same amount, so
+gain cancels out of the condition above. It therefore only affects which
+microphone counts as louder:
 
 ```
-lapsen_absoluuttinen = isännän_absoluuttinen + (lapsen_offset - isännän_start)
+level = db + gain          # only for the overlap comparison
 ```
 
-Tämä koskee sekä liitettyjä klippejä että `sync-clip`in sisältöä, ja se on
-`read.py`:n `_walk`-funktion koko idea. Sama sääntö toiseen suuntaan selittää,
-miksi `write.py` antaa mikkien liitetyille klipeille offsetiksi ensimmäisen
-spine-klipin `start`-arvon eikä nollaa.
+This is deliberate. If gain also moved the threshold, two controls would do
+partly the same thing and tuning would become guesswork.
 
-### Monikamera
+The noise floor is the 20th percentile of the material. It is computed once
+during alignment and cached, because it doesn't depend on the controls.
 
-`<mc-clip>` on isäntä, sisältö on `<media><multicam>`:in kulmissa, ja kulmien
-aikapohjan nollakohta on multicamin `tcStart`. Sama sääntö siis pätee, mutta
-yhdellä lisäyksellä: **kulman sisältö on rajattava `mc-clip`:n kestoon**.
-Kulma ulottuu koko multicamin yli, joten ilman rajausta kaksi osaa samasta
-multicamista tuottaisi päällekkäiset esiintymät, verhokäyrä kohdistuisi
-väärään kohtaan ja peitto näyttäisi kuvaa siellä missä sitä ei ole. Tämä on
-`_walk`:n `bounds`-parametri, ja se koskee myös `ref-clip`iä.
+## The decision
 
-### Raita, ei media
+`decide.py` never loops over samples. First numpy produces a `want` array — the
+desired shot at each moment, with no duration constraints — and then a loop
+walks its **runs** (`_runs`). Two hours of material has thousands of runs and
+hundreds of thousands of samples.
 
-Roolituksen yksikkö on **raita** (`Timeline.tracks`), ei media. Tavallisessa
-aikajanassa ero ei näy — jokainen media on oma raitansa ja avain on
-tiedostonimi kuten ennen — mutta monikamerassa sama kulma on eri tiedosto joka
-osassa, ja ne kuuluvat samaan rooliin, samaan säätimeen ja samaan puhujaan.
+The order:
 
-Ilman tätä `Roles.wide_key` ja `Roles.closes` pitäisi kaikki muuttaa listoiksi
-ja jokainen niitä lukeva kohta osaisi käsitellä monta avainta. Raita hoitaa
-saman yhdessä paikassa: päätöskerros näkee edelleen yhden avaimen kuvaa
-kohden, ja peitto on raidan osien yhdiste.
+1. **Confirm time.** Speech runs shorter than the confirm time are dropped
+   (`_open_runs`). Pauses shorter than the confirm time are filled
+   (`_close_gaps`) so word gaps don't fragment a run.
+2. **One person talking** → their close-up.
+3. **Several talking.** If the overlap is shorter than `min_overlap` it is
+   backchannelling rather than overlapping speech: pick the louder one and
+   don't trigger the rule. Otherwise apply the chosen rule.
+4. **A speaker with no close-up** → wide. **A close-up that isn't on the
+   timeline here** → hold current.
+5. **Duration constraints** in the run loop: lead moves the cut earlier,
+   shortest shot stops it landing too close to the previous one. If the two
+   together push the cut past the run, no cut is made.
+6. **Long turn** as post-processing (`_force_wide`).
 
-Ryhmittely tapahtuu kulman nimellä (`"1"`, `"nyman a Track2"`), koska se on
-leikkaajan oma merkintä siitä että kyse on samasta kamerasta. Avain sen sijaan
-johdetaan tiedostonimistä, koska nimet ja `angleID`:t vaihtuvat viennistä
-toiseen. Kahta saman multicamin kulmaa ei koskaan yhdistetä, vaikka nimet
-normalisoituisivat samoiksi.
+### Long turn
 
-## Kirjoitus
+Steps 1–5 produce the right shot but not a rhythm: a monologue gives one
+close-up for as long as the speech lasts, and to a viewer that is a minute of
+the same face. Once the same speaker has held the floor for `wide_every`
+seconds, the picture cuts to the wide.
 
-Yksi spine, yksi klippi per kuva. Kameroiden oma ääni pois
-`srcEnable="video"`. Mikit liitettyinä klippeinä ensimmäiseen spine-klippiin
-laneilla −1, −2, … rooleilla `dialogue.<puhuja>`.
+There are two ways to continue, because they are editorially different things
+and neither is always right. **Return to speaker** lets the wide last
+`wide_hold` and returns to the same shot; the rhythm stays with the speaker,
+which suits a conversation where monologue is the exception. **Stay wide**
+holds the wide until the next turn; a long monologue reads as a situation
+rather than a face, and there are markedly fewer cuts. The choice is taste, so
+it is a control rather than a constant.
 
-### Monikameran kirjoitus
+This runs on the finished cut list, not on the `want` array. It is a rhythm
+rule rather than an observation about who is talking, and it must not get
+mixed into the thresholds: `want` still says whose turn it is, and
+`_force_wide` decides separately whether to show it.
 
-Monikameralähteestä ulos tulee `<mc-clip>` per kuva: kuvakulma
-`srcEnable="video"`, mikkikulmat `srcEnable="audio"` omilla
-`dialogue.<puhuja>`-rooleillaan, kameran oma ääni `active="0"`. Tulos on
-natiivi monikameraleikkaus, joten kuvakulman voi vaihtaa Final Cutissa
-jälkikäteen — littana leikkauksessa se ei enää onnistu.
+The wide duration is always raised to at least the shortest shot. Otherwise the
+control would produce flashes that no other rule would allow — and the minimum
+duration is the strictest promise the decision makes.
 
-Resurssit **kopioidaan lähde-XML:stä sellaisenaan** eikä rakenneta uudestaan.
-Multicamin kulmarakenne, `angleID`:t ja assettien keskinäinen synkkaus ovat
-juuri se osa jota ei saa muuttaa, ja kopio on ainoa tapa taata se.
+## Time
 
-Kuva ei saa jatkua osasta toiseen: seuraava osa on eri `<mc-clip>` eri
-`angleID`:illä. Siksi kvantisoidut jaksot pilkotaan vielä osien rajoilla
-(`_split_spans`), ja jokainen pala saa oman `start`-arvonsa oman osansa
-aikapohjassa.
+All time read from and written to XML is a `Fraction`. The reason shows up in
+`test_quantize_is_exact_over_many_frames`: at 29.97 fps a frame is 1001/30000
+seconds, and as a float the error accumulated over 216 000 frames is enough to
+move a cut to the wrong frame. The timeline would be left with gaps, and Final
+Cut shows gaps as black.
 
-Kvantisointi (`_quantize`) on tarkempi kuin miltä näyttää. Se kulkee jaksot
-läpi eteenpäin ja pitää kirjaa kursorista, joka takaa että jokainen kuva saa
-vähintään yhden kehyksen ja että seuraavan alku on aina edellistä suurempi.
-Jokaisen jakson loppu on seuraavan alku, joten aukkoja ei voi syntyä. Jos
-leikkauksia olisi enemmän kuin kehyksiä — mitä päätöskerros ei tuota, mutta
-mitä ei saa myöskään kirjoittaa rikkinäisenä — loput pudotetaan ja edellinen
-kuva jatkuu niiden yli.
+Floating point is acceptable only in the analysis layer, where the 20 ms grid
+is coarser than a frame anyway.
 
-## Ääni
+### FCPXML time semantics
 
-Kolmas hidas kerros: `audio/chain.py` tekee signaalinkäsittelyn,
-`audio/mix.py` päättää mitä käsitellään ja vahtii synkkaa.
+A clip's `offset` is **in the host's local time base**, whose zero is the
+host's `start`. A child's absolute position on the timeline is therefore:
 
-Ketju ajettiin aluksi rinnakkaisprojektin (automixer) ympäristössä
-`uv run --project`illa, koska se vaati Python 3.13:n ja MLX:n. Riippuvuus
-purettiin: tarvittu osa oli pieni, ja pedalboard tekee sen suoraan samassa
-prosessissa. Mukana lähtivät sekä versiovaatimus että prosessiraja.
+```
+child_absolute = host_absolute + (child_offset - host_start)
+```
 
-Kirjastosta löytyi kaksi kohtaa joissa nimi ei vastaa käytöstä, ja molemmat
-olisivat menneet läpi huomaamatta ilman pituustarkistusta:
+This applies to attached clips and to the contents of a `sync-clip` alike, and
+it is the entire idea behind `read.py`'s `_walk`. The same rule in reverse
+explains why `write.py` gives the microphones' connected clips an offset equal
+to the first spine clip's `start` rather than zero.
 
-* `plugin.process(..., reset=False)` jättää liitännäisen viiveen verran häntää
-  pois — dxRevivellä 4641 näytettä. Tulos on oikean kuuloinen mutta liian
-  lyhyt. Siksi `reset=True`, eikä tiedostoa käsitellä paloissa.
-* `pedalboard.Limiter` tekee makeup-vahvistuksen. Se nosti valmiiksi
-  normalisoidun raidan −20 LUFS:sta −15,8:aan ja huiput nollaan. Tilalla on
-  `peak_guard`: staattinen vaimennus, joka vaimentaa vain jos katto ylittyy
-  eikä koskaan nosta.
+### Multicam
 
-Portatusta `declick`istä löytyi kolmas: alkuperäinen vertasi HF-energiaa
-paikalliseen **maksimiin**, vaikka kommentti puhui keskiarvosta. Naksu on
-määritelmän mukaan oman ympäristönsä maksimi, joten ehto ei voinut täyttyä
-koskaan ja koko käsittely oli nolla-operaatio. Keskiarvolla se toimii.
+`<mc-clip>` is the host, the content lives in the angles of
+`<media><multicam>`, and the zero of the angles' time base is the multicam's
+`tcStart`. The same rule applies, with one addition: **the angle's content must
+be clipped to the `mc-clip`'s duration**. An angle spans the whole multicam, so
+without clipping two parts of the same multicam would produce overlapping
+placements, the envelope would align to the wrong place, and coverage would
+claim picture where there is none. That is `_walk`'s `bounds` parameter, and it
+applies to `ref-clip` too.
 
-### Miksi analyysi ajetaan raa'asta äänestä
+### A track, not a media file
 
-Kompressori tekee kaksi asiaa, jotka molemmat huonontavat päätöstä. Se nostaa
-pohjakohinaa sanojen välissä, ja herkkyys on kynnys **pohjan yli**. Se
-tasoittaa mikkien keskinäisen eron, ja päällekkäispuheen sääntö *vahvempi
-voittaa* vertaa mikkejä toisiinsa. Käsitelty ääni on siis parempi kuunnella ja
-huonompi mitata, joten kerrokset erotetaan: analyysi lukee alkuperäisen, vienti
-viittaa käsiteltyyn.
+The unit of roling is a **track** (`Timeline.tracks`), not a media file. On an
+ordinary timeline the difference is invisible — each media file is its own
+track and the key is the filename as before — but in a multicam the same angle
+is a different file in each part, and they belong to the same role, the same
+control and the same speaker.
 
-### Normalisointi ennen kompressointia
+Without this, `Roles.wide_key` and `Roles.closes` would all have to become
+lists, and every site reading them would have to handle several keys. A track
+handles it in one place: the decision layer still sees one key per shot, and
+coverage is the union of the track's parts.
 
-Kompressorin kynnykset ovat absoluuttisia desibelejä. Käsittelemätön
-podcast-mikki on helposti −40 LUFS, jolloin −12 dB:n kynnys ei ylity
-kertaakaan ja koko ketju on nolla-operaatio. Siksi jokainen mikki mitataan ja
-nostetaan ensin samaan äänekkyyteen.
+Grouping is by angle name (`"1"`, `"nyman a Track2"`), because that is the
+editor's own marking that this is the same camera. The key, however, is derived
+from the filenames, because names and `angleID`s change from one export to the
+next. Two angles of the same multicam are never merged, even if their names
+normalise to the same string.
 
-Tavoite on **stemin** eikä ohjelman: −20 LUFS, ei −16. Yksi puhuja on äänessä
-kerrallaan, joten summa osuu lähelle samaa lukemaa, ja lopullinen taso
-asetetaan Final Cutissa. Ohjelman tavoitteen antaminen jokaiselle raidalle
-erikseen tuottaisi summassa liian kovan.
+## Writing
 
-### Näytemäärä on synkan koko lupaus
+One spine, one clip per shot. The cameras' own audio is disabled with
+`srcEnable="video"`. Microphones are connected clips on the first spine clip,
+on lanes −1, −2, … with roles `dialogue.<speaker>`.
 
-Vienti viittaa käsiteltyyn tiedostoon **samoilla ajoilla** kuin alkuperäiseen.
-Yksikin lisätty tai pudotettu näyte siirtää kuvan ja äänen erilleen, eikä
-virhettä huomaa ennen kuin lopputulos on koossa. Siksi pituus tarkistetaan
-työprosessissa näytetaulukoista ja vielä uudestaan ffprobella, ja poikkeava
-hylätään käyttämättömänä.
+### Writing multicam
 
-Tästä seuraa myös se, mitä alkuperäisestä ketjusta jätettiin ottamatta:
-**mainoskatko** siirtää raitaa ja **summaus** veisi puhujien erottelun ja siten
-`dialogue.<puhuja>`-roolit. Kumpikaan ei kuulu tänne.
+From a multicam source the output is one `<mc-clip>` per shot: the picture
+angle `srcEnable="video"`, the microphone angles `srcEnable="audio"` with their
+own `dialogue.<speaker>` roles, and the camera's own audio `active="0"`. The
+result is a native multicam edit, so the angle can still be changed by hand in
+Final Cut afterwards — which a flat edit no longer allows.
 
-Siirtymä mitataan erikseen ristikorrelaationa, koska pituustarkistus ei
-huomaa sitä: liitännäinen voi ilmoittaa viiveensä väärin ja palauttaa oikean
-mittaisen mutta kokonaan siirtyneen raidan. Korrelaatio lasketaan
-verhokäyristä eikä aallonmuodosta — liitännäinen muuttaa sisältöä mutta ei
-puheen rytmiä.
+Resources are **copied from the source XML verbatim** rather than rebuilt. The
+multicam's angle structure, the `angleID`s and the assets' mutual sync are
+exactly the part that must not change, and copying is the only way to guarantee
+that.
 
-### Ohjaus tapahtuu resurssitasolla
+A shot must not continue from one part into the next: the next part is a
+different `<mc-clip>` with different `angleID`s. So the quantised spans are
+split again at part boundaries (`_split_spans`), and each piece gets its own
+`start` in its own part's time base.
 
-Monikameraviennissä `<resources>` kopioidaan lähteestä, joten käsitelty ääni
-ohjataan paikalleen vaihtamalla assetin `media-rep src`. Kulmat ja `mc-source`t
-viittaavat assettiin, joten leikkauslistaan ei tarvitse koskea.
+Quantisation (`_quantize`) is more careful than it looks. It walks the segments
+forward keeping a cursor, which guarantees each shot gets at least one frame
+and that the next start is always greater than the previous. Each segment's end
+is the next one's start, so gaps cannot appear. If there were more cuts than
+frames — which the decision layer does not produce, but which must not be
+written broken either — the rest are dropped and the previous shot continues
+over them.
 
-`<bookmark>` on samalla **poistettava**. Se on macOS:n tiedostoviite, joka
-voittaa `src`:n: jättäminen tarkoittaisi että Final Cut avaa alkuperäisen
-käsittelemättömän tiedoston kertomatta siitä mitään.
+## Audio
 
-### Vaimennus käyttää kuvan puheentunnistusta
+The third slow layer: `audio/chain.py` does the signal processing,
+`audio/mix.py` decides what gets processed and guards the sync.
 
-Mikin portti on klassisesti vaikea: tunnistus välkkyy tavuvälien yli ja
-reagoi yskäisyyn. Tässä tunnistus on kuitenkin jo olemassa, säädetty
-herkkyyssäätimillä ja katsottu esikatselupalkista — sama `SpeakerLanes.on`
-joka päättää kuvan. Portti saa siis ohjauksen ilmaiseksi.
+The chain originally ran in a sibling project's environment (automixer) via
+`uv run --project`, because it required Python 3.13 and MLX. That dependency
+was removed: the part actually needed was small, and pedalboard does it
+directly in the same process. The version requirement and the process boundary
+went with it.
 
-Kaksi asiaa piti silti lisätä.
+Two places in that library where the name doesn't match the behaviour turned
+up, and both would have shipped unnoticed without the length check:
 
-**Kovin voittaa.** Pelkkä kynnys ei erota puhujia: kaksi mikkiä samassa
-huoneessa kuulevat molemmat, ja mitatussa aineistossa kumpikin ylitti
-kynnyksen 41 % ajasta yhtä aikaa. Vuoto on kuitenkin selvästi hiljempaa —
-mediaaniero 12,8 dB — joten auki jätetään vain kovin mikki ja ne jotka ovat
-`duck_dominance_db`:n sisällä siitä. Kuudella desibelillä päällekkäisyys
-putosi 41 %:sta 6 %:iin.
+* `plugin.process(..., reset=False)` drops the plug-in's latency worth of tail
+  — 4641 samples with dxRevive. The result sounds correct but is too short.
+  Hence `reset=True`, and no chunked processing.
+* `pedalboard.Limiter` applies makeup gain. It lifted an already-normalised
+  track from −20 LUFS to −15.8 and pushed peaks to zero. It was replaced with
+  `peak_guard`: a static attenuation that only ever reduces, and only when the
+  ceiling is exceeded.
 
-**Vaimennus vain peittävän äänen alla.** Ensimmäinen versio vaimensi aina kun
-puhuja oli hiljaa, ja se kuulosti kamalalta: 20 millisekunnin kuoppia, 13–33
-vaimennusta minuutissa, ja liu'ut keskellä hiljaisuutta. Portti kuuluu aina
-kun mikään ei peitä sitä.
+A third turned up in the ported `declick`: the original compared HF energy
+against a local **maximum**, although the comment said mean. A click is by
+definition the maximum of its own neighbourhood, so the condition could never
+be true and the whole operation was a no-op. With a mean it works.
 
-Nyt vaimennus voi olla olemassa vain silloin kun **jokin toinen mikki on
-auki**. Lasku ajoitetaan toisen puheen alkuun ilman ennakkoa — lasku ei saa
-alkaa ennen kuin peittävä ääni on tullut — ja peittävän jakson lopusta
-leikataan pito ja paluun mitta pois, jotta myös nousu tapahtuu peittävän
-äänen alla. Mitattuna hiljaisuudessa tapahtuva vaimennus putosi 5,4 %:sta
-1,6 %:iin ja 12,7 %:sta 5,2 %:iin, ja loppu on lauseensisäisiä taukoja joissa
-toinen puhuja on selvästi vielä kesken.
+### Why analysis runs on raw audio
 
-Syvyys on säädin mutta melkein merkityksetön: vuoto on jo ~13 dB puheen alla,
-joten −9 dB ja −15 dB eroavat yhteissummassa alle 0,1 dB ja erotussignaali on
-keskimäärin 34 dB miksin alapuolella. Tämä myös selittää miksi ensimmäinen
-versio kuulosti pahalta vaikka taso tuskin liikkui: kuultiin artefaktit, ei
-vaimennusta. Oletus on siksi matala −9 dB, joka tekee vähiten vahinkoa jos
-tunnistus erehtyy.
+A compressor does two things, both of which degrade the decision. It raises the
+noise floor between words, and sensitivity is a threshold **above the floor**.
+It flattens the difference between microphones, and the *louder wins* rule
+compares microphones against each other. Processed audio is therefore better to
+listen to and worse to measure, so the layers are kept apart: analysis reads
+the original, the export points at the processed copy.
 
-Liu'ut ovat desibeleissä eivätkä amplitudissa, koska kuulo on logaritminen:
-lineaarinen liuku on puolivälissä jo lähes perillä ja kuulostaa äkkinäiseltä.
-Ne ovat myös epäsymmetriset ja hitaat — 0,25 s alas, 0,4 s ylös — koska
-piilossa oleva liuku ei hyödy nopeudesta.
+### Normalisation before compression
 
-**Omat ajat.** Kuva odottaa vahvistusaikaa ennen leikkausta; portin on
-avauduttava heti. `open_windows` pudottaa liian lyhyet jaksot (`min_open`,
-yskäisy), avaa etukäteen (`lookahead`) ja pitää auki jälkikäteen (`hold`).
-Ennakko on mahdollinen vain koska käsittely on jälkikäteistä — juuri sen
-puuttuminen tekee reaaliaikaisesta portista sanoja syövän.
+Compressor thresholds are absolute decibels. An unprocessed podcast microphone
+is easily −40 LUFS, at which a −12 dB threshold is never crossed and the whole
+chain is a no-op. So every microphone is measured and lifted to the same
+loudness first.
 
-`_close_gaps` oli tähän asti kuollutta koodia `decide.py`:ssä. Sanavälien
-täyttö tapahtuu nyt implisiittisesti: ennakko ja pito laajentavat jaksoja
-molempiin suuntiin, ja lähekkäiset sulautuvat.
+The target is a **stem** target rather than a programme one: −20 LUFS, not −16.
+One person speaks at a time, so the sum lands close to the same figure, and the
+final level is set in Final Cut. Applying a programme target to every track
+separately would produce a sum that is far too hot.
 
-Vaimennus tehdään näytetasolla jaksoittain eikä koko tiedoston mittaisella
-vahvistuskäyrällä: tunnin mikki on 184 miljoonaa näytettä, ja float-taulukko
-sen päälle olisi kolme neljäsosaa gigatavusta. Jaksoja on tuhansia.
+The level is measured again after compression. LUFS gates quiet passages
+relative to the whole, so when compression lifts quiet material a different set
+of blocks passes the gate and the reading rises — measured at 2.2 dB above
+target. The correction is therefore applied afterwards, and the peak ceiling
+after that.
 
-### Tilaääni on liitetty klippi, ei kulma
+### The sample count is the whole sync promise
 
-Kuvakulma vaihtuu joka leikkauksessa, tilaäänen on jatkuttava yli niiden.
-Siksi se ei ole `mc-source` vaan `<asset-clip>` lanella −1 omalla roolillaan,
-liitettynä ensimmäiseen klippiin — sama rakenne kuin littanan mikeillä.
-Kameran ääni puretaan ensin ffmpegillä välimuistiin, koska soundfile ei avaa
-mp4:ää.
+The export references the processed file with **the same times** as the
+original. A single sample added or dropped separates picture from sound, and
+the error isn't noticeable until the result is finished. So the length is
+checked in the chain and again from the written file with ffprobe, and anything
+that deviates is discarded unused.
 
-## Käyttöliittymä
+The same reasoning determines what was left out of the original chain: the **ad
+break** shifts the track, and **summing** would remove the separation between
+speakers and with it the `dialogue.<speaker>` roles. Neither belongs here.
 
-FastAPI ja tavallinen JavaScript ilman käännösvaihetta. Selain pitää tilaa vain
-säätimistä; päätös ajetaan aina palvelimella, koska se on numpya.
+A shift is measured separately by cross-correlation, because the length check
+cannot see it: a plug-in can report its latency incorrectly and return a
+correct-length but entirely displaced track. The correlation is computed on
+envelopes rather than waveforms — a plug-in changes the content but not the
+rhythm of the speech. dxRevive measured 0 samples.
 
-Säätimen liike ei lähetä pyyntöä heti vaan 45 ms:n viiveellä, ja edellinen
-pyyntö keskeytetään `AbortController`illa. Raahaus ei siis kasaa jonoa.
+### Redirection happens at the resource level
 
-Esikatselupalkki tiivistetään palvelimella (`preview.py`) noin 1400 sarakkeeksi.
-Puhujarivillä sarake on "äänessä" jos puhuja on äänessä missä tahansa sen
-sisällä — muuten lyhyet repliikit katoaisivat tiivistyksessä. Valitun kuvan
-rivillä otetaan sarakkeen keskikohta, koska siinä kiinnostaa vallitseva arvo.
+In a multicam export `<resources>` is copied from the source, so the processed
+audio is put in place by changing the asset's `media-rep src`. Angles and
+`mc-source`s reference the asset, so the cut list never needs touching.
 
-### Miksi ei SwiftUI
+The `<bookmark>` must be **removed** at the same time. It is a macOS file
+reference that beats `src`: leaving it would mean Final Cut opens the original
+unprocessed file without saying anything.
 
-AVFoundation olisi antanut toiston ja aaltomuodot valmiina. Vastapainona
-analyysi olisi pitänyt kirjoittaa Swiftinä uusiksi tai ajaa Pythonia
-alaprosessina, eli kaksi kieltä ja IPC ensimmäisestä versiosta alkaen. Tämän
-kokoluokan työkalussa se maksaa enemmän kuin tuo.
+### Ducking uses the picture's speech detection
 
-### Miten toisto lisätään myöhemmin
+A microphone gate is classically hard: the detection flickers across word gaps
+and reacts to a cough. Here the detection already exists, tuned with the
+sensitivity sliders and inspected in the preview bar — the same
+`SpeakerLanes.on` that decides the picture. The gate gets its control for free.
 
-Päätöskerrokseen ei tarvitse koskea. `preview.py` palauttaa jo aikajanan
-sekunteina ja `decide.py` ei tiedä käyttöliittymästä mitään. Tarvitaan:
+Two things still had to be added.
 
-1. proxytiedostojen luonti ffmpegillä (samaan välimuistihakemistoon)
-2. reitti joka tarjoilee proxyn `Range`-tuella
-3. `<video>`-elementti ja soitinpää palkin päälle
-4. leikkauskohdissa lähteen vaihto, koska yksi `<video>` ei voi näyttää kahta
-   kameraa — käytännössä kaksi päällekkäistä elementtiä, joista toista
-   esiladataan
+**The loudest wins.** A threshold alone doesn't separate speakers: two
+microphones in one room hear both, and in the measured material both crossed
+the threshold 41 % of the time simultaneously. The bleed is clearly quieter
+though — a median difference of 12.8 dB — so only the loudest microphone is
+left open, plus any within `duck_dominance_db` of it. At six decibels the
+overlap fell from 41 % to 6 %.
+
+**Ducking only under a masking voice.** The first version ducked whenever a
+speaker was quiet, and it sounded terrible: 20-millisecond dips, 13–33 ducks
+per minute, and fades in the middle of silence. A gate is always audible when
+nothing masks it.
+
+Ducking can now only exist while **some other microphone is open**. The fade
+down is timed to the other person's speech starting, without lookahead — the
+fade must not begin before the masking sound has arrived — and the hold plus
+the release length are trimmed off the end of the masking run so the fade up
+also happens under the masking voice. Measured, ducking during silence fell
+from 5.4 % to 1.6 % and from 12.7 % to 5.2 %, and what remains is
+within-sentence pauses where the other speaker is clearly still mid-sentence.
+
+The fades are in decibels rather than amplitude, because hearing is
+logarithmic: a linear ramp is nearly all the way down at its midpoint and reads
+as a step. They are also asymmetric and slow — 0.25 s down, 0.4 s up — because
+a hidden fade gains nothing from being fast.
+
+Depth is a control but almost irrelevant: the bleed is already ~13 dB below the
+speech, so −9 dB and −15 dB differ by less than 0.1 dB in the sum and the
+difference signal averages 34 dB below the mix. This also explains why the
+first version sounded bad although the level barely moved: what was audible was
+artefacts, not attenuation. The default is therefore a shallow −9 dB, which
+does least damage when the detection is wrong.
+
+**Own timings.** The picture waits for a confirm time before cutting; the gate
+must open immediately. `open_windows` drops runs that are too short
+(`min_open`, a cough), opens ahead of time (`lookahead`) and holds afterwards
+(`hold`). The lookahead is only possible because processing is offline —
+its absence is exactly what makes a real-time gate eat words.
+
+`_close_gaps` was dead code in `decide.py` until then. Filling word gaps now
+happens implicitly: lookahead and hold expand runs in both directions, and
+adjacent ones merge.
+
+Ducking is applied at sample level per run rather than as a gain curve spanning
+the whole file: an hour-long microphone is 184 million samples, and a float
+array on top of that would be three quarters of a gigabyte. There are thousands
+of runs.
+
+### Room tone is a connected clip, not an angle
+
+The picture angle changes at every cut; room tone has to continue across them.
+So it is not an `mc-source` but an `<asset-clip>` on lane −1 with its own role,
+attached to the first clip — the same structure as the microphones in a flat
+edit. The camera's audio is extracted with ffmpeg into the cache first, because
+the audio reader cannot open mp4.
+
+## The interface
+
+FastAPI and plain JavaScript with no build step. The browser holds state only
+for the controls; the decision always runs on the server, because it is numpy.
+
+Moving a slider doesn't send a request immediately but after 45 ms, and the
+previous request is cancelled with an `AbortController`. Dragging therefore
+never builds a queue.
+
+The preview bar is summarised on the server (`preview.py`) into about 1400
+columns. On a speaker row a column is "talking" if the speaker is talking
+anywhere within it — otherwise short lines would vanish in the summary. On the
+chosen-shot row the middle of the column is taken, because there the prevailing
+value is what matters.
+
+Static files are served with their modification time as a query parameter.
+Without it the browser serves an old stylesheet with a new script, and the
+layout breaks in a way nobody connects to caching. This happened once already.
+
+### Why not SwiftUI
+
+AVFoundation would have provided playback and waveforms out of the box. Against
+that, the analysis would have had to be rewritten in Swift or run as a Python
+subprocess — two languages and IPC from the first version onwards. In a tool
+this size that costs more than it brings.
+
+### How playback would be added later
+
+The decision layer needs no changes. `preview.py` already returns timeline
+seconds and `decide.py` knows nothing about the interface. What's needed:
+
+1. proxy file generation with ffmpeg (into the same cache directory)
+2. a route serving the proxy with `Range` support
+3. a `<video>` element and a playhead over the bar
+4. switching source at cut points, since one `<video>` cannot show two cameras
+   — in practice two stacked elements with one preloading

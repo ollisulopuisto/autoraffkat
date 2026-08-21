@@ -1,136 +1,144 @@
 # autoraffkat
 
-FCPXML sisään, FCPXML ulos. Kuva vaihtuu puhujan mukaan. Ei renderöintiä.
+FCPXML in, FCPXML out. The picture cuts to whoever is talking. Nothing is
+rendered.
 
-## Kaksi kerrosta, älä sekoita
+Code, comments and docstrings are in **Finnish** — they are for the
+maintainers. Documentation and everything the user sees is in English and
+Finnish. Keep it that way.
 
-`audio/envelope.py` on hidas (ffmpeg, sekunteja) ja välimuistitettu levylle.
-`decide.py` on nopea (numpy, millisekunteja) ja ajetaan joka säädöllä. Mitään
-tiedostojen lukua ei saa valua `decide.py`:hen eikä sinne kutsuttavaan
-`analysis.build_grid`:iin — se rikkoo käyttöliittymän vasteajan, joka on
-toimeksiannon tärkein yksittäinen vaatimus.
+## Two layers, don't mix them
 
-`decide.py` ei myöskään saa silmukoida yksittäisten näytteiden yli. Silmukat
-kulkevat jaksojen (`_runs`) yli, joita on tuhansia, ei näytteiden, joita on
-satojatuhansia.
+`audio/envelope.py` is slow (ffmpeg, seconds) and cached to disk. `decide.py`
+is fast (numpy, milliseconds) and runs on every adjustment. No file reading may
+leak into `decide.py` or into `analysis.build_grid` which it calls — that
+breaks the interface response time, which is the single most important
+requirement here.
 
-## Aika on Fraction
+`decide.py` must not loop over individual samples either. Loops walk runs
+(`_runs`), of which there are thousands, not samples, of which there are
+hundreds of thousands.
 
-Kaikki XML:stä luettu ja XML:ään kirjoitettu aika kulkee `timeline.py`:n läpi
-`Fraction`ina. Liukuluku kelpaa vain analyysikerroksessa. Syy: pyöristysvirhe
-kertyy tuhansien kehysten yli ja aikajanalle jää aukkoja.
+## Time is a Fraction
 
-FCPXML:n aikasemantiikka: klipin `offset` on isännän paikallisessa aikapohjassa,
-jonka nollakohta on isännän `start`. Lapsen absoluuttinen paikka on siis
-`isännän_absoluuttinen + (lapsen_offset - isännän_start)`. Tämä koskee sekä
-liitettyjä klippejä että sync-clipin sisältöä, ja se on `fcpxml/read.py`:n
-`_walk`-funktion koko idea.
+All time read from and written to XML passes through `timeline.py` as a
+`Fraction`. Floating point is acceptable only in the analysis layer. The
+reason: rounding error accumulates over thousands of frames and leaves gaps on
+the timeline.
 
-Monikamerassa lisäksi: kulman sisältö on rajattava `mc-clip`:n kestoon
-(`_walk`:n `bounds`), koska kulma ulottuu koko multicamin yli ja sama multicam
-voi olla spinellä kahdesti.
+FCPXML time semantics: a clip's `offset` is in the host's local time base,
+whose zero is the host's `start`. A child's absolute position is therefore
+`host_absolute + (child_offset - host_start)`. This applies to attached clips
+and to sync-clip contents alike, and it is the entire idea behind
+`fcpxml/read.py`'s `_walk`.
 
-## Raita ei ole media
+In a multicam, additionally: the angle's content must be clipped to the
+`mc-clip`'s duration (`_walk`'s `bounds`), because an angle spans the whole
+multicam and the same multicam can appear on the spine twice.
 
-Roolituksen yksikkö on `Timeline.tracks`, ei `Timeline.media`. Monikamerassa
-sama kulma on eri tiedosto joka osassa mutta yksi raita. Kaikki mikä lukee
-rooleja, säätimiä tai `Segment.angle`ia puhuu raita-avaimista. Ilman tätä
-`Roles.wide_key` ja `closes` olisivat listoja ja jokainen niitä lukeva kohta
-joutuisi käsittelemään monta avainta.
+## A track is not a media file
 
-## Roolit peritään jaksosta toiseen
+The unit of roling is `Timeline.tracks`, not `Timeline.media`. In a multicam
+the same angle is a different file in each part but one track. Everything that
+reads roles, controls or `Segment.angle` speaks in track keys. Without this,
+`Roles.wide_key` and `closes` would be lists and every site reading them would
+have to handle several keys.
 
-Uusi jakso ilman omia asetuksia lukee lähimmän aiemman
-`*.autoraffkat.json`-tiedoston ja ottaa siitä täsmäävien raita-avainten
-roolit. Tämä on koko syy siihen, että raita-avain johdetaan tiedostonimestä
-eikä kulman nimestä tai `angleID`:stä: sarjassa kamerat pysyvät, kulmanumerot
-eivät. Jos avaimen johtamista muuttaa, perintä lakkaa toimimasta hiljaisesti.
+## Roles are inherited between episodes
 
-## Herkkyys ja vahvistus eivät ole sama asia
+A new episode with no settings of its own reads the nearest previous
+`*.autoraffkat.json` and takes the roles of matching track keys from it. This
+is the entire reason a track key is derived from the filename rather than the
+angle name or `angleID`: in a series the cameras stay, the angle numbers do
+not. Change how the key is derived and inheritance stops working silently.
 
-Herkkyys on kynnys pohjakohinan yli, joten vahvistus ei siirrä sitä — pohja
-siirtyy saman verran. Vahvistus vaikuttaa vain mikkien keskinäiseen vertailuun
-päällekkäispuheessa. Jos tämän muuttaa, säätimet alkavat vaikuttaa toisiinsa.
+## Sensitivity and gain are not the same thing
 
-## Ääni: analysoi raaka, vie käsitelty
+Sensitivity is a threshold above the noise floor, so gain does not move it —
+the floor moves by the same amount. Gain only affects how microphones compare
+against each other during overlapping speech. Change this and the controls
+start interfering with each other.
 
-`audio/mix.py` on kolmas hidas kerros. Kaksi asiaa eivät ole neuvoteltavissa:
+## Audio: analyse raw, export processed
 
-Alkuperäisen päälle ei kirjoiteta. Verhokäyrän välimuisti avainnetaan
-muokkausajalla, joten päällekirjoitus laskisi käyrän uudestaan — ja uusi
-laskenta osuisi käsiteltyyn ääneen. Analyysi tehdään aina raa'asta: kompressori
-nostaa pohjakohinaa sanojen välissä ja tasoittaa mikkien eron, eli tuhoaa
-tasan ne kaksi asiaa joihin herkkyys ja päällekkäispuheen sääntö nojaavat.
+`audio/mix.py` is the third slow layer. Two things are not negotiable:
 
-Näytemäärä ei saa muuttua. Vienti viittaa käsiteltyyn tiedostoon samoilla
-ajoilla kuin alkuperäiseen. Tarkistus on kahdessa paikassa, ja poikkeava
-hylätään — käsittely tapahtuu vieraassa ympäristössä eikä sen lupauksiin
-nojata.
+Never write over the original. The envelope cache is keyed on modification
+time, so overwriting would recompute the curve — and the new computation would
+land on processed audio. Analysis is always done on the raw file: a compressor
+raises the noise floor between words and flattens the difference between
+microphones, destroying exactly the two things sensitivity and the overlap rule
+depend on.
 
-Kun assetin `src` ohjataan toisaalle, `<bookmark>` on poistettava. Se on
-macOS:n tiedostoviite joka voittaa `src`:n, ja jättäminen tarkoittaisi että
-Final Cut avaa käsittelemättömän tiedoston kertomatta siitä mitään.
+The sample count must not change. The export references the processed file with
+the same times as the original. The check exists in two places and anything
+deviating is discarded. A shift is measured separately by cross-correlation,
+because length alone cannot detect a plug-in that reports its latency wrongly.
 
-Kanavanauha on `audio/chain.py`:ssä, pedalboardilla. Kaksi kohtaa joissa
-kirjasto ei tee mitä nimi lupaa, molemmat mitattuja:
+When an asset's `src` is redirected, the `<bookmark>` must be removed. It is a
+macOS file reference that beats `src`, and leaving it would mean Final Cut
+opens the unprocessed file without saying anything.
 
-* `plugin.process(..., reset=False)` **lyhentää** tulosta liitännäisen viiveen
-  verran (dxRevivella 4641 näytettä). Käytä aina `reset=True`, äläkä käsittele
-  tiedostoa paloissa.
-* `pedalboard.Limiter` tekee makeup-vahvistuksen: se nosti −20 LUFS:n
-  −15,8:aan ja huiput nollaan. Tilalla on `peak_guard`, staattinen vaimennus
-  joka ei koskaan nosta.
+The channel strip is in `audio/chain.py`, on pedalboard. Two places where the
+library doesn't do what its name promises, both measured:
 
-## Mikki kulmaan, tilaääni lanelle — ja miksi
+* `plugin.process(..., reset=False)` **shortens** the result by the plug-in's
+  latency (4641 samples with dxRevive). Always use `reset=True`, and never
+  process a file in chunks.
+* `pedalboard.Limiter` applies makeup gain: it lifted −20 LUFS to −15.8 and
+  peaks to zero. It was replaced by `peak_guard`, a static attenuation that
+  never raises.
 
-Mikkiääni menee vientiin monikameraklipin sisään (`mc-source`), joten se ei
-voi irrota synkasta vaikka käyttäjä leikkaisi Final Cutissa miten tahansa.
-Tilaääni on liitetty klippi, koska `mc-source` ei tunne tasoa — ja siksi se
-**voi** irrota rippausleikkauksessa. Jos tilaäänelle joskus keksii tavan
-mennä kulmaksi tasoineen, se on parannus.
+## Microphone to the angle, room tone to a lane — and why
 
-## Final Cut on ankarampi kuin oma lukija
+Microphone audio goes into the export inside the multicam clip (`mc-source`),
+so it cannot lose sync no matter how the user edits in Final Cut. Room tone is
+a connected clip, because `mc-source` has no level control — and therefore it
+**can** drift on a ripple edit. If someone finds a way to make room tone an
+angle with a level, that is an improvement.
 
-Vienti on tarkistettava Final Cutin omaa DTD:tä vasten
+## Final Cut is stricter than our own reader
+
+The export must be validated against Final Cut's own DTD
 (`/Applications/Final Cut Pro.app/.../Interchange.framework/.../FCPXMLv1_*.dtd`,
-`xmllint --dtdvalid`). Oma lukija hyväksyy paljon enemmän kuin tuonti: kerran
-`mc-clip`iin kirjoitettiin `tcFormat`, joka kelpasi lukijalle mutta kaatoi
-koko tuonnin. `clip` ja `asset-clip` tuntevat sen, `mc-clip` ei.
+`xmllint --dtdvalid`). Our reader accepts far more than the importer: once
+`tcFormat` was written onto `mc-clip`, which the reader accepted but which
+killed the entire import. `clip` and `asset-clip` know that attribute,
+`mc-clip` does not.
 
-Johdetut tiedostot eivät mene `.fcpxmld`-paketin sisään vaan sen viereen ja
-saavat paketin nimen. Paketti kuuluu Final Cutille.
+Derived files do not go inside the `.fcpxmld` bundle but beside it, taking the
+bundle's name. The bundle belongs to Final Cut.
 
-## Käyttäjälle näkyvä teksti käännetään, koodi ei
+## User-visible text is translated, code is not
 
-Kaikki mitä käyttäjä lukee kulkee käännöksen läpi: palvelimen viestit
-`i18n.py`:n `t()`-funktiolla, selaimen tekstit `static/i18n.js`:n
-`T()`-funktiolla. Uusi virheilmoitus tarkoittaa uutta avainta molempiin
-kieliin — kovakoodattu merkkijono näkyy väärällä kielellä eikä kukaan huomaa
-sitä ennen kuin käyttäjä valittaa.
+Everything the user reads goes through translation: server messages via
+`i18n.py`'s `t()`, browser strings via `static/i18n.js`'s `T()`. A new error
+message means a new key in both languages — a hard-coded string shows up in the
+wrong language and nobody notices until a user complains.
 
-Koodi, kommentit ja docstringit pysyvät suomeksi. Ne ovat tekijöille.
+Code, comments and docstrings stay in Finnish. They are for the maintainers.
 
-Kieli on `ContextVar`issa, ei globaalina: äänenkäsittely ajetaan
-taustasäikeessä samaan aikaan kun käyttöliittymä pyytää tilaa.
+The language is a `ContextVar`, not a global: audio processing runs in a
+background thread while the interface is asking for state.
 
-## Staattiset tiedostot versioidaan
+## Static files are versioned
 
-`index.html` tarjoillaan niin että `app.js` ja `style.css` saavat
-muokkausajan kyselyparametriksi. Ilman sitä selain tarjoilee vanhaa tyyliä
-uuden skriptin kanssa, ja asettelu hajoaa tavalla jota kukaan ei osaa
-yhdistää välimuistiin. Näin kävi kerran jo.
+`index.html` is served with `app.js`, `i18n.js` and `style.css` given their
+modification time as a query parameter. Without it the browser serves an old
+stylesheet with a new script, and the layout breaks in a way nobody connects to
+caching. This happened once already.
 
-## Testit
+## Tests
 
-`tests/make_fixture.py` syntetisoi aineiston ffmpegillä: siniaaltopurskeet
-tunnetuissa kohdissa (`SPEECH_A`, `SPEECH_B`). Projektifixture alkaa lähteen
-sekunnista 1, synkkaklippi nollasta — vertailussa on käytettävä
-`source_to_timeline`-muunnosta, ei raakoja lukuja.
+`tests/make_fixture.py` synthesises the material with ffmpeg: sine bursts at
+known positions (`SPEECH_A`, `SPEECH_B`). The project fixture starts at second
+1 of the source, the sync clip at zero — comparisons must use the
+`source_to_timeline` conversion, not raw numbers.
 
-`multicam.fcpxml` on sama aineisto kahtena osana: osien tiedostot ovat
-kopioita, koska ryhmittely katsoo tiedostonimeä eikä sisältöä. Siinä
-aikajanan hetki vastaa tiedoston hetkeä, joten `source_to_timeline` antaa
-identiteetin — eri kuin projektifixturessa.
+`multicam.fcpxml` is the same material as two parts: the parts' files are
+copies, because grouping looks at the filename rather than the content. There a
+timeline moment equals a file moment, so `source_to_timeline` is the identity —
+unlike in the project fixture.
 
-Asetukset kirjoitetaan XML:n viereen, joten testit jotka vievät tai tallentavat
-tarvitsevat `scratch_xml`-fixturen, eivät jaettua `fixture_dir`iä.
+Settings are written beside the XML, so tests that export or save need the
+`scratch_xml` fixture rather than the shared `fixture_dir`.
