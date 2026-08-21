@@ -291,3 +291,17 @@ def test_flat_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
     assert "MIC_A%20%5Bmix%5D.wav" in xml
     assert "WIDE.mp4" in xml
     validate_fcpxml(xml, "flat-mixed.fcpxml")
+
+
+def test_room_asset_declares_mono(fixture_dir):
+    """Tilaääni kirjoitetaan monona, joten assetti ei saa luvata stereota."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    room = [(k, f"/mix/{k[:-4]} [room].wav")
+            for k in tl.media_by_key() if k.startswith("WIDE 01")]
+    xml = build_multicam_fcpxml(
+        tl, [Segment("WIDE", "Laaja", 0.0, 36.0)], [], Fraction(0), Fraction(36),
+        "Mono", room=room)
+    asset = next(a for a in ET.fromstring(xml).iter("asset")
+                 if (a.get("name") or "").endswith("tilaääni"))
+    assert asset.get("audioChannels") == "1"
+    assert asset.get("audioSources") == "1"

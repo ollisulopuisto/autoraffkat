@@ -448,7 +448,9 @@ def _room_asset(source, res_id: str, path: str):
         if source.get(name):
             asset.set(name, source.get(name))
     asset.set("hasAudio", "1")
-    asset.set("audioSources", source.get("audioSources", "1"))
+    asset.set("audioSources", "1")
+    # Tilaääni kirjoitetaan monona, joten kanavamäärä ei peri kameran arvoa.
+    asset.set("audioChannels", "1")
     ET.SubElement(asset, "media-rep", {"kind": "original-media",
                                        "src": file_url(path)})
     return asset

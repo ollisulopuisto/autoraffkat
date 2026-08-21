@@ -213,7 +213,11 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
                 jobs.append({"key": item.key, "source": item.path,
                              "target": sibling(item.path, ROOM_SUFFIX),
                              "target_lufs": settings.target_lufs + settings.room_db,
-                             "gain_db": 0.0, "speech": False})
+                             "gain_db": 0.0, "speech": False,
+                             # Tunnelmaraita ei tarvitse stereokuvaa eikä 24
+                             # bittiä: tunnin kamerarraita on monona ja 16
+                             # bitissä kuudesosa siitä mitä uskollinen kopio.
+                             "mono": True, "subtype": "PCM_16"})
     return jobs
 
 

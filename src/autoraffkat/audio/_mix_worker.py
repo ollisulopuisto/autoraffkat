@@ -90,6 +90,10 @@ def run(spec):
             frames = data.shape[0]
             if frames == 0:
                 raise ValueError(f"Tyhjä äänitiedosto: {source}")
+            if job.get("mono") and data.shape[1] > 1:
+                # Tilaääni on tunnelmaa eikä stereokuvaa: monona se vie
+                # murto-osan tilasta eikä kuulostaudu miltään erilaiselta.
+                data = data.mean(axis=1, keepdims=True)
             # Normalisointi mitataan monosummasta ja sama vahvistus annetaan
             # kaikille kanaville, jotta stereokuva ei muutu.
             wanted = job.get("target_lufs")
@@ -113,7 +117,7 @@ def run(spec):
                 out[:, channel] = result
 
             tmp = target + ".tmp.wav"
-            sf.write(tmp, out, rate, subtype="PCM_24")
+            sf.write(tmp, out, rate, subtype=job.get("subtype", "PCM_24"))
             written = sf.info(tmp).frames
             if written != frames:
                 os.remove(tmp)
@@ -122,7 +126,7 @@ def run(spec):
                     f"{written}): {os.path.basename(source)}")
             os.replace(tmp, target)
             done.append({"key": key, "target": target, "frames": frames,
-                         "gain_db": round(lift, 2)})
+                         "channels": out.shape[1], "gain_db": round(lift, 2)})
         except Exception as exc:                    # yksi tiedosto ei kaada muita
             errors[key] = f"{type(exc).__name__}: {exc}"
     return {"done": done, "errors": errors}
