@@ -76,10 +76,61 @@ jobs:
           path: dist/autoraffkat-*.dmg
           if-no-files-found: error
 
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: uv sync --all-extras
+
+      - name: Cache bundled ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: bin
+          key: ffmpeg-windows-${{ runner.arch }}-${{ hashFiles('scripts/fetch_binaries.py') }}
+
+      - name: Fetch binaries
+        run: uv run python scripts/fetch_binaries.py --os windows
+
+      - name: Tests
+        run: uv run pytest -q
+
+      - name: Build Windows app
+        run: uv run python scripts/build_app.py --clean
+
+      - name: Report what is inside
+        shell: pwsh
+        run: |
+          Get-ChildItem dist/autoraffkat
+          if (!(Test-Path "dist/autoraffkat/autoraffkat.exe")) {
+            Write-Error "autoraffkat.exe puuttuu dist-kansiosta"
+            exit 1
+          }
+
+      - name: Compress to ZIP
+        shell: pwsh
+        run: |
+          Compress-Archive -Path dist/autoraffkat -DestinationPath dist/autoraffkat-windows-x64.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoraffkat-windows-x64
+          path: dist/autoraffkat-windows-x64.zip
+          if-no-files-found: error
+
   release:
     # Vain tagista. Käsin ajettu käännös jää artefaktiksi, ei julkaisuksi.
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: macos
+    needs: [macos, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -94,6 +145,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           cat > notes.md <<'NOTES'
+          ### macOS
           Levykuva ei ole Applen notarisoima, koska siihen tarvitaan Developer
           ID. Ensimmäisellä avauksella: oikea klikkaus paketin päällä ja
           «Avaa», tai `xattr -d com.apple.quarantine autoraffkat.app`.
@@ -101,8 +153,12 @@ jobs:
           The disk image is not notarised by Apple — that needs a Developer ID.
           On first launch: right-click the app and choose "Open", or run
           `xattr -d com.apple.quarantine autoraffkat.app`.
+
+          ### Windows
+          Pura zip-paketti ja käynnistä `autoraffkat.exe`.
+          Extract the zip package and run `autoraffkat.exe`.
           NOTES
-          gh release create "$GITHUB_REF_NAME" dist/*.dmg \
+          gh release create "$GITHUB_REF_NAME" dist/*.dmg dist/*.zip \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
             --notes-file notes.md \
