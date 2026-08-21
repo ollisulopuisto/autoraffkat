@@ -1,8 +1,10 @@
 # autoraffkat
 
-Automatic multicam editing for interview and podcast video. FCPXML from Final
-Cut in, a new FCPXML out where the picture cuts to whoever is talking. Nothing
-is ever rendered.
+Automatic multicam editing for interview and podcast video on macOS. Export an
+FCPXML from Final Cut Pro and get a new FCPXML back, where the picture cuts to
+whoever is talking. The cut is decided from the microphone tracks. Nothing is
+ever rendered, and the result opens in Final Cut Pro as an ordinary multicam
+timeline you can keep editing by hand.
 
 *[Suomenkielinen README](README.fi.md) · [Design notes](DESIGN.md)*
 
@@ -13,6 +15,15 @@ is the whole episode at a glance; the list under it is every cut the export
 will make. Pictured: editing episode 53 of
 [Peter & Peter](https://www.youtube.com/@peterpeterhistoria), a Finnish show
 about history.*
+
+* **The angles switch on the audio**, not on a rhythm: each speaker's
+  microphone decides when their camera is on screen.
+* **Long turns and overlapping speech are rules you set once** — cut to the
+  wide, hold the current shot, or let the louder microphone win.
+* **Milliseconds per adjustment.** Moving a slider re-decides the whole
+  episode and redraws the preview without writing a file.
+* **Final Cut Pro all the way out.** A multicam source produces a multicam
+  timeline; angles, roles and sync survive the round trip.
 
 ## Usage
 
@@ -30,7 +41,7 @@ uv run autoraffkat "episode 12.fcpxmld"
 uv run autoraffkat --pick            # go straight to the file dialog
 ```
 
-Existing `-leikattu` exports are never offered as a source: the loop always
+Existing `-cut` exports are never offered as a source: the loop always
 returns to the original.
 
 The browser opens at `http://127.0.0.1:8731/`.
@@ -45,17 +56,16 @@ The loop:
 Steps 2 and 3 are milliseconds apart: moving a slider runs only the decision
 layer, and the preview bar shows the result without a round trip through XML.
 
-Export writes a new file `episode-leikattu.fcpxml`; the source XML is never
+Export writes a new file `episode-cut.fcpxml`; the source XML is never
 touched. Settings are saved next to it as `episode.autoraffkat.json`.
 
-An earlier export is never overwritten either. If `episode-leikattu.fcpxml`
-exists, the next one becomes `episode-leikattu v2.fcpxml`, then `v3`, and so
-on. The path shown in the interface is always the one the next export will
+An earlier export is never overwritten either. If `episode-cut.fcpxml`
+exists, the next one becomes `episode-cut v2.fcpxml`, then `v3`, and so on. The path shown in the interface is always the one the next export will
 write.
 
 When the source is a `.fcpxmld` bundle, neither file goes inside it. Both land
 beside it and take the bundle's name: `episode 12.fcpxmld` produces
-`episode 12-leikattu.fcpxml` and `episode 12.autoraffkat.json`. The
+`episode 12-cut.fcpxml` and `episode 12.autoraffkat.json`. The
 bundle belongs to Final Cut.
 
 A new episode inherits its roles from the previous one. Track keys are derived
@@ -76,7 +86,7 @@ first time envelopes are computed. Intel Macs need a package of their own:
 GitHub no longer offers free Intel runners, so build it on an Intel machine
 with `scripts/build_app.py --dmg`.
 
-### Installation
+### Install from source
 
 ```
 brew install ffmpeg

@@ -17,7 +17,7 @@ import re
 import subprocess
 import sys
 
-from .project import OUTPUT_SUFFIX
+from .project import LEGACY_OUTPUT_SUFFIXES, OUTPUT_SUFFIX
 
 BUNDLE_EXT = ".fcpxmld"
 BUNDLE_INNER = "Info.fcpxml"
@@ -38,8 +38,12 @@ def resolve(path: str) -> str:
     return path
 
 
-# Oma vienti tunnuksineen, myös numeroituna: "jakso-leikattu v3.fcpxml".
-_OUTPUT_RE = re.compile(re.escape(OUTPUT_SUFFIX) + r"( v\d+)?$")
+# Oma vienti tunnuksineen, myös numeroituna: "jakso-cut v3.fcpxml". Vanha
+# suomenkielinen tunnus tunnistetaan yhä: levyllä on jo `-leikattu`-viennejä,
+# eikä tunnuksen vaihtuminen saa tehdä niistä kelvollisia lähteitä.
+_OUTPUT_RE = re.compile(
+    "(" + "|".join(re.escape(s) for s in (OUTPUT_SUFFIX, *LEGACY_OUTPUT_SUFFIXES))
+    + r")( v\d+)?$")
 
 
 def _is_output(path: str) -> bool:

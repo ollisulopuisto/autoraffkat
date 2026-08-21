@@ -400,10 +400,10 @@ def test_second_export_writes_a_new_file(scratch_xml):
     second = client.post("/api/export", json=payload).json()
     assert first["ok"] and second["ok"]
     assert first["path"] != second["path"]
-    assert second["path"].endswith("-leikattu v2.fcpxml")
+    assert second["path"].endswith("-cut v2.fcpxml")
     assert os.path.exists(first["path"]) and os.path.exists(second["path"])
     # Ruudulla näkyvä polku kertoo mihin seuraava vienti menee.
-    assert second["next_path"].endswith("-leikattu v3.fcpxml")
+    assert second["next_path"].endswith("-cut v3.fcpxml")
     assert client.get("/api/state").json()["output_path"] == second["next_path"]
 
 

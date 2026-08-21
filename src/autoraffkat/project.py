@@ -18,7 +18,12 @@ FORMAT_VERSION = 1
 
 # Viennin nimen tunnus. Sama vakio molemmissa suunnissa, jotta valmiit
 # leikkaukset eivät päädy tarjolle uudeksi lähteeksi.
-OUTPUT_SUFFIX = "-leikattu"
+OUTPUT_SUFFIX = "-cut"
+
+# Aiemmat tunnukset. Näihin ei kirjoiteta, mutta ne tunnistetaan omiksi
+# viennneiksi: levyllä on jo `-leikattu`-tiedostoja, eikä tunnuksen
+# vaihtuminen saa tehdä niistä yhtäkkiä kelvollisia lähteitä.
+LEGACY_OUTPUT_SUFFIXES = ("-leikattu",)
 
 
 SETTINGS_SUFFIX = ".autoraffkat.json"
@@ -52,7 +57,7 @@ def legacy_settings_path(xml_path: str) -> str:
 
 
 def default_output_path(xml_path: str) -> str:
-    """Viennin perusnimi: ``jakso.fcpxml`` -> ``jakso-leikattu.fcpxml``.
+    """Viennin perusnimi: ``jakso.fcpxml`` -> ``jakso-cut.fcpxml``.
 
     Erillinen nimi on tahallinen: vienti ei saa osua lähde-XML:n päälle, koska
     silmukassa palataan aina samaan lähteeseen.
@@ -63,8 +68,8 @@ def default_output_path(xml_path: str) -> str:
 def next_output_path(xml_path: str) -> str:
     """Ensimmäinen vapaa viennin polku.
 
-    ``jakso-leikattu.fcpxml``, sitten ``jakso-leikattu v2.fcpxml``, ``v3`` ja
-    niin edelleen. Valmiin leikkauksen päälle ei kirjoiteta: edellinen vienti
+    ``jakso-cut.fcpxml``, sitten ``jakso-cut v2.fcpxml``, ``v3`` ja niin
+    edelleen. Valmiin leikkauksen päälle ei kirjoiteta: edellinen vienti
     on tyypillisesti jo tuotu Final Cutiin ja sitä on ehditty leikata, eikä
     siihen työhön ole enää muuta lähdettä. Numero tulee nimen loppuun
     tunnuksen jälkeen, jotta ``pick`` tunnistaa myös numeroidut viennit

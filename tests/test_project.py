@@ -24,19 +24,19 @@ def test_round_trip(tmp_path):
 def test_settings_live_next_to_xml(tmp_path):
     xml = tmp_path / "jakso.fcpxml"
     assert project.settings_path(str(xml)) == str(tmp_path / "jakso.autoraffkat.json")
-    assert project.default_output_path(str(xml)) == str(tmp_path / "jakso-leikattu.fcpxml")
+    assert project.default_output_path(str(xml)) == str(tmp_path / "jakso-cut.fcpxml")
 
 
 def test_export_never_overwrites_an_earlier_cut(tmp_path):
     """Edellinen vienti on jo Final Cutissa; sen päälle ei kirjoiteta."""
     xml = tmp_path / "jakso.fcpxml"
-    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu.fcpxml")
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-cut.fcpxml")
 
-    (tmp_path / "jakso-leikattu.fcpxml").write_text("<fcpxml/>")
-    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu v2.fcpxml")
+    (tmp_path / "jakso-cut.fcpxml").write_text("<fcpxml/>")
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-cut v2.fcpxml")
 
-    (tmp_path / "jakso-leikattu v2.fcpxml").write_text("<fcpxml/>")
-    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-leikattu v3.fcpxml")
+    (tmp_path / "jakso-cut v2.fcpxml").write_text("<fcpxml/>")
+    assert project.next_output_path(str(xml)) == str(tmp_path / "jakso-cut v3.fcpxml")
 
 
 def test_broken_file_does_not_block(tmp_path):
@@ -107,7 +107,7 @@ def test_bundle_keeps_its_derived_files_outside(tmp_path):
     xml = str(bundle / "Info.fcpxml")
     # Nimi tulee paketista, ei sen sisällön Info-tiedostosta.
     assert project.settings_path(xml) == str(tmp_path / "episode 12.autoraffkat.json")
-    assert project.default_output_path(xml) == str(tmp_path / "episode 12-leikattu.fcpxml")
+    assert project.default_output_path(xml) == str(tmp_path / "episode 12-cut.fcpxml")
     for path in (project.settings_path(xml), project.default_output_path(xml)):
         assert not os.path.dirname(path).endswith(".fcpxmld")
 
@@ -115,7 +115,7 @@ def test_bundle_keeps_its_derived_files_outside(tmp_path):
 def test_plain_xml_is_unchanged(tmp_path):
     xml = str(tmp_path / "jakso.fcpxml")
     assert project.settings_path(xml) == str(tmp_path / "jakso.autoraffkat.json")
-    assert project.default_output_path(xml) == str(tmp_path / "jakso-leikattu.fcpxml")
+    assert project.default_output_path(xml) == str(tmp_path / "jakso-cut.fcpxml")
 
 
 def test_settings_left_inside_a_bundle_are_still_read(tmp_path):

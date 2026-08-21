@@ -110,7 +110,7 @@ Derived files do not go inside the `.fcpxmld` bundle but beside it, taking the
 bundle's name. The bundle belongs to Final Cut.
 
 An export never lands on an existing file. `project.next_output_path` walks
-`-leikattu`, `-leikattu v2`, `v3` … until it finds a free name, and `pick`'s
+`-cut`, `-cut v2`, `v3` … until it finds a free name, and `pick`'s
 `_OUTPUT_RE` recognises the numbered ones as our own so they are not offered
 back as a source. The reason is not tidiness: the previous export is usually
 already imported into Final Cut and edited by hand, and that work has no other

@@ -28,10 +28,25 @@ def test_candidates_finds_both_muodot(tmp_path):
 def test_own_export_is_not_a_candidate(tmp_path):
     """Silmukassa palataan lähteeseen, ei valmiiseen leikkaukseen."""
     source = _touch(str(tmp_path / "jakso.fcpxml"))
-    _touch(str(tmp_path / "jakso-leikattu.fcpxml"))
-    _touch(str(tmp_path / "jakso-leikattu.fcpxmld" / "Info.fcpxml"))
+    _touch(str(tmp_path / "jakso-cut.fcpxml"))
+    _touch(str(tmp_path / "jakso-cut.fcpxmld" / "Info.fcpxml"))
     # Numeroitu vienti on yhtä lailla oma tuotos.
+    _touch(str(tmp_path / "jakso-cut v2.fcpxml"))
+    assert pick.candidates(str(tmp_path)) == [source]
+
+
+def test_old_finnish_export_is_still_recognised(tmp_path):
+    """Tunnus vaihtui suomesta englanniksi, mutta levy ei tyhjentynyt.
+
+    Aiemmat `-leikattu`-viennit ovat yhä käyttäjien hakemistoissa. Jos
+    tunnuksen vaihtuminen tekisi niistä kelvollisia lähteitä, työkalu
+    tarjoaisi omaa tulostaan takaisin syötteeksi eikä kukaan huomaisi ennen
+    kuin leikkaus ajetaan leikatun päälle.
+    """
+    source = _touch(str(tmp_path / "jakso.fcpxml"))
+    _touch(str(tmp_path / "jakso-leikattu.fcpxml"))
     _touch(str(tmp_path / "jakso-leikattu v2.fcpxml"))
+    _touch(str(tmp_path / "jakso-leikattu.fcpxmld" / "Info.fcpxml"))
     assert pick.candidates(str(tmp_path)) == [source]
 
 

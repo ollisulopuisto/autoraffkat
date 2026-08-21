@@ -16,6 +16,15 @@ yhdellä silmäyksellä, ja sen alla oleva lista on jokainen leikkaus jonka
 vienti tekee. Kuvassa leikataan historiaohjelma
 [Peter & Peterin](https://www.youtube.com/@peterpeterhistoria) jaksoa 53.*
 
+* **Kuva vaihtuu äänestä**, ei rytmistä: kunkin puhujan mikki päättää milloin
+  hänen kameransa on ruudulla.
+* **Pitkä puheenvuoro ja päällekkäispuhe ovat sääntöjä**, jotka asetetaan
+  kerran — laajaan, nykyiseen kuvaan tai kovempaan mikkiin.
+* **Millisekunteja per säätö.** Liukusäätimen liike päättää koko jakson
+  uudestaan ja piirtää esikatselun ilman että mitään kirjoitetaan levylle.
+* **Final Cut Prosta ulos ja takaisin.** Monikameralähteestä tulee
+  monikameraleikkaus; kulmat, roolit ja synkka säilyvät.
+
 ## Käyttö
 
 ```
@@ -32,7 +41,7 @@ uv run autoraffkat "episode 12.fcpxmld"
 uv run autoraffkat --pick            # suoraan valintaikkuna
 ```
 
-Valmiit `-leikattu`-viennit eivät päädy tarjolle: silmukassa palataan aina
+Valmiit `-cut`-viennit eivät päädy tarjolle: silmukassa palataan aina
 alkuperäiseen lähteeseen.
 
 Selain avautuu osoitteeseen `http://127.0.0.1:8731/`.
@@ -47,18 +56,18 @@ Silmukka:
 Kohdan 2 ja 3 välissä kuluu millisekunteja: liukusäätimen liike ajaa vain
 päätöskerroksen, ja esikatselupalkki näyttää lopputuloksen ilman XML-kierrosta.
 
-Vienti kirjoittaa uuden tiedoston `jakso-leikattu.fcpxml`; lähde-XML:ää ei
+Vienti kirjoittaa uuden tiedoston `jakso-cut.fcpxml`; lähde-XML:ää ei
 kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
 viereen.
 
-Aiemman viennin päälle ei kirjoiteta. Jos `jakso-leikattu.fcpxml` on jo
-olemassa, seuraavasta tulee `jakso-leikattu v2.fcpxml`, sitten `v3` ja niin
+Aiemman viennin päälle ei kirjoiteta. Jos `jakso-cut.fcpxml` on jo
+olemassa, seuraavasta tulee `jakso-cut v2.fcpxml`, sitten `v3` ja niin
 edelleen. Käyttöliittymässä näkyvä polku on aina se johon seuraava vienti
 menee.
 
 Kun lähde on `.fcpxmld`-paketti, kumpikaan tiedosto ei mene paketin sisään
 vaan sen viereen ja saa paketin nimen: `episode 12.fcpxmld` tuottaa
-`episode 12-leikattu.fcpxml` ja `episode 12.autoraffkat.json`.
+`episode 12-cut.fcpxml` ja `episode 12.autoraffkat.json`.
 Paketti kuuluu Final Cutille.
 
 Uusi jakso perii roolit edellisestä: raita-avaimet on johdettu
