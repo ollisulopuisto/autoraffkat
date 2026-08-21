@@ -26,8 +26,17 @@ const GLOBAL_KNOBS = [
   { key: 'min_shot', label: 'Lyhin kuvan kesto', min: 0.3, max: 12, step: 0.1, unit: ' s' },
   { key: 'lead', label: 'Ennakko', min: 0, max: 1.5, step: 0.01, unit: ' s' },
   { key: 'confirm', label: 'Vahvistusaika', min: 0, max: 2, step: 0.02, unit: ' s' },
-  { key: 'wide_every', label: 'Laaja pakotetaan', min: 0, max: 90, step: 1, unit: ' s',
-    zero: 'ei koskaan' },
+];
+
+const LONGTAKE_KNOBS = [
+  { key: 'wide_every', label: 'Katkaise viimeistään', min: 0, max: 90, step: 1,
+    unit: ' s', zero: 'ei koskaan' },
+  { key: 'wide_hold', label: 'Laajan kesto', min: 0.5, max: 30, step: 0.5, unit: ' s' },
+];
+
+const LONGTAKE_RULES = [
+  ['return', 'Palaa puhujaan', 'Laaja välissä, sitten takaisin samaan kuvaan.'],
+  ['stay', 'Jää laajaan', 'Laaja jatkuu, kunnes joku toinen saa puheenvuoron.'],
 ];
 
 const OVERLAP_KNOBS = [
@@ -199,6 +208,44 @@ function renderGlobals() {
       state.globals[spec.key] = v;
       schedule();
     }));
+  });
+
+
+  /* Pitkä puheenvuoro. «Laajan kesto» koskee vain paluusääntöä, joten se
+     piilotetaan kun laajaan jäädään — muuten säädin lupaa vaikutusta jota
+     sillä ei ole. */
+  const longtake = $('longtake-params');
+  longtake.textContent = '';
+  LONGTAKE_KNOBS.forEach((spec) => {
+    if (spec.key === 'wide_hold' && state.globals.long_take_rule === 'stay') return;
+    longtake.append(knob(spec, state.globals[spec.key], (v) => {
+      const was = !!state.globals[spec.key];
+      state.globals[spec.key] = v;
+      // Nollan ylitys kytkee säännön päälle tai pois, joten osa säätimistä
+      // vaihtaa tilaa. Kesken raahauksen ei piirretä uudestaan, koska kahva
+      // menettäisi kohdistuksen.
+      if (spec.key === 'wide_every' && was !== !!v) renderGlobals();
+      schedule();
+    }));
+  });
+
+  const longRules = $('longtake-rules');
+  longRules.textContent = '';
+  LONGTAKE_RULES.forEach(([value, title, hint]) => {
+    const label = document.createElement('label');
+    const radio = document.createElement('input');
+    radio.type = 'radio'; radio.name = 'longtake'; radio.value = value;
+    radio.checked = state.globals.long_take_rule === value;
+    radio.disabled = !state.globals.wide_every;
+    radio.addEventListener('change', () => {
+      state.globals.long_take_rule = value;
+      renderGlobals();
+      schedule(0);
+    });
+    const text = document.createElement('span');
+    text.innerHTML = `${title} <span class="hint">${hint}</span>`;
+    label.append(radio, text);
+    longRules.append(label);
   });
 
   const rules = $('overlap-rules');

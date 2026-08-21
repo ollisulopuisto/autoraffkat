@@ -21,6 +21,11 @@ OVERLAP_HOLD = "hold"
 OVERLAP_LOUDER = "louder"
 OVERLAP_RULES = (OVERLAP_WIDE, OVERLAP_HOLD, OVERLAP_LOUDER)
 
+# Mitä tehdään, kun yksi puhuja pitää puheenvuoroa liian kauan.
+LONGTAKE_RETURN = "return"     # laaja välissä, takaisin samaan puhujaan
+LONGTAKE_STAY = "stay"         # laajaan ja siihen jäädään puhujan vaihtoon asti
+LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY)
+
 
 @dataclass
 class Placement:
@@ -127,7 +132,10 @@ class Globals:
     overlap_rule: str = OVERLAP_WIDE
     dominance_db: float = 5.0      # vaadittu ero päällekkäispuheessa
     min_overlap: float = 0.50      # lyhin päällekkäispuhe joka laukaisee säännön, s
-    wide_every: float = 0.0        # pakota laaja näin usein, 0 = ei koskaan
+    # Pitkä puheenvuoro: yhtä lähikuvaa ei jakseta katsoa loputtomiin.
+    wide_every: float = 15.0       # katkaise laajaan näin pitkän pätkän jälkeen, 0 = ei koskaan
+    wide_hold: float = 4.0         # laajan kesto ennen paluuta, s (vain «return»)
+    long_take_rule: str = LONGTAKE_RETURN
     project_name: str = "Raakaleikkaus"
 
     def to_json(self) -> dict:

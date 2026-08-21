@@ -90,8 +90,19 @@ suhteen, joten se ei siirry vahvistuksen mukana; vahvistus vaikuttaa vain
 mikkien keskinäiseen vertailuun päällekkäispuheessa.
 
 **Globaalit**: lyhin kuvan kesto, ennakko (leikataan näin paljon ennen puheen
-alkua), vahvistusaika (puheen on jatkuttava näin kauan ennen kuin se lasketaan),
-laajan kuvan pakotusväli.
+alkua), vahvistusaika (puheen on jatkuttava näin kauan ennen kuin se lasketaan).
+
+**Pitkä puheenvuoro**: yksi lähikuva ei kanna loputtomiin. Kun sama puhuja on
+pitänyt lattiaa asetetun ajan (oletus 15 s), kuva vaihtuu laajaan. Kaksi tapaa
+jatkaa:
+
+* **Palaa puhujaan** — laaja kestää «Laajan kesto» ja palataan samaan
+kuvaan. Monologi hengittää, rytmi pysyy puhujassa.
+* **Jää laajaan** — laaja jatkuu, kunnes joku toinen saa puheenvuoron.
+Vähemmän leikkauksia, ja pitkä yksinpuhelu näyttää tilanteelta.
+
+Nolla poistaa säännön käytöstä. Laaja ei koskaan jää alle lyhimmän kuvan
+keston, vaikka «Laajan kesto» olisi pienempi.
 
 **Päällekkäispuhe**, kolme sääntöä:
 

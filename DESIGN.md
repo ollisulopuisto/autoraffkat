@@ -122,9 +122,30 @@ Järjestys:
 5. **Kestorajoitukset** jaksosilmukassa: ennakko siirtää leikkausta taaksepäin,
    lyhin kuvan kesto estää sitä osumasta liian lähelle edellistä. Jos molemmat
    yhdessä työntävät leikkauksen jakson yli, leikkausta ei tehdä.
-6. **Laajan pakotusväli** jälkikäsittelynä: pitkät lähikuvat pilkotaan
-   vuorotellen laajaan, mutta ei niin että syntyisi vähimmäiskestoa lyhyempi
-   pala.
+6. **Pitkä puheenvuoro** jälkikäsittelynä (`_force_wide`).
+
+### Pitkä puheenvuoro
+
+Kohdat 1–5 tuottavat oikean kuvan mutta eivät rytmiä: yksinpuhelu antaa yhden
+lähikuvan niin pitkäksi kuin puhe kestää, ja katsojalle se on minuutti samaa
+kasvokuvaa. Kun sama puhuja on pitänyt lattiaa `wide_every` sekuntia, kuva
+vaihtuu laajaan.
+
+Jatkoja on kaksi, koska ne ovat eri asia leikkauksellisesti eikä kumpikaan ole
+aina oikein. **Palaa puhujaan** antaa laajan kestää `wide_hold` ja palaa samaan
+kuvaan; rytmi pysyy puhujassa, ja se sopii keskustelulle jossa monologi on
+poikkeus. **Jää laajaan** pitää laajan seuraavaan puheenvuoroon asti; pitkä
+yksinpuhelu näyttää tilanteelta eikä kasvokuvalta, ja leikkauksia tulee
+selvästi vähemmän. Valinta on makua, joten se on säädin eikä vakio.
+
+Tämä ajetaan vasta valmiille leikkauslistalle eikä `want`-taulukkoon. Se on
+rytmisääntö eikä havainto siitä kuka puhuu, eikä se saa sekaantua kynnyksiin:
+`want` kertoo edelleen kenen vuoro on, ja `_force_wide` päättää erikseen
+näytetäänkö se.
+
+Laajan kesto nostetaan aina vähintään lyhimpään kuvan kestoon. Muuten säädin
+tuottaisi välähdyksiä, joita mikään muu sääntö ei päästäisi läpi — ja
+vähimmäiskesto on koko päätöksen tiukin lupaus.
 
 ## Aika
 

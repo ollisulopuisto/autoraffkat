@@ -13,8 +13,8 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .model import (HOP, OVERLAP_HOLD, OVERLAP_LOUDER, OVERLAP_WIDE, Globals,
-                    Segment)
+from .model import (HOP, LONGTAKE_STAY, OVERLAP_HOLD, OVERLAP_LOUDER,
+                    OVERLAP_WIDE, Globals, Segment)
 
 WIDE = -2       # want-taulukon erikoisarvot
 HOLD = -1
@@ -175,18 +175,43 @@ def _cut_points(want: np.ndarray, g: Globals) -> list[tuple[float, int]]:
 
 def _force_wide(segments: list[Segment], g: Globals, wide_label: str,
                 wide_key: str) -> list[Segment]:
-    """Pilkkoo pitkät lähikuvat vuorotellen laajaan."""
+    """Katkaisee pitkän puheenvuoron laajaan.
+
+    Yksi lähikuva ei kanna loputtomiin: kun sama puhuja pitää lattiaa
+    ``wide_every`` sekuntia, kuva vaihtuu laajaan. Sen jälkeen on kaksi tapaa
+    jatkaa, ja ne ovat eri asia leikkauksellisesti:
+
+    * ``return`` — laaja kestää ``wide_hold`` ja palataan samaan puhujaan.
+      Monologi hengittää, mutta rytmi pysyy puhujassa.
+    * ``stay`` — laajaan jäädään, kunnes seuraava puhuja saa kuvan. Vähemmän
+      leikkauksia, ja pitkä yksinpuhelu näyttää tilanteelta eikä kasvokuvalta.
+
+    Laaja ei koskaan jää alle vähimmäiskeston, vaikka ``wide_hold`` olisi
+    pienempi: muuten säädin tuottaisi välähdyksiä.
+    """
     if g.wide_every <= 0 or not wide_key:
         return segments
+    stay = g.long_take_rule == LONGTAKE_STAY
+    hold = max(g.wide_hold, g.min_shot)
+
     out: list[Segment] = []
     for seg in segments:
         if seg.angle == wide_key or seg.duration <= g.wide_every:
             out.append(seg)
             continue
+        if stay:
+            cut = seg.start + g.wide_every
+            if seg.end - cut < g.min_shot:
+                # Loppu on liian lyhyt omaksi kuvakseen; puhuja jatkaa.
+                out.append(seg)
+                continue
+            out.append(Segment(seg.angle, seg.label, seg.start, cut))
+            out.append(Segment(wide_key, wide_label, cut, seg.end))
+            continue
         cursor = seg.start
         to_wide = False
         while cursor < seg.end:
-            stop = min(cursor + g.wide_every, seg.end)
+            stop = min(cursor + (hold if to_wide else g.wide_every), seg.end)
             if seg.end - stop < g.min_shot:
                 stop = seg.end
             if to_wide:

@@ -25,7 +25,8 @@ from ..decide import decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
                             write_fcpxml)
-from ..model import (OVERLAP_RULES, ROLES, ROLE_MIC, Globals, TrackConfig)
+from ..model import (LONGTAKE_RULES, OVERLAP_RULES, ROLES, ROLE_MIC,
+                     Globals, TrackConfig)
 from ..preview import build as build_preview
 
 STATIC_DIR = Path(__file__).parent / "static"
@@ -162,11 +163,13 @@ class AppState:
         raw = payload.get("globals") or {}
         g = self.settings.globals
         for name in ("min_shot", "lead", "confirm", "dominance_db",
-                     "min_overlap", "wide_every"):
+                     "min_overlap", "wide_every", "wide_hold"):
             if name in raw:
                 setattr(g, name, max(0.0, float(raw[name])))
         if raw.get("overlap_rule") in OVERLAP_RULES:
             g.overlap_rule = raw["overlap_rule"]
+        if raw.get("long_take_rule") in LONGTAKE_RULES:
+            g.long_take_rule = raw["long_take_rule"]
         if "project_name" in raw:
             g.project_name = str(raw["project_name"])[:120] or "Raakaleikkaus"
 
