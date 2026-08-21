@@ -149,7 +149,7 @@ class Globals:
 
 @dataclass
 class AudioSettings:
-    """Äänenkäsittely: automixerin kanavanauha mikeille.
+    """Äänenkäsittely: kanavanauha mikeille.
 
     Käsittely ei koske analyysiä. Verhokäyrät luetaan aina raa'asta äänestä,
     koska kompressori nostaa pohjakohinaa sanojen välissä ja tasoittaa juuri
@@ -168,6 +168,10 @@ class AudioSettings:
     peak_threshold_db: float = -12.0    # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
     declick: bool = False        # maiskaukset ja huulinaksut pois
+    # Ulkoinen VST3/AU-liitännäinen, ajetaan ketjun ensimmäisenä. Tässä
+    # tehdään kohinanpoisto ja restaurointi: ketjussa itsessään ei ole
+    # kohinanvaimennusta, koska hyvä sellainen on liitännäinen.
+    plugin_path: str = ""
     gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
     room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
     room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa

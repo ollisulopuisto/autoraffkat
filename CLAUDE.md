@@ -71,8 +71,15 @@ Kun assetin `src` ohjataan toisaalle, `<bookmark>` on poistettava. Se on
 macOS:n tiedostoviite joka voittaa `src`:n, ja jättäminen tarkoittaisi että
 Final Cut avaa käsittelemättömän tiedoston kertomatta siitä mitään.
 
-automixer ajetaan prosessirajan takana (`uv run --project`), ei importilla:
-se vaatii Python 3.13:n ja MLX:n ja asentuu nimellä `src.automixer`.
+Kanavanauha on `audio/chain.py`:ssä, pedalboardilla. Kaksi kohtaa joissa
+kirjasto ei tee mitä nimi lupaa, molemmat mitattuja:
+
+* `plugin.process(..., reset=False)` **lyhentää** tulosta liitännäisen viiveen
+  verran (dxRevivella 4641 näytettä). Käytä aina `reset=True`, äläkä käsittele
+  tiedostoa paloissa.
+* `pedalboard.Limiter` tekee makeup-vahvistuksen: se nosti −20 LUFS:n
+  −15,8:aan ja huiput nollaan. Tilalla on `peak_guard`, staattinen vaimennus
+  joka ei koskaan nosta.
 
 ## Final Cut on ankarampi kuin oma lukija
 

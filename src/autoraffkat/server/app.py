@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 
 from .. import project
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
-from ..audio import mix
+from ..audio import chain, mix
 from ..decide import decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
@@ -50,8 +50,8 @@ class AppState:
     load_error: str = ""
     inherited_from: str = ""        # mistä roolit perittiin, "" jos ei mistään
     mix_result: mix.MixResult = field(default_factory=mix.MixResult)
-    mix_progress: dict = field(default_factory=lambda: {"done": 0, "total": 0,
-                                                        "current": "", "running": False})
+    mix_progress: dict = field(default_factory=lambda: {
+        "done": 0, "total": 0, "current": "", "eta": 0, "running": False})
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ---------------------------------------------------------- lataus
@@ -190,6 +190,11 @@ class AppState:
                      "leveler_threshold_db", "gain_db", "room_db"):
             if name in raw:
                 a.__dict__[name] = float(raw[name])
+        if "plugin_path" in raw:
+            wanted = str(raw["plugin_path"]).strip()
+            # Tuntematon polku nollataan heti: käsittely kaatuisi siihen
+            # vasta minuuttien päästä.
+            a.plugin_path = wanted if (not wanted or os.path.exists(wanted)) else ""
         if "room_track" in raw:
             keys = {t.key for t in self.timeline.tracks} if self.timeline else set()
             wanted = str(raw["room_track"])
@@ -200,11 +205,11 @@ class AppState:
         assert self.timeline is not None
         roles = resolve_roles(self.timeline, self.settings.tracks)
         self.mix_progress.update({"done": 0, "total": 0, "current": "",
-                                  "running": True})
+                                  "eta": 0, "running": True})
 
-        def report(done: int, total: int, current: str) -> None:
+        def report(done: int, total: int, current: str, eta: float = 0.0) -> None:
             self.mix_progress.update({"done": done, "total": total,
-                                      "current": current})
+                                      "current": current, "eta": round(eta)})
 
         try:
             result = mix.process(self.timeline, roles, self.settings.audio,
@@ -318,12 +323,11 @@ def _state_json(state: AppState) -> dict:
         "inherited_from": state.inherited_from,
         "audio": state.settings.audio.to_json(),
         "mix": {
-            "available": mix.available(),
-            "path": mix.automixer_path(),
             "progress": state.mix_progress,
             "ready": len(state.mix_result.replacements),
             "room": len(state.mix_result.room),
             "skipped": state.mix_result.skipped,
+            "gains": state.mix_result.gains,
             "errors": list(state.mix_result.errors.values()),
         },
         "error": state.load_error,
@@ -342,6 +346,11 @@ def create_app(state: AppState) -> FastAPI:
     def index():
         """Käyttöliittymän sivu."""
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/api/plugins")
+    def list_plugins():
+        """Asennetut VST3- ja AU-liitännäiset. Haetaan vasta pyydettäessä."""
+        return {"plugins": chain.plugins()}
 
     @app.get("/api/state")
     def get_state():
@@ -452,10 +461,6 @@ def create_app(state: AppState) -> FastAPI:
                 state.apply(payload)
             state.settings.audio.enabled = True
             project.save(state.xml_path, state.settings)
-        if not mix.available():
-            raise HTTPException(400, (
-                "automixeria ei löydy. Asenna se autoraffkatin naapuriksi tai "
-                f"aseta polku ympäristömuuttujaan {mix.ENV_VAR}."))
         threading.Thread(target=state.run_mix, daemon=True).start()
         return {"ok": True, "running": True}
 

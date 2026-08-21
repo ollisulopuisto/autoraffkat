@@ -132,7 +132,8 @@ src/autoraffkat/
   fcpxml/read.py     sync-clip, spine ja monikamera sisään
   fcpxml/write.py    uusi projekti ulos, littana tai monikamerana
   audio/envelope.py  ffmpeg + RMS, levyvälimuisti          HIDAS
-  audio/mix.py       automixerin kanavanauha, valinnainen  HIDAS
+  audio/chain.py     kanavanauha: pedalboard + liitännäiset
+  audio/mix.py       mitkä tiedostot, minne, synkan vahti     HIDAS
   analysis.py        verhokäyrät aikajanan ruudukolle
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
   preview.py         palkin tiivistys selaimelle
@@ -194,25 +195,38 @@ ettei aikajanalle jää aukkoja eikä päällekkäisyyksiä. Kaikki aika kulkee
 ## Ääni
 
 Käsittelemätön mikki on tyypillisesti −40 LUFS, eikä sitä kannata viedä
-sellaisenaan. Jos [automixer](../automixer) löytyy naapurista (tai
-`AUTORAFFKAT_AUTOMIXER` osoittaa siihen), mikit voi ajaa sen kanavanauhan läpi
-painikkeesta «Käsittele ääni».
+sellaisenaan. Painike «Käsittele ääni» ajaa mikit kanavanauhan läpi:
 
-Ketju: ylipäästö → normalisointi tavoiteäänekkyyteen → huippujen kompressointi
-→ tasaus → maiskausten poisto → trimmi → rajoitin. Normalisointi on
-ensimmäisenä tarkoituksella: ilman sitä kompressorin kynnykset eivät ylity
-kertaakaan.
+1. **Ulkoinen liitännäinen** (VST3 tai AU) ensin — tässä tehdään kohinanpoisto
+   ja restaurointi
+2. **Ylipäästö** vie jyrinän
+3. **Maiskausten poisto** siivoaa huulinaksut
+4. **Normalisointi** tavoiteäänekkyyteen, mitattuna vasta siivotusta signaalista
+5. **Kompressointi** kahdessa vaiheessa, nopea ja hidas
+6. **Tason korjaus ja huippukatto**
 
-**Kohinanpoistoa ketjussa ei ole.** Ylipäästö vie jyrinän, maiskausten poisto
-huulinaksut, mutta laajakaistaista kohinaa ei vaimenneta millään. automixerissa
-se on tarkoitettu tehtäväksi ulkoisella VST3/AU-liitännäisellä, eikä
-autoraffkat kutsu sitä.
+Normalisointi on vasta neljäntenä tarkoituksella: kompressorin kynnykset ovat
+absoluuttisia desibelejä, eikä −12 dB:n kynnys ylity kertaakaan jos raita on
+−40 LUFS. Taso mitataan vielä kompressoinnin jälkeen uudestaan, koska LUFS
+portittaa hiljaiset kohdat suhteessa kokonaisuuteen ja kompressointi siirtää
+lukemaa.
+
+**Ketjussa ei ole kohinanvaimennusta.** Ylipäästö vie jyrinän ja maiskausten
+poisto huulinaksut, mutta laajakaistaista kohinaa ei vaimenneta. Se on
+liitännäisen työtä — hyvä puheen restaurointi (esim. dxRevive) tekee sen
+paremmin kuin mikään mitä tähän kannattaisi kirjoittaa.
+
+Huomaa että normalisointi nostaa myös pohjakohinaa. Tyypillinen nosto on
++20…+26 dB, ja käyttöliittymä näyttää toteutuneen luvun.
 
 Kaksi sääntöä pitävät kuvan ja äänen yhdessä:
 
 * **Alkuperäiseen ei kosketa.** Käsitelty ääni menee viereen nimellä
 `mikki [mix].wav`, ja vienti viittaa siihen.
-* **Näytemäärä ei muutu.** Se tarkistetaan kahdesti, ja poikkeava hylätään.
+* **Näytemäärä ei muutu eikä ääni siirry.** Pituus tarkistetaan kahdesti ja
+siirtymä mitataan ristikorrelaatiolla — liitännäinen voi ilmoittaa viiveensä
+väärin ja tuottaa oikean mittaisen mutta väärässä kohdassa olevan raidan.
+Poikkeava hylätään.
 
 Analyysi ajetaan aina raa'asta äänestä, koska kompressori nostaa pohjakohinaa
 ja tasoittaa mikkien eron — juuri ne kaksi asiaa, joihin herkkyys ja
@@ -221,11 +235,7 @@ päällekkäispuheen sääntö nojaavat.
 **Tilaääni**: yksi kameraraita voidaan purkaa omaksi ääniraidakseen ja liittää
 leikkaukseen roolilla `effects.Tilaääni` asetetun verran puhetta hiljemmalle.
 Se ei ole kulma vaan liitetty klippi, joten se jatkuu leikkausten yli.
-
-automixer on **valinnainen**. Ilman sitä ääni viedään sellaisenaan, ja kaikki
-muu toimii kuten ennen. Se ajetaan omassa ympäristössään (`uv run --project`),
-koska se vaatii Python 3.13:n ja MLX:n eikä leikkaustyökalu saa vaatia
-kumpaakaan.
+Kompressointia siihen ei tehdä: kompressoitu tilaääni pumppaa.
 
 ## Rajaukset
 

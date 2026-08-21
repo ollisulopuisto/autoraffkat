@@ -56,28 +56,52 @@ def test_disabled_does_nothing(fixture_dir):
     assert result.replacements == {} and result.room == [] and result.ok
 
 
-def test_missing_automixer_is_reported_not_raised(fixture_dir, monkeypatch):
-    """Puuttuva automixer on viesti käyttöliittymään, ei poikkeus."""
+def test_missing_plugin_is_reported_not_raised(fixture_dir):
+    """Puuttuva liitännäinen on viesti käyttöliittymään, ei poikkeus.
+
+    Virhe tulee ennen kuin yhtään tiedostoa on käsitelty: minuuttien
+    odottaminen ja vasta sitten kaatuminen olisi huonoin vaihtoehto.
+    """
     from autoraffkat.analysis import resolve_roles
     from autoraffkat.fcpxml.read import read_fcpxml
     from autoraffkat.model import ROLE_MIC, TrackConfig
 
-    monkeypatch.setattr(mix, "automixer_path", lambda: "")
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     tracks = {"olli Track1": TrackConfig(role=ROLE_MIC, speaker="Olli")}
     result = mix.process(timeline, resolve_roles(timeline, tracks),
-                         AudioSettings(enabled=True))
+                         AudioSettings(enabled=True,
+                                       plugin_path="/ei/ole/mitaan.vst3"))
     assert not result.ok
-    assert "automixer" in " ".join(result.errors.values()).lower()
+    assert "liitännäistä ei löydy" in " ".join(result.errors.values()).lower()
+    assert result.processed == 0
 
 
-def test_automixer_path_rejects_a_stranger(tmp_path, monkeypatch):
-    """Väärä hakemisto on pahempi kuin ei hakemistoa."""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "jokumuu"\n')
-    monkeypatch.setenv(mix.ENV_VAR, str(tmp_path))
-    assert mix.automixer_path() == ""
-    (tmp_path / "pyproject.toml").write_text('[project]\nname = "automixer"\n')
-    assert mix.automixer_path() == str(tmp_path)
+def test_plugins_are_found_by_extension(tmp_path, monkeypatch):
+    """Liitännäisluettelo tulee vakiopaikoista, ei mistä tahansa."""
+    from autoraffkat.audio import chain
+
+    (tmp_path / "Hieno.vst3").mkdir()
+    (tmp_path / "Toinen.component").mkdir()
+    (tmp_path / "eiTama.txt").write_text("x")
+    monkeypatch.setattr(chain, "PLUGIN_DIRS", (str(tmp_path),))
+    found = {p["name"]: p["path"] for p in chain.plugins()}
+    assert set(found) == {"Hieno", "Toinen"}
+    assert found["Hieno"] == str(tmp_path / "Hieno.vst3")
+
+
+def test_same_plugin_in_both_formats_is_listed_once(tmp_path, monkeypatch):
+    """VST3 ja AU samasta liitännäisestä ovat sama asia valikossa."""
+    from autoraffkat.audio import chain
+
+    vst = tmp_path / "vst3"
+    au = tmp_path / "components"
+    vst.mkdir(); au.mkdir()
+    (vst / "dxRevive.vst3").mkdir()
+    (au / "dxRevive.component").mkdir()
+    monkeypatch.setattr(chain, "PLUGIN_DIRS", (str(vst), str(au)))
+    found = chain.plugins()
+    assert len(found) == 1
+    assert found[0]["path"].endswith(".vst3")
 
 
 @needs_ffmpeg

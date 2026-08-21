@@ -73,6 +73,7 @@ let pending = null;             // ajastin
 let inflight = null;            // AbortController
 let progressTimer = null;
 let mixTimer = null;
+let pluginList = null;          // haetaan kerran, samat koko koneella
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement)
@@ -308,15 +309,6 @@ function renderAudio() {
   const audio = state.audio;
   const info = state.mix || {};
 
-  if (!info.available) {
-    const note = document.createElement('p');
-    note.className = 'muted small';
-    note.textContent = 'automixeria ei löydy, joten ääni viedään sellaisenaan. '
-      + 'Asenna se autoraffkatin naapuriksi tai aseta AUTORAFFKAT_AUTOMIXER.';
-    host.append(note);
-    return;
-  }
-
   const toggle = document.createElement('label');
   toggle.className = 'check';
   const box = document.createElement('input');
@@ -328,10 +320,32 @@ function renderAudio() {
     schedule(0);
   });
   toggle.append(box, Object.assign(document.createElement('span'),
-    { textContent: 'Käsittele mikit automixerilla' }));
+    { textContent: 'Käsittele mikit' }));
   host.append(toggle);
 
   if (!audio.enabled) return;
+
+  /* Liitännäinen on ketjun ensimmäinen vaihe: kohinanpoisto ja restaurointi
+     tehdään täällä, koska omassa ketjussa ei ole kohinanvaimennusta.
+     Koneella voi olla satoja liitännäisiä, joten kenttä on kirjoitettava eikä
+     valikko — datalist ehdottaa nimeltä. */
+  const plug = document.createElement('label');
+  plug.className = 'field';
+  plug.append(Object.assign(document.createElement('span'),
+    { textContent: 'Liitännäinen' }));
+  const plugInput = document.createElement('input');
+  plugInput.type = 'text';
+  plugInput.placeholder = 'esim. dxRevive — tyhjä = ei liitännäistä';
+  plugInput.setAttribute('list', 'plugin-names');
+  plugInput.value = pluginName(audio.plugin_path);
+  plugInput.addEventListener('change', () => {
+    audio.plugin_path = pluginPath(plugInput.value);
+    plugInput.value = pluginName(audio.plugin_path);
+    schedule(0);
+  });
+  plug.append(plugInput);
+  host.append(plug);
+  loadPlugins();
 
   AUDIO_KNOBS.forEach((spec) => {
     host.append(knob(spec, audio[spec.key], (v) => {
@@ -395,19 +409,61 @@ function renderAudio() {
   note.className = 'muted small';
   if (busy) {
     const p = info.progress;
-    note.textContent = `${p.done}/${p.total}${p.current ? ' · ' + p.current : ''}`;
+    /* Liitännäinen voi olla hidas — dxRevive noin 7x reaaliaika — joten
+       pelkkä 2/4 ei riitä kertomaan paljonko vielä menee. */
+    const eta = p.eta ? ` · noin ${fmtLeft(p.eta)} jäljellä` : '';
+    note.textContent = `${p.done}/${p.total}`
+      + (p.current ? ' · ' + p.current : '') + eta;
   } else if (info.errors && info.errors.length) {
     note.className = 'warn';
     note.textContent = info.errors.join('\n');
   } else if (info.ready) {
+    /* Nosto näkyviin: se nostaa myös pohjakohinaa, eikä sitä saa tehdä
+       huomaamatta. +26 dB kertoo enemmän kuin "valmis". */
+    const gains = Object.values(info.gains || {});
+    const lift = gains.length
+      ? ` · nosto ${Math.min(...gains).toFixed(1)}…${Math.max(...gains).toFixed(1)} dB`
+      : '';
     note.textContent = `${info.ready} mikkitiedostoa valmiina`
-      + (info.room ? ` · tilaääni ${info.room}` : '')
+      + (info.room ? ` · tilaääni ${info.room}` : '') + lift
       + '. Vienti käyttää niitä.';
   } else {
     note.textContent = 'Alkuperäisiin tiedostoihin ei kosketa; '
       + 'käsitelty ääni kirjoitetaan [mix]-kopioiksi niiden viereen.';
   }
   host.append(note);
+}
+
+/* Liitännäisluettelo haetaan kerran; se on sama koko koneella. */
+async function loadPlugins() {
+  if (pluginList) return;
+  try {
+    pluginList = (await (await fetch('/api/plugins')).json()).plugins || [];
+  } catch (err) {
+    pluginList = [];
+    return;
+  }
+  $('plugin-names').innerHTML = pluginList
+    .map((p) => `<option value="${p.name.replace(/"/g, '&quot;')}">`).join('');
+}
+
+function pluginName(path) {
+  if (!path) return '';
+  const hit = (pluginList || []).find((p) => p.path === path);
+  return hit ? hit.name : path.split('/').pop().replace(/\.(vst3|component)$/, '');
+}
+
+function pluginPath(name) {
+  const wanted = name.trim();
+  if (!wanted) return '';
+  const hit = (pluginList || []).find((p) => p.name === wanted);
+  return hit ? hit.path : '';
+}
+
+/* Jäljellä oleva aika lyhyesti: minuutit riittävät, sekunnit eivät auta. */
+function fmtLeft(seconds) {
+  if (seconds < 90) return `${Math.round(seconds)} s`;
+  return `${Math.round(seconds / 60)} min`;
 }
 
 /* Käsittelyn käynnistys ja edistymisen seuranta. */

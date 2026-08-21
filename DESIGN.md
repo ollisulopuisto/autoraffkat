@@ -233,11 +233,29 @@ kuva jatkuu niiden yli.
 
 ## Ääni
 
-Kolmas hidas kerros, `audio/mix.py`. Se on **valinnainen** ja **prosessirajan
-takana**: automixer vaatii Python 3.13:n ja MLX:n ja asentuu nimellä
-`src.automixer`, eikä leikkaustyökalu saa periä mitään noista. Rajapinta on
-kapea — "anna näistä tiedostoista käsitellyt, saman pituiset kopiot" — joten
-`uv run --project` maksaa vähemmän kuin yhteinen ympäristö.
+Kolmas hidas kerros: `audio/chain.py` tekee signaalinkäsittelyn,
+`audio/mix.py` päättää mitä käsitellään ja vahtii synkkaa.
+
+Ketju ajettiin aluksi rinnakkaisprojektin (automixer) ympäristössä
+`uv run --project`illa, koska se vaati Python 3.13:n ja MLX:n. Riippuvuus
+purettiin: tarvittu osa oli pieni, ja pedalboard tekee sen suoraan samassa
+prosessissa. Mukana lähtivät sekä versiovaatimus että prosessiraja.
+
+Kirjastosta löytyi kaksi kohtaa joissa nimi ei vastaa käytöstä, ja molemmat
+olisivat menneet läpi huomaamatta ilman pituustarkistusta:
+
+* `plugin.process(..., reset=False)` jättää liitännäisen viiveen verran häntää
+  pois — dxRevivellä 4641 näytettä. Tulos on oikean kuuloinen mutta liian
+  lyhyt. Siksi `reset=True`, eikä tiedostoa käsitellä paloissa.
+* `pedalboard.Limiter` tekee makeup-vahvistuksen. Se nosti valmiiksi
+  normalisoidun raidan −20 LUFS:sta −15,8:aan ja huiput nollaan. Tilalla on
+  `peak_guard`: staattinen vaimennus, joka vaimentaa vain jos katto ylittyy
+  eikä koskaan nosta.
+
+Portatusta `declick`istä löytyi kolmas: alkuperäinen vertasi HF-energiaa
+paikalliseen **maksimiin**, vaikka kommentti puhui keskiarvosta. Naksu on
+määritelmän mukaan oman ympäristönsä maksimi, joten ehto ei voinut täyttyä
+koskaan ja koko käsittely oli nolla-operaatio. Keskiarvolla se toimii.
 
 ### Miksi analyysi ajetaan raa'asta äänestä
 
@@ -268,9 +286,15 @@ virhettä huomaa ennen kuin lopputulos on koossa. Siksi pituus tarkistetaan
 työprosessissa näytetaulukoista ja vielä uudestaan ffprobella, ja poikkeava
 hylätään käyttämättömänä.
 
-Tästä seuraa myös se, mitä automixerin ketjusta jätetään pois: **mainoskatko**
-siirtää raitaa ja **summaus** veisi puhujien erottelun ja siten
+Tästä seuraa myös se, mitä alkuperäisestä ketjusta jätettiin ottamatta:
+**mainoskatko** siirtää raitaa ja **summaus** veisi puhujien erottelun ja siten
 `dialogue.<puhuja>`-roolit. Kumpikaan ei kuulu tänne.
+
+Siirtymä mitataan erikseen ristikorrelaationa, koska pituustarkistus ei
+huomaa sitä: liitännäinen voi ilmoittaa viiveensä väärin ja palauttaa oikean
+mittaisen mutta kokonaan siirtyneen raidan. Korrelaatio lasketaan
+verhokäyristä eikä aallonmuodosta — liitännäinen muuttaa sisältöä mutta ei
+puheen rytmiä.
 
 ### Ohjaus tapahtuu resurssitasolla
 
