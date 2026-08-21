@@ -1,0 +1,110 @@
+name: build
+
+# Paketointi ajetaan tageista ja käsin, ei jokaisesta puskusta: käännös hakee
+# ffmpegin verkosta ja kestää minuutteja, kun taas testit ovat sekunteja.
+# Tagi `v*` julkaisee levykuvan GitHubin Releaseen.
+on:
+  workflow_dispatch:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    # Vain Apple Silicon. GitHub on poistanut ilmaiset Intel-ajurit
+    # (`macos-13`), ja jäljellä olevat x86_64-imaget ovat maksullisia isoja
+    # ajureita. Intel-paketti tehdään siis toistaiseksi käsin Intel-koneella:
+    # `uv run python scripts/build_app.py --dmg`. Arkkitehtuuri luetaan
+    # ajurilta eikä kirjoiteta tähän, jottei tiedoston nimi voi valehdella.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ffmpeg
+        run: brew install ffmpeg
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install
+        run: uv sync --all-extras
+
+      # Testit ennen pakkausta. Rikkinäinen binääri on pahempi kuin hidas
+      # käännös: sen ehtii ladata ennen kuin kukaan huomaa.
+      - name: Tests
+        run: uv run pytest -q
+
+      # Niputettavat ffmpeg-binäärit ovat iso lataus ulkopuoliselta
+      # palvelimelta. Välimuisti pitää käännöksen pystyssä silloinkin kun se
+      # palvelin on nurin.
+      - name: Cache bundled ffmpeg
+        uses: actions/cache@v4
+        with:
+          path: bin
+          key: ffmpeg-${{ runner.arch }}-${{ hashFiles('scripts/fetch_binaries.py') }}
+
+      - name: Build app and disk image
+        run: uv run python scripts/build_app.py --dmg
+
+      # Mitä pakettiin oikeasti päätyi. Niputettu ffmpeg tulee ulkopuolelta
+      # eikä ole välttämättä samaa arkkitehtuuria kuin sovellus, ja
+      # allekirjoitus voi rikkoutua kopioinnissa. Kumpikin selviäisi ilman
+      # tätä vasta käyttäjän koneelta.
+      - name: Report what is inside
+        id: inside
+        run: |
+          arch=$(uname -m)
+          echo "arch=$arch" >> "$GITHUB_OUTPUT"
+          echo "sovellus: $(file -b dist/autoraffkat.app/Contents/MacOS/autoraffkat)"
+          echo "ffmpeg:   $(file -b bin/ffmpeg)"
+          codesign --verify --deep --strict dist/autoraffkat.app
+          echo "allekirjoitus kelpaa"
+
+      # Arkkitehtuuri nimeen, jotta Releaseen mahtuu myöhemmin toinenkin.
+      - name: Name the image by architecture
+        run: mv dist/autoraffkat.dmg "dist/autoraffkat-${{ steps.inside.outputs.arch }}.dmg"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: autoraffkat-${{ steps.inside.outputs.arch }}
+          path: dist/autoraffkat-*.dmg
+          if-no-files-found: error
+
+  release:
+    # Vain tagista. Käsin ajettu käännös jää artefaktiksi, ei julkaisuksi.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: macos
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cat > notes.md <<'NOTES'
+          Levykuva ei ole Applen notarisoima, koska siihen tarvitaan Developer
+          ID. Ensimmäisellä avauksella: oikea klikkaus paketin päällä ja
+          «Avaa», tai `xattr -d com.apple.quarantine autoraffkat.app`.
+
+          The disk image is not notarised by Apple — that needs a Developer ID.
+          On first launch: right-click the app and choose "Open", or run
+          `xattr -d com.apple.quarantine autoraffkat.app`.
+          NOTES
+          gh release create "$GITHUB_REF_NAME" dist/*.dmg \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --notes-file notes.md \
+            --generate-notes

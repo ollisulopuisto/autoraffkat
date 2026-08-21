@@ -67,7 +67,20 @@ Perintä haetaan XML:n hakemistosta, sen yläpuolelta ja yläpuolen
 `.fcpxmld`-paketeista, ja lähde näkyy otsikon alla rivillä «Roolit peritty».
 Jakson omat asetukset ohittavat perinnän aina.
 
-### Asennus
+### Lataus
+
+[Releasesissa](../../releases) on levykuva Apple Siliconille. CI kääntää ja
+julkaisee sen `v*`-tagista. Se ei ole notarisoitu — siihen tarvittaisiin
+maksullinen Apple Developer ID — joten ensimmäisellä avauksella tarvitaan oikea
+klikkaus paketin päällä ja «Avaa», tai `xattr -d com.apple.quarantine
+autoraffkat.app`.
+
+Mukana tuleva ffmpeg on x86_64-käännös, joten macOS voi pyytää asentamaan
+Rosettan ensimmäisellä verhokäyrien laskennalla. Intel-Macille tarvitaan oma
+paketti: GitHubilla ei ole enää ilmaisia Intel-ajureita, joten se käännetään
+Intel-koneella komennolla `scripts/build_app.py --dmg`.
+
+### Asennus lähteestä
 
 ```
 brew install ffmpeg
@@ -80,6 +93,9 @@ uv sync            # tai: pip install -e .
 uv run python scripts/build_app.py          # dist/autoraffkat.app
 uv run python scripts/build_app.py --dmg    # …ja dist/autoraffkat.dmg
 ```
+
+`v*`-tagin puskeminen ajaa samat kaksi komentoa CI:llä ja julkaisee
+levykuvan Releasesiin; katso `.github/workflows/build.yml`.
 
 Käännös niputtaa mukaan staattiset ffmpeg- ja ffprobe-binäärit ja hakee ne
 `bin/`-hakemistoon ensimmäisellä kerralla. `scripts/make_dmg.py` pakkaa jo

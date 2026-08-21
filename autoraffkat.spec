@@ -84,6 +84,9 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+icon_file = BASE_DIR / "assets" / ("icon.icns" if sys.platform == "darwin" else "icon.ico")
+icon_path = str(icon_file) if icon_file.exists() else None
+
 exe = EXE(
     pyz,
     a.scripts,
@@ -100,6 +103,7 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon=icon_path,
 )
 
 coll = COLLECT(
@@ -117,7 +121,7 @@ if sys.platform == "darwin":
     app = BUNDLE(
         coll,
         name="autoraffkat.app",
-        icon=None,
+        icon=str(BASE_DIR / "assets" / "icon.icns") if (BASE_DIR / "assets" / "icon.icns").exists() else None,
         bundle_identifier="com.sulopuis.autoraffkat",
         info_plist={
             "CFBundleName": "autoraffkat",

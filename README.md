@@ -64,6 +64,18 @@ looks in the XML's directory, the one above it, and any `.fcpxmld` bundles
 there; the source is shown under the title as "Roles inherited from". An
 episode's own settings always win.
 
+### Download
+
+[Releases](../../releases) carries a disk image for Apple Silicon, built and
+published by CI from a `v*` tag. It is not notarised — that needs a paid Apple
+Developer ID — so the first launch takes a right-click on the app and "Open",
+or `xattr -d com.apple.quarantine autoraffkat.app`.
+
+The bundled ffmpeg is an x86_64 build, so macOS may ask to install Rosetta the
+first time envelopes are computed. Intel Macs need a package of their own:
+GitHub no longer offers free Intel runners, so build it on an Intel machine
+with `scripts/build_app.py --dmg`.
+
 ### Installation
 
 ```
@@ -80,6 +92,9 @@ Everything else is cross-platform.
 uv run python scripts/build_app.py          # dist/autoraffkat.app
 uv run python scripts/build_app.py --dmg    # …and dist/autoraffkat.dmg
 ```
+
+Pushing a `v*` tag runs the same two commands on CI and publishes the disk
+image to Releases; see `.github/workflows/build.yml`.
 
 The build bundles static ffmpeg and ffprobe binaries, downloading them into
 `bin/` on the first run. `scripts/make_dmg.py` packs an already-built app on
