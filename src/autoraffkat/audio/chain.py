@@ -241,7 +241,8 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     if len(cleanup):
         audio = cleanup(audio, rate, reset=True)
     if speech and getattr(settings, "declick", False):
-        audio = declick(audio, rate)
+        audio = declick(audio, rate,
+                        getattr(settings, "declick_sensitivity", 0.5))
 
     # 4. Normalisointi siivotusta signaalista.
     measured = loudness(audio.mean(axis=0), rate) if target_lufs is not None else None

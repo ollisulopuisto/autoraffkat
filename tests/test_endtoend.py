@@ -390,3 +390,29 @@ def test_export_is_quiet_when_audio_is_off(scratch_xml):
         "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
         "globals": {}, "audio": {"enabled": False}}).json()
     assert result["ok"] and result["warnings"] == []
+
+
+def test_defaults_are_available_for_resetting(scratch_xml):
+    """Säätimiä on kolmisenkymmentä ja ne periytyvät seuraavaan jaksoon.
+
+    Ilman paluuta yhdestä huonosta arvosta ei pääsisi takaisin.
+    """
+    from autoraffkat.model import AudioSettings, Globals
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    data = client.get("/api/defaults").json()
+    assert data["globals"] == Globals().to_json()
+    assert data["audio"] == AudioSettings().to_json()
+    assert data["audio"]["duck_db"] == -9.0
+
+
+def test_declick_sensitivity_round_trips(scratch_xml):
+    """Naksujen herkkyys riippuu puhujasta, joten se on säädettävissä."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    client.post("/api/settings", json={
+        "tracks": {}, "globals": {},
+        "audio": {"enabled": True, "declick": True, "declick_sensitivity": 0.8}})
+    assert state.settings.audio.declick_sensitivity == 0.8

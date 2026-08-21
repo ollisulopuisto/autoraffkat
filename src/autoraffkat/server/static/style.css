@@ -202,3 +202,7 @@ td .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
 .check { display: flex; align-items: center; gap: .5rem; margin: .5rem 0; }
 .check input { margin: 0; }
 #audio-panel button { margin-top: .5rem; }
+
+/* Toissijainen painike säädinryhmän lopussa. */
+button.small { font-size: .85em; padding: 4px 9px; margin-top: .6rem; opacity: .8; }
+button.small:hover { opacity: 1; }

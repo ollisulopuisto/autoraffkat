@@ -239,8 +239,15 @@ Kompressointia siihen ei tehdä: kompressoitu tilaääni pumppaa.
 
 ### Toisen mikin vaimennus
 
-Valinnainen. Kun toinen puhuu, toisen mikki vaimennetaan — oletuksena 15 dB,
+Valinnainen. Kun toinen puhuu, toisen mikki vaimennetaan — oletuksena 9 dB,
 ei kokonaan mykistetä.
+
+Oletus on tahallisen matala. Vuoto on mitatusti noin 13 dB puheen alla, joten
+sitä syvempi vaimennus muuttaa yhteissummaa alle 0,1 dB: −9 dB ja −15 dB
+eroavat toisistaan keskimäärin 34 dB miksin alapuolella. Hyöty tulee siis
+ajoituksesta eikä syvyydestä, ja matala vaimennus tekee vähemmän vahinkoa jos
+tunnistus erehtyy. Syvempää kannattaa kokeilla vain jos mikit ovat lähekkäin
+tai huone on eläväinen.
 
 Ohjaus tulee **samasta puheentunnistuksesta kuin kuvan leikkaus**, eli siitä
 mikä näkyy esikatselupalkissa ja on jo säädetty herkkyyssäätimillä. Se on koko
@@ -295,6 +302,21 @@ Siitä tulee varoitus vientipainikkeen jälkeen.
 **Uusi vienti ei tuo Final Cutissa tehtyjä muokkauksia mukanaan.** Se on uusi
 projekti. Siksi käsittely kannattaa ajaa loppuun ennen kuin viet ja alat
 leikata.
+
+## Säätimet ja oletukset
+
+Jokainen arvo on säädettävissä ja jokaisella on oletus, joka toimii ilman
+säätämistä. Oletukset on valittu oikealla aineistolla mitaten, eivät
+arvaamalla — perustelut ovat [`DESIGN.md`](DESIGN.md):ssä.
+
+Kovakoodattuna on vain kanavanauhan sisäinen dynamiikka: kompressorien suhteet
+ja ajat sekä huippukatto. Niiden kynnykset ovat säätimiä, ja kynnys on se joka
+aineiston mukana muuttuu.
+
+«Palauta oletukset» kummassakin ryhmässä palauttaa tehdasarvot. Sitä tarvitaan,
+koska asetukset periytyvät seuraavaan jaksoon: ilman paluuta yksi huono arvo
+kulkisi mukana loputtomiin. Roolit, puhujat ja projektin nimi jäävät — ne ovat
+työtä, eivät säätöä.
 
 ## Rajaukset
 

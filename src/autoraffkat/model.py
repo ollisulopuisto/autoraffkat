@@ -168,6 +168,9 @@ class AudioSettings:
     peak_threshold_db: float = -12.0    # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
     declick: bool = False        # maiskaukset ja huulinaksut pois
+    # Naksujen herkkyys. Tämä riippuu puhujasta enemmän kuin mikään muu
+    # ketjun arvo: toiset maiskuttavat, toiset eivät lainkaan.
+    declick_sensitivity: float = 0.5
     # Ulkoinen VST3/AU-liitännäinen, ajetaan ketjun ensimmäisenä. Tässä
     # tehdään kohinanpoisto ja restaurointi: ketjussa itsessään ei ole
     # kohinanvaimennusta, koska hyvä sellainen on liitännäinen.
@@ -176,7 +179,13 @@ class AudioSettings:
     # puheentunnistuksesta kuin kuvan leikkaus, mutta omilla ajoillaan: kuva
     # odottaa vahvistusaikaa ennen leikkausta, portin on avauduttava heti.
     duck: bool = False
-    duck_db: float = -15.0          # kuinka paljon hiljemmalle, 0 = ei mitään
+    # Kuinka paljon hiljemmalle, 0 = ei mitään. Yhdeksän desibeliä on
+    # tahallisen matala: vuoto on jo valmiiksi ~13 dB puheen alla, joten
+    # syvempi vaimennus muuttaa summaa mitatusti alle 0,1 dB. Kaikki hyöty
+    # tulee ajoituksesta, ei syvyydestä — ja matala vaimennus tekee
+    # vähemmän vahinkoa jos tunnistus joskus erehtyy. Säädettävissä siltä
+    # varalta että mikit ovat lähempänä toisiaan tai huone on eläväisempi.
+    duck_db: float = -9.0
     duck_lookahead: float = 0.15    # avaa näin paljon ennen puheen alkua, s
     duck_hold: float = 0.40         # pidä auki näin kauan puheen jälkeen, s
     duck_min_open: float = 0.20     # tätä lyhyempi jakso ei avaa porttia, s

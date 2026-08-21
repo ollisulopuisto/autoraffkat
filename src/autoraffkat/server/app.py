@@ -190,7 +190,7 @@ class AppState:
             a.duck = bool(raw["duck"])
         for name in ("duck_db", "duck_lookahead", "duck_hold", "duck_min_open",
                      "duck_fade", "duck_release", "duck_min_closed",
-                     "duck_dominance_db"):
+                     "duck_dominance_db", "declick_sensitivity"):
             if name in raw:
                 a.__dict__[name] = float(raw[name])
         for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
@@ -394,6 +394,12 @@ def create_app(state: AppState) -> FastAPI:
     def index():
         """Käyttöliittymän sivu."""
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/api/defaults")
+    def defaults():
+        """Tehdasasetukset. Säätimiä on paljon, ja perintä vie huonon arvon
+        seuraavaan jaksoon — ilman paluuta siitä ei pääse takaisin."""
+        return {"globals": Globals().to_json(), "audio": AudioSettings().to_json()}
 
     @app.get("/api/plugins")
     def list_plugins():

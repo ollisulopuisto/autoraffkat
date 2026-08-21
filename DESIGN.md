@@ -335,6 +335,13 @@ leikataan pito ja paluun mitta pois, jotta myös nousu tapahtuu peittävän
 1,6 %:iin ja 12,7 %:sta 5,2 %:iin, ja loppu on lauseensisäisiä taukoja joissa
 toinen puhuja on selvästi vielä kesken.
 
+Syvyys on säädin mutta melkein merkityksetön: vuoto on jo ~13 dB puheen alla,
+joten −9 dB ja −15 dB eroavat yhteissummassa alle 0,1 dB ja erotussignaali on
+keskimäärin 34 dB miksin alapuolella. Tämä myös selittää miksi ensimmäinen
+versio kuulosti pahalta vaikka taso tuskin liikkui: kuultiin artefaktit, ei
+vaimennusta. Oletus on siksi matala −9 dB, joka tekee vähiten vahinkoa jos
+tunnistus erehtyy.
+
 Liu'ut ovat desibeleissä eivätkä amplitudissa, koska kuulo on logaritminen:
 lineaarinen liuku on puolivälissä jo lähes perillä ja kuulostaa äkkinäiseltä.
 Ne ovat myös epäsymmetriset ja hitaat — 0,25 s alas, 0,4 s ylös — koska

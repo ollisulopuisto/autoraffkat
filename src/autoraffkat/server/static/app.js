@@ -56,6 +56,11 @@ const AUDIO_KNOBS = [
   { key: 'gain_db', label: 'Trimmi', min: -12, max: 12, step: 0.5, unit: ' dB' },
 ];
 
+const DECLICK_KNOBS = [
+  { key: 'declick_sensitivity', label: 'Naksujen herkkyys', min: 0, max: 1,
+    step: 0.05 },
+];
+
 const DUCK_KNOBS = [
   { key: 'duck_db', label: 'Vaimennus', min: -60, max: 0, step: 1, unit: ' dB',
     zero: 'ei vaimennusta' },
@@ -308,6 +313,8 @@ function renderGlobals() {
 
   renderAudio();
 
+  host.append(resetButton('globals', 'Palauta oletukset'));
+
   const title = $('project-title');
   title.value = state.globals.project_name;
   title.oninput = () => { state.globals.project_name = title.value; schedule(); };
@@ -372,10 +379,22 @@ function renderAudio() {
   const essBox = document.createElement('input');
   essBox.type = 'checkbox';
   essBox.checked = !!audio.declick;
-  essBox.addEventListener('change', () => { audio.declick = essBox.checked; schedule(); });
+  essBox.addEventListener('change', () => {
+    audio.declick = essBox.checked;
+    renderAudio();
+    schedule();
+  });
   ess.append(essBox, Object.assign(document.createElement('span'),
     { textContent: 'Maiskausten poisto' }));
   host.append(ess);
+  if (audio.declick) {
+    DECLICK_KNOBS.forEach((spec) => {
+      host.append(knob(spec, audio[spec.key], (v) => {
+        audio[spec.key] = v;
+        schedule();
+      }));
+    });
+  }
 
   /* Toisen mikin vaimennus. Ohjaus tulee samasta puheentunnistuksesta kuin
      esikatselupalkin värit, joten palkki kertoo suoraan milloin kumpikin
@@ -443,6 +462,8 @@ function renderAudio() {
   if (info.progress && info.progress.running) setBusy(run, true, 'Käsitellään…');
   host.append(run);
 
+  host.append(resetButton('audio', 'Palauta ääniasetukset'));
+
   const note = document.createElement('p');
   note.className = 'muted small';
   if (busy) {
@@ -470,6 +491,35 @@ function renderAudio() {
       + 'käsitelty ääni kirjoitetaan [mix]-kopioiksi niiden viereen.';
   }
   host.append(note);
+}
+
+/* Paluu tehdasasetuksiin. Säätimiä on kolmisenkymmentä ja ne periytyvät
+   seuraavaan jaksoon, joten yhdestä huonosta arvosta ei muuten pääse
+   takaisin. Roolit ja puhujat jäävät: ne ovat työtä, eivät säätöä. */
+async function resetSection(which) {
+  const data = await (await fetch('/api/defaults')).json();
+  if (which === 'globals') {
+    const name = state.globals.project_name;
+    state.globals = data.globals;
+    state.globals.project_name = name;
+    renderGlobals();
+  } else {
+    const keep = { room_track: state.audio.room_track,
+                   plugin_path: state.audio.plugin_path,
+                   enabled: state.audio.enabled };
+    state.audio = Object.assign(data.audio, keep);
+    renderAudio();
+  }
+  schedule(0);
+}
+
+function resetButton(which, title) {
+  const button = document.createElement('button');
+  button.className = 'ghost small';
+  button.type = 'button';
+  button.textContent = title;
+  button.addEventListener('click', () => resetSection(which));
+  return button;
 }
 
 /* Liitännäisluettelo haetaan kerran; se on sama koko koneella. */
