@@ -15,6 +15,10 @@ from .model import Globals, TrackConfig
 
 FORMAT_VERSION = 1
 
+# Viennin nimen tunnus. Sama vakio molemmissa suunnissa, jotta valmiit
+# leikkaukset eivät päädy tarjolle uudeksi lähteeksi.
+OUTPUT_SUFFIX = "-leikattu"
+
 
 def settings_path(xml_path: str) -> str:
     """Asetustiedoston polku: ``jakso.fcpxml`` -> ``jakso.autoraffkat.json``."""
@@ -29,7 +33,7 @@ def default_output_path(xml_path: str) -> str:
     silmukassa palataan aina samaan lähteeseen.
     """
     base, ext = os.path.splitext(os.path.abspath(xml_path))
-    return f"{base}-leikattu{ext or '.fcpxml'}"
+    return f"{base}{OUTPUT_SUFFIX}{ext or '.fcpxml'}"
 
 
 @dataclass

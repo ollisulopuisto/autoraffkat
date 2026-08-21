@@ -7,8 +7,21 @@ missään vaiheessa.
 ## Käyttö
 
 ```
-uv run autoraffkat jakso.fcpxml
+uv run autoraffkat
 ```
+
+Ilman argumenttia lähde etsitään työhakemistosta: ainoa vienti avataan
+suoraan, useammasta kysytään numeroitu valinta (Enter = uusin), ja tyhjästä
+hakemistosta avautuu Finderin valintaikkuna. Polun voi silti antaa, ja
+`.fcpxmld`-paketin voi antaa sellaisenaan:
+
+```
+uv run autoraffkat "pp 53 multicam.fcpxmld"
+uv run autoraffkat --pick            # suoraan valintaikkuna
+```
+
+Valmiit `-leikattu`-viennit eivät päädy tarjolle: silmukassa palataan aina
+alkuperäiseen lähteeseen.
 
 Selain avautuu osoitteeseen `http://127.0.0.1:8731/`.
 
@@ -101,6 +114,7 @@ src/autoraffkat/
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
   preview.py         palkin tiivistys selaimelle
   project.py         asetukset JSONina XML:n viereen
+  pick.py            lähteen etsintä ja valinta käynnistyksessä
   server/app.py      HTTP-rajapinta
   server/static/     käyttöliittymä
 ```
