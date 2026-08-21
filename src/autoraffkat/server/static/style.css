@@ -128,11 +128,15 @@ main {
   grid-template-columns: minmax(0, 1fr) 290px;
   gap: 6px 14px;
   align-items: center;
-  padding: 12px 0;
+  padding: 12px 8px;
   border-top: 1px solid var(--line);
+  border-left: 3px solid transparent;
+  border-radius: 4px;
+  transition: background-color .15s ease, border-left-color .15s ease;
 }
 .track-video { grid-template-columns: 132px minmax(0, 1fr) 290px; }
 .track:first-child { border-top: 0; }
+.track.is-highlighted { background: rgba(255, 255, 255, 0.05); }
 
 .track .thumb {
   width: 132px; aspect-ratio: 16 / 9;
@@ -148,6 +152,32 @@ main {
                line-height: 1.5; }
 .track .tags .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
                     margin-right: 5px; vertical-align: middle; }
+
+.track .pairing {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+.track .pairing .dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.track .pairing .speaker-name {
+  font-weight: 500;
+  color: var(--text);
+}
+.track .pairing .paired-label {
+  color: var(--muted);
+}
+.track .pairing.unlinked .paired-label {
+  color: var(--warn);
+}
 
 /* Rooli ja puhuja vierekkäin, jotta ne eivät vie kahta riviä. */
 .track .controls { display: grid; grid-template-columns: 130px 150px; gap: 10px; }

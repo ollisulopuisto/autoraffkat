@@ -127,6 +127,8 @@ const routes = {
   '/api/language': () => ({ language: 'fi', languages: ['fi', 'en'] }),
   '/api/export': () => ({ ok: true, path: '/x/out.fcpxml', cuts: 3, warnings: [] }),
   '/api/mix': () => ({ ok: true, running: true }),
+  '/api/open': () => state,
+  '/api/reload': () => state,
 };
 
 const context = {
@@ -277,6 +279,7 @@ for (const lang of ['fi', 'en']) {
 async function asyncPaths() {
   await step('send', () => context.send());
   await step('exportXml', () => context.exportXml());
+  await step('openXml', () => context.openXml('/x/test.fcpxml'));
   await step('runMix', () => context.runMix());
   await step('resetSection(globals)', () => context.resetSection('globals'));
   await step('resetSection(audio)', () => context.resetSection('audio'));

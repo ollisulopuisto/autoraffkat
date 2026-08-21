@@ -19,6 +19,8 @@ import os
 import subprocess
 from pathlib import Path
 
+from .audio.binaries import get_binary_path
+
 WIDTH = 320
 TIMEOUT = 60
 
@@ -51,14 +53,15 @@ def thumbnail(path: str, duration: float) -> str | None:
         return str(target)
     tmp = target.with_suffix(".tmp.jpg")
     try:
+        ffmpeg_bin = get_binary_path("ffmpeg")
         done = subprocess.run(
             # -ss ennen -i:tä hakee avainkuvaan asti purkamatta, joten tunnin
             # tiedostosta ruudun saa sekunnissa eikä minuutissa.
-            ["ffmpeg", "-y", "-v", "error", "-ss", f"{at:.3f}", "-i", path,
+            [ffmpeg_bin, "-y", "-v", "error", "-ss", f"{at:.3f}", "-i", path,
              "-frames:v", "1", "-vf", f"scale={WIDTH}:-2", "-q:v", "5",
              str(tmp)],
             capture_output=True, text=True, timeout=TIMEOUT)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
         return None
     if done.returncode != 0 or not tmp.exists() or tmp.stat().st_size == 0:
         tmp.unlink(missing_ok=True)

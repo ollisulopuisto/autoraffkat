@@ -30,31 +30,49 @@ def main(argv: list[str] | None = None) -> int:
                              "Ilman tätä etsitään työhakemistosta.")
     parser.add_argument("--pick", action="store_true",
                         help="avaa Finderin valintaikkuna")
+    parser.add_argument("--gui", action="store_true", default=None,
+                        help="avaa natiivi työpöytäikkuna")
+    parser.add_argument("--no-gui", "--headless", dest="gui", action="store_false",
+                        help="suorita taustapalvelimena ilman ikkunaa")
+    parser.add_argument("--debug", action="store_true",
+                        help="ota kehitystyökalut käyttöön")
     parser.add_argument("--port", type=int, default=8731)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--no-browser", action="store_true",
-                        help="älä avaa selainta")
+                        help="älä avaa selainta (vain headless-tilassa)")
     args = parser.parse_args(argv)
 
+    # Oletustila: jos ajetaan pakattuna sovelluksena (.app / .exe) tai annettu --gui
+    is_frozen = getattr(sys, "frozen", False)
+    use_gui = args.gui if args.gui is not None else is_frozen
+
     here = os.getcwd()
+    chosen = None
     if args.pick:
         chosen = pick.native(here, force=True)
     elif args.xml:
         chosen = pick.resolve(args.xml)
     else:
         chosen = pick.pick(here)
-    if not chosen:
+
+    xml_path = None
+    if chosen:
+        xml_path = os.path.abspath(chosen)
+        if not os.path.exists(xml_path):
+            print(f"Tiedostoa ei löydy: {xml_path}", file=sys.stderr)
+            return 1
+        if not args.xml:
+            print(f"Lähde: {pick.label(xml_path)}")
+    elif not use_gui:
         print("Ei lähdettä. Vie Final Cutista FCPXML tähän hakemistoon, "
               "anna polku argumenttina tai valitse ikkunasta: "
               "autoraffkat --pick", file=sys.stderr)
         return 1
 
-    xml_path = os.path.abspath(chosen)
-    if not os.path.exists(xml_path):
-        print(f"Tiedostoa ei löydy: {xml_path}", file=sys.stderr)
-        return 1
-    if not args.xml:
-        print(f"Lähde: {pick.label(xml_path)}")
+    if use_gui:
+        from .gui import launch_gui
+        launch_gui(xml_path=xml_path, host=args.host, port=args.port, debug=args.debug)
+        return 0
 
     state = AppState(xml_path=xml_path)
     state.load()

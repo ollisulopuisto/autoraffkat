@@ -5,6 +5,7 @@
 
 const STRINGS = {
   fi: {
+    'app.open': 'Avaa XML…',
     'app.reload': 'Lue uudestaan',
     'app.reloading': 'Luetaan…',
     'app.export': 'Vie XML',
@@ -36,6 +37,10 @@ const STRINGS = {
     'app.angle': 'kulma {name}',
     'app.channels': '{n} kan.',
     'app.audioOf': 'ääni {codec} {n} kan.',
+    'app.linkedMic': 'mikki: {name}',
+    'app.noLinkedMic': 'ei mikkiä',
+    'app.linkedClose': 'lähikuva: {name}',
+    'app.noLinkedClose': 'ei lähikuvaa',
     'app.exported': '{cuts} kuvaa → {file}',
     'app.exportedMix': ' · {n} käsiteltyä ääntä',
     'kind.project': 'projekti',
@@ -124,6 +129,7 @@ const STRINGS = {
     'unit.hourMin': '{h} h {m} min',
   },
   en: {
+    'app.open': 'Open XML…',
     'app.reload': 'Reload',
     'app.reloading': 'Reading…',
     'app.export': 'Export XML',
@@ -155,6 +161,10 @@ const STRINGS = {
     'app.angle': 'angle {name}',
     'app.channels': '{n} ch',
     'app.audioOf': 'audio {codec} {n} ch',
+    'app.linkedMic': 'mic: {name}',
+    'app.noLinkedMic': 'no mic',
+    'app.linkedClose': 'close-up: {name}',
+    'app.noLinkedClose': 'no close-up',
     'app.exported': '{cuts} shots → {file}',
     'app.exportedMix': ' · {n} processed audio files',
     'kind.project': 'project',

@@ -30,9 +30,10 @@ from ..fcpxml.write import (WriteError, build_fcpxml, build_multicam_fcpxml,
                             write_fcpxml)
 from ..model import (LONGTAKE_RULES, OVERLAP_RULES, ROLES, ROLE_MIC,
                      AudioSettings, Globals, TrackConfig)
+from ..paths import get_resource_path
 from ..preview import build as build_preview
 
-STATIC_DIR = Path(__file__).parent / "static"
+STATIC_DIR = get_resource_path("server/static")
 
 
 @dataclass
@@ -483,6 +484,17 @@ def create_app(state: AppState) -> FastAPI:
     def reload_xml():
         """Lukee lähde-XML:n uudestaan levyltä, esimerkiksi uuden viennin jälkeen."""
         state.load()
+        return _state_json(state)
+
+    @app.post("/api/open")
+    def open_xml(payload: dict):
+        """Avaa toisen XML-tiedoston tai paketin."""
+        path = str((payload or {}).get("path") or "").strip()
+        if not path or not os.path.exists(path):
+            raise HTTPException(400, t("read.file_missing", path=path or "(polku puuttuu)"))
+        with state.lock:
+            state.xml_path = os.path.abspath(path)
+            state.load()
         return _state_json(state)
 
     @app.post("/api/settings")

@@ -5,6 +5,7 @@ venv/
 *.egg-info/
 dist/
 build/
+bin/
 .pytest_cache/
 .DS_Store
 # Ajokohtaiset

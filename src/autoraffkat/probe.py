@@ -16,6 +16,8 @@ import json
 import os
 import subprocess
 
+from .audio.binaries import get_binary_path
+
 TIMEOUT = 30
 
 _cache: dict[tuple, dict] = {}
@@ -24,12 +26,13 @@ _cache: dict[tuple, dict] = {}
 def _run(path: str) -> dict:
     """ffproben raakatulos, tai tyhjä."""
     try:
+        ffprobe_bin = get_binary_path("ffprobe")
         done = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_format", "-show_streams",
+            [ffprobe_bin, "-v", "error", "-show_format", "-show_streams",
              "-of", "json", path],
             capture_output=True, text=True, timeout=TIMEOUT)
         return json.loads(done.stdout or "{}") if done.returncode == 0 else {}
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return {}
 
 

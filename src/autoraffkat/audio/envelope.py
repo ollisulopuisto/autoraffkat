@@ -20,6 +20,7 @@ from pathlib import Path
 import numpy as np
 
 from ..model import HOP
+from .binaries import get_binary_path, require_ffmpeg as _check_binaries
 
 SAMPLE_RATE = 8000          # riittää puheen energialle, neljäsosa purkuajasta
 CACHE_VERSION = 2
@@ -39,11 +40,10 @@ def cache_dir() -> Path:
 
 def require_ffmpeg() -> None:
     """Varmistaa työkalut ennen purkua, jotta virhe on luettava eikä OSError."""
-    for tool in ("ffmpeg", "ffprobe"):
-        if shutil.which(tool) is None:
-            raise EnvelopeError(
-                f"{tool} puuttuu polusta. Asenna: brew install ffmpeg"
-            )
+    try:
+        _check_binaries()
+    except FileNotFoundError as err:
+        raise EnvelopeError(str(err)) from err
 
 
 def _cache_key(path: str) -> str:
@@ -60,11 +60,12 @@ def _cache_key(path: str) -> str:
 def probe_audio(path: str) -> bool:
     """Onko tiedostossa ääniraitaa."""
     try:
+        ffprobe_bin = get_binary_path("ffprobe")
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a:0",
+            [ffprobe_bin, "-v", "error", "-select_streams", "a:0",
              "-show_entries", "stream=index", "-of", "csv=p=0", path],
             capture_output=True, text=True, timeout=30)
-    except (OSError, subprocess.TimeoutExpired):
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
         return False
     return out.returncode == 0 and bool(out.stdout.strip())
 
@@ -75,7 +76,8 @@ def _decode_rms(path: str, progress=None) -> np.ndarray:
     chunk_frames = 4096                      # 4096 * 20 ms ≈ 82 s kerrallaan
     chunk_bytes = win * chunk_frames * 4
 
-    cmd = ["ffmpeg", "-v", "error", "-nostdin", "-i", path,
+    ffmpeg_bin = get_binary_path("ffmpeg")
+    cmd = [ffmpeg_bin, "-v", "error", "-nostdin", "-i", path,
            "-map", "0:a:0", "-ac", "1", "-ar", str(SAMPLE_RATE),
            "-f", "f32le", "-"]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)

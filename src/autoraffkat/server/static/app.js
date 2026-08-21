@@ -202,9 +202,15 @@ function trackFacts(media) {
 /* Puhujan indeksi väripaletissa. Tulee palvelimen esikatselusta, jotta palkki,
    selite ja leikkauslista käyttävät varmasti samaa väriä. */
 function speakerIndex(name) {
-  if (!latest || !latest.preview) return -1;
-  const found = latest.preview.speakers.find((s) => s.name === name);
-  return found ? found.index : -1;
+  if (!name) return -1;
+  if (latest && latest.preview && latest.preview.speakers) {
+    const found = latest.preview.speakers.find((s) => s.name === name);
+    if (found) return found.index;
+  }
+  if (!state || !state.tracks) return 0;
+  const speakers = [...new Set(state.tracks.map((t) => t.config.speaker).filter(Boolean))];
+  const idx = speakers.indexOf(name);
+  return idx >= 0 ? idx : 0;
 }
 
 /* Raitalista. Piirretään kokonaan uudestaan roolin vaihtuessa, koska rooli
@@ -237,6 +243,30 @@ function trackRow(media, kind) {
   row.className = `track track-${kind}`;
   if (media.config.role === 'mic') row.classList.add('is-mic');
 
+  const speakerName = (media.config.speaker || '').trim();
+  let trackColor = null;
+  if (media.config.role === 'wide') {
+    trackColor = css(WIDE_COLOR);
+  } else if ((media.config.role === 'close' || media.config.role === 'mic') && speakerName) {
+    trackColor = colorFor(speakerIndex(speakerName));
+  }
+
+  if (trackColor) {
+    row.style.borderLeftColor = trackColor;
+  }
+  if (speakerName) {
+    row.dataset.speaker = speakerName;
+    row.addEventListener('mouseenter', () => {
+      const escape = (typeof CSS !== 'undefined' && CSS.escape) ? CSS.escape : (s) => s;
+      document.querySelectorAll(`.track[data-speaker="${escape(speakerName)}"]`)
+        .forEach((el) => el.classList.add('is-highlighted'));
+    });
+    row.addEventListener('mouseleave', () => {
+      document.querySelectorAll('.track.is-highlighted')
+        .forEach((el) => el.classList.remove('is-highlighted'));
+    });
+  }
+
   if (kind === 'video') {
     const thumb = document.createElement('img');
     thumb.className = 'thumb';
@@ -260,6 +290,55 @@ function trackRow(media, kind) {
   tags.className = 'tags';
   tags.textContent = trackFacts(media);
   left.append(name, tags);
+
+  if (media.config.role === 'close' && speakerName) {
+    const pair = document.createElement('div');
+    pair.className = 'pairing';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = trackColor;
+    const spSpan = document.createElement('span');
+    spSpan.className = 'speaker-name';
+    spSpan.textContent = speakerName;
+    const counterpart = state.tracks.find((t) => t.kind === 'audio' && t.config.role === 'mic' && (t.config.speaker || '').trim() === speakerName);
+    const link = document.createElement('span');
+    link.className = 'paired-label';
+    link.textContent = counterpart
+      ? ` · ${T('app.linkedMic', { name: counterpart.name })}`
+      : ` · ${T('app.noLinkedMic')}`;
+    if (!counterpart) pair.classList.add('unlinked');
+    pair.append(dot, spSpan, link);
+    left.append(pair);
+  } else if (media.config.role === 'mic' && speakerName) {
+    const pair = document.createElement('div');
+    pair.className = 'pairing';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = trackColor;
+    const spSpan = document.createElement('span');
+    spSpan.className = 'speaker-name';
+    spSpan.textContent = speakerName;
+    const counterpart = state.tracks.find((t) => t.kind === 'video' && t.config.role === 'close' && (t.config.speaker || '').trim() === speakerName);
+    const link = document.createElement('span');
+    link.className = 'paired-label';
+    link.textContent = counterpart
+      ? ` · ${T('app.linkedClose', { name: counterpart.name })}`
+      : ` · ${T('app.noLinkedClose')}`;
+    if (!counterpart) pair.classList.add('unlinked');
+    pair.append(dot, spSpan, link);
+    left.append(pair);
+  } else if (media.config.role === 'wide') {
+    const pair = document.createElement('div');
+    pair.className = 'pairing';
+    const dot = document.createElement('span');
+    dot.className = 'dot';
+    dot.style.background = trackColor;
+    const spSpan = document.createElement('span');
+    spSpan.className = 'speaker-name';
+    spSpan.textContent = T('role.wide');
+    pair.append(dot, spSpan);
+    left.append(pair);
+  }
 
   const controls = document.createElement('div');
   controls.className = 'controls';
@@ -972,8 +1051,50 @@ function renderStatic() {
   document.querySelectorAll('[data-t]').forEach((el) => {
     el.textContent = T(el.dataset.t);
   });
+  $('open').innerHTML = `${T('app.open')} <kbd>⌘O</kbd>`;
   $('reload').textContent = T('app.reload');
   $('export').innerHTML = `${T('app.export')} <kbd>⌘E</kbd>`;
+}
+
+async function openXml(path) {
+  if (!path && typeof window !== 'undefined' && window.pywebview && window.pywebview.api) {
+    try {
+      path = await window.pywebview.api.open_file_dialog();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+  if (!path) return;
+  const button = $('open');
+  setBusy(button, true, T('app.reloading'));
+  try {
+    const res = await fetch('/api/open', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setBusy(button, false);
+      banner(data.detail || T('app.readFailed', { error: 'Open failed' }), true);
+      return;
+    }
+    state = data;
+  } catch (err) {
+    setBusy(button, false);
+    banner(T('app.readFailed', { error: err.message }), true);
+    return;
+  }
+  latest = null;
+  setBusy(button, false);
+  if (state.error) {
+    banner(state.error, true);
+    return;
+  }
+  banner('');
+  renderHeader(); renderTracks(); renderGlobals();
+  watchProgress();
+  if (state.progress && state.progress.ready) send();
 }
 
 async function boot() {
@@ -989,6 +1110,7 @@ async function boot() {
   if (state.progress && state.progress.ready) send();
 }
 
+$('open').addEventListener('click', () => openXml());
 $('export').addEventListener('click', exportXml);
 /* Lukeminen jatkuu verhokäyrien laskentana taustalla, joten painike vapautuu
    vasta kun se on ohi — ei kun pyyntö palaa. Muuten nappi näyttäisi
@@ -1021,6 +1143,19 @@ window.addEventListener('keydown', (e) => {
   if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'e') {
     e.preventDefault();
     exportXml();
+  } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'o') {
+    e.preventDefault();
+    openXml();
+  }
+});
+window.addEventListener('dragover', (e) => e.preventDefault());
+window.addEventListener('dragenter', (e) => e.preventDefault());
+window.addEventListener('drop', (e) => {
+  e.preventDefault();
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+    const file = e.dataTransfer.files[0];
+    const path = file.path || file.name;
+    if (path) openXml(path);
   }
 });
 

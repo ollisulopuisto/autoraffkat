@@ -36,6 +36,7 @@ from ..decide import _runs, drop_short, open_windows, trim_end
 from ..i18n import t
 from ..model import HOP, AudioSettings
 from . import chain
+from .binaries import get_binary_path
 from .chain import ChainError
 
 # Formaatit jotka luetaan suoraan. Muut puretaan ffmpegillä: kameran ääni on
@@ -77,13 +78,14 @@ def is_current(source: str, target: str) -> bool:
 def frame_count(path: str) -> int | None:
     """Äänen näytemäärä ffprobella, tai ``None`` jos ei selviä."""
     try:
+        ffprobe_bin = get_binary_path("ffprobe")
         done = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "a:0",
+            [ffprobe_bin, "-v", "error", "-select_streams", "a:0",
              "-show_entries", "stream=duration_ts,nb_samples,sample_rate,duration",
              "-of", "json", path],
             capture_output=True, text=True, timeout=60)
         streams = json.loads(done.stdout or "{}").get("streams") or []
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError):
+    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
         return None
     if not streams:
         return None
@@ -123,11 +125,12 @@ def ensure_readable(path: str) -> str:
         return str(target)
     tmp = target.with_suffix(".tmp.wav")
     try:
+        ffmpeg_bin = get_binary_path("ffmpeg")
         done = subprocess.run(
-            ["ffmpeg", "-y", "-v", "error", "-i", path, "-vn", "-map", "a:0",
+            [ffmpeg_bin, "-y", "-v", "error", "-i", path, "-vn", "-map", "a:0",
              "-c:a", "pcm_f32le", str(tmp)],
             capture_output=True, text=True, timeout=TIMEOUT)
-    except (OSError, subprocess.TimeoutExpired) as exc:
+    except (OSError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
         raise MixError(t("audio.extract_failed", name=exc)) from exc
     if done.returncode != 0 or not tmp.exists():
         tail = (done.stderr or "").strip().splitlines()
