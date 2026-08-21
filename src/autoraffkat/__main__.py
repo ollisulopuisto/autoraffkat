@@ -8,8 +8,8 @@ import sys
 import threading
 import webbrowser
 
-from . import pick
-from .server.app import AppState, create_app
+from autoraffkat import pick
+from autoraffkat.server.app import AppState, create_app
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -70,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if use_gui:
-        from .gui import launch_gui
+        from autoraffkat.gui import launch_gui
         launch_gui(xml_path=xml_path, host=args.host, port=args.port, debug=args.debug)
         return 0
 

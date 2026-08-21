@@ -1,8 +1,8 @@
 """Pääohjelman käynnistyksen ja komentoriviparametrien testit."""
 
-from unittest.mock import MagicMock, patch
-
-import pytest
+import subprocess
+import sys
+from unittest.mock import MagicMock
 
 from autoraffkat import __main__
 
@@ -27,3 +27,15 @@ def test_main_headless_mode(monkeypatch, scratch_xml):
     ret = __main__.main([xml, "--no-gui", "--no-browser"])
     assert ret == 0
     mock_run.assert_called_once()
+
+
+def test_main_direct_script_execution():
+    """__main__.py voidaan ajaa suoraan skriptinä (kuten PyInstaller tekee)."""
+    res = subprocess.run(
+        [sys.executable, "src/autoraffkat/__main__.py", "--help"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert res.returncode == 0
+    assert "autoraffkat" in res.stdout
