@@ -282,6 +282,30 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
     assert state.inherited_from.endswith("jakso53.autoraffkat.json")
 
 
+def test_audio_settings_are_inherited_too(fixture_dir, tmp_path):
+    """Kanavanauha ja vaimennus ovat samat viikosta toiseen."""
+    import shutil
+    from autoraffkat import project
+    from autoraffkat.model import AudioSettings
+
+    previous = tmp_path / "jakso53.fcpxmld"
+    previous.mkdir()
+    project.save(str(previous / "Info.fcpxml"), project.ProjectSettings(
+        tracks={k: v for k, v in _multicam_tracks().items()},
+        audio=AudioSettings(enabled=True, duck=True, duck_db=-20.0,
+                            target_lufs=-17.0)))
+
+    current = tmp_path / "jakso54.fcpxmld"
+    current.mkdir()
+    shutil.copy(fixture_dir / "multicam.fcpxml", current / "Info.fcpxml")
+
+    state = AppState(xml_path=str(current / "Info.fcpxml"))
+    state.load()
+    assert state.settings.audio.enabled and state.settings.audio.duck
+    assert state.settings.audio.duck_db == -20.0
+    assert state.settings.audio.target_lufs == -17.0
+
+
 def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
     import shutil
     from autoraffkat import project

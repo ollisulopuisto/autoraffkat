@@ -122,7 +122,7 @@ main {
 
 .track {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 130px 150px;
+  grid-template-columns: 96px minmax(0, 1fr) 130px 150px;
   gap: 10px 12px;
   align-items: center;
   padding: 10px 0;
@@ -135,8 +135,16 @@ main {
 .track .tags .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
                     margin-right: 5px; vertical-align: middle; }
 .track .knobs { grid-column: 1 / -1; display: none; gap: 18px; }
+/* Pikkukuva pitää sarakkeensa myös mikkiriveillä, jotta nimet ovat linjassa. */
+.track .thumb { width: 96px; aspect-ratio: 16 / 9; border-radius: 4px;
+                object-fit: cover; background: #12151b; display: block; }
+.track .thumb-empty { border: 1px dashed var(--line); }
 .track.is-mic .knobs { display: flex; flex-wrap: wrap; }
 .track .warn { color: var(--warn); font-size: 12px; grid-column: 1 / -1; }
+@media (max-width: 900px) {
+  .track { grid-template-columns: 64px minmax(0, 1fr) 110px 120px; }
+  .track .thumb { width: 64px; }
+}
 
 select, input[type="text"] {
   font: inherit;

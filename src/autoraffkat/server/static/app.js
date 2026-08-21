@@ -162,6 +162,21 @@ function renderTracks() {
     row.className = 'track';
     if (media.config.role === 'mic') row.classList.add('is-mic');
 
+    /* Ruutu kuvasta: kulmien nimet ovat 1, 2 ja 3, eikä niistä näe kuka on
+       kuvassa. Ladataan laiskasti, koska purku on ffmpegiä. */
+    if (media.thumb) {
+      const thumb = document.createElement('img');
+      thumb.className = 'thumb';
+      thumb.loading = 'lazy';
+      thumb.alt = '';
+      thumb.src = `/api/thumb?track=${encodeURIComponent(media.key)}`;
+      thumb.addEventListener('error', () => thumb.remove());
+      row.append(thumb);
+    } else {
+      row.append(Object.assign(document.createElement('div'),
+        { className: 'thumb thumb-empty' }));
+    }
+
     const left = document.createElement('div');
     const name = document.createElement('div');
     name.className = 'name';

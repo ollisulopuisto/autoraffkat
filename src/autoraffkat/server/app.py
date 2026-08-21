@@ -16,10 +16,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .. import project
+from .. import project, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
 from ..decide import decide
@@ -98,8 +98,11 @@ class AppState:
             return set()
         for key in matched:
             self.settings.tracks[key] = previous.tracks[key]
-        # Säätimet ovat leikkaajan makua, eivät jakson ominaisuus.
+        # Säätimet ovat leikkaajan makua, eivät jakson ominaisuus. Tämä
+        # koskee myös ääntä: kanavanauha, liitännäinen ja vaimennus ovat
+        # samat viikosta toiseen samalla kokoonpanolla.
         self.settings.globals = previous.globals
+        self.settings.audio = previous.audio
         self.inherited_from = source or ""
         return matched
 
@@ -347,6 +350,7 @@ def _track_json(state: AppState, track) -> dict:
                    "missing": bool(m.path) and not os.path.exists(m.path)}
                   for m in items],
         "angle_name": first.angle_name if first else "",
+        "thumb": bool(track.has_video and first and first.path),
         "config": state.settings.config_for(track.key).to_json(),
         "envelope_error": next((e for e in errors if e), ""),
     }
@@ -394,6 +398,25 @@ def create_app(state: AppState) -> FastAPI:
     def index():
         """Käyttöliittymän sivu."""
         return FileResponse(STATIC_DIR / "index.html")
+
+    @app.get("/api/thumb")
+    def thumb(track: str):
+        """Ruutu raidan kuvasta. Puretaan vasta pyydettäessä.
+
+        Kulmien nimet ovat ``1``, ``2`` ja ``3``, joten roolituksen tekeminen
+        ilman kuvaa on arvailua. Purku on ffmpegiä, joten se ei kuulu
+        latausvaiheeseen — selain pyytää nämä omaan tahtiinsa.
+        """
+        if state.timeline is None:
+            raise HTTPException(404, "XML:ää ei ole luettu.")
+        for item in state.timeline.track_media(track):
+            path = thumbs.for_item(item)
+            if path:
+                # Välimuistin avain sisältää muokkausajan, joten sisältö ei
+                # muutu saman URLin alla.
+                return FileResponse(path, media_type="image/jpeg",
+                                    headers={"Cache-Control": "max-age=86400"})
+        return Response(status_code=404)
 
     @app.get("/api/defaults")
     def defaults():
