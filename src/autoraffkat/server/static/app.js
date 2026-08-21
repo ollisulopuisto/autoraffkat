@@ -9,80 +9,94 @@ const SPEAKER_COLORS = ['--sp0', '--sp1', '--sp2', '--sp3', '--sp4'];
 const WIDE_COLOR = '--wide';
 const DEBOUNCE_MS = 45;
 
-const ROLE_LABELS = [
-  ['unused', 'Ei käytössä'],
-  ['wide', 'Laaja'],
-  ['close', 'Lähikuva'],
-  ['mic', 'Mikki'],
+const ROLE_LABELS = () => [
+  ['unused', T('role.unused')],
+  ['wide', T('role.wide')],
+  ['close', T('role.close')],
+  ['mic', T('role.mic')],
 ];
 
-const TRACK_KNOBS = [
-  { key: 'sensitivity_db', label: 'Herkkyys', min: 0, max: 40, step: 0.5,
-    unit: ' dB yli pohjan' },
-  { key: 'gain_db', label: 'Vahvistus', min: -24, max: 24, step: 0.5, unit: ' dB' },
+const TRACK_KNOBS = () => [
+  { key: 'sensitivity_db', label: T('knob.sensitivity'), min: 0, max: 40, step: 0.5,
+    unit: T('knob.sensitivityUnit') },
+  { key: 'gain_db', label: T('knob.gain'), min: -24, max: 24, step: 0.5,
+    unit: T('unit.db') },
 ];
 
-const GLOBAL_KNOBS = [
-  { key: 'min_shot', label: 'Lyhin kuvan kesto', min: 0.3, max: 12, step: 0.1, unit: ' s' },
-  { key: 'lead', label: 'Ennakko', min: 0, max: 1.5, step: 0.01, unit: ' s' },
-  { key: 'confirm', label: 'Vahvistusaika', min: 0, max: 2, step: 0.02, unit: ' s' },
+const GLOBAL_KNOBS = () => [
+  { key: 'min_shot', label: T('knob.minShot'), min: 0.3, max: 12, step: 0.1,
+    unit: T('unit.seconds') },
+  { key: 'lead', label: T('knob.lead'), min: 0, max: 1.5, step: 0.01,
+    unit: T('unit.seconds') },
+  { key: 'confirm', label: T('knob.confirm'), min: 0, max: 2, step: 0.02,
+    unit: T('unit.seconds') },
 ];
 
-const LONGTAKE_KNOBS = [
-  { key: 'wide_every', label: 'Katkaise viimeistään', min: 0, max: 90, step: 1,
-    unit: ' s', zero: 'ei koskaan' },
-  { key: 'wide_hold', label: 'Laajan kesto', min: 0.5, max: 30, step: 0.5, unit: ' s' },
+const LONGTAKE_KNOBS = () => [
+  { key: 'wide_every', label: T('knob.wideEvery'), min: 0, max: 90, step: 1,
+    unit: T('unit.seconds'), zero: T('knob.never') },
+  { key: 'wide_hold', label: T('knob.wideHold'), min: 0.5, max: 30, step: 0.5,
+    unit: T('unit.seconds') },
 ];
 
-const LONGTAKE_RULES = [
-  ['return', 'Palaa puhujaan', 'Laaja välissä, sitten takaisin samaan kuvaan.'],
-  ['stay', 'Jää laajaan', 'Laaja jatkuu, kunnes joku toinen saa puheenvuoron.'],
+const LONGTAKE_RULES = () => [
+  ['return', T('longtake.return'), T('longtake.returnHint')],
+  ['stay', T('longtake.stay'), T('longtake.stayHint')],
 ];
 
-const OVERLAP_KNOBS = [
-  { key: 'min_overlap', label: 'Lyhin päällekkäisyys', min: 0, max: 3, step: 0.05, unit: ' s' },
-  { key: 'dominance_db', label: 'Vaadittu ero', min: 0, max: 24, step: 0.5, unit: ' dB' },
+const OVERLAP_KNOBS = () => [
+  { key: 'min_overlap', label: T('knob.minOverlap'), min: 0, max: 3, step: 0.05,
+    unit: T('unit.seconds') },
+  { key: 'dominance_db', label: T('knob.dominance'), min: 0, max: 24, step: 0.5,
+    unit: T('unit.db') },
 ];
 
-const AUDIO_KNOBS = [
-  { key: 'target_lufs', label: 'Tavoiteäänekkyys', min: -32, max: -10, step: 0.5,
-    unit: ' LUFS' },
-  { key: 'high_pass_hz', label: 'Ylipäästö', min: 0, max: 200, step: 5, unit: ' Hz',
-    zero: 'ei käytössä' },
-  { key: 'peak_threshold_db', label: 'Huippujen kynnys', min: -30, max: 0, step: 0.5,
-    unit: ' dB' },
-  { key: 'leveler_threshold_db', label: 'Tasaajan kynnys', min: -36, max: 0, step: 0.5,
-    unit: ' dB' },
-  { key: 'gain_db', label: 'Trimmi', min: -12, max: 12, step: 0.5, unit: ' dB' },
+const AUDIO_KNOBS = () => [
+  { key: 'target_lufs', label: T('audio.targetLufs'), min: -32, max: -10, step: 0.5,
+    unit: T('unit.lufs') },
+  { key: 'high_pass_hz', label: T('audio.highpass'), min: 0, max: 200, step: 5,
+    unit: T('unit.hz'), zero: T('audio.highpassOff') },
+  { key: 'peak_threshold_db', label: T('audio.peak'), min: -30, max: 0, step: 0.5,
+    unit: T('unit.db') },
+  { key: 'leveler_threshold_db', label: T('audio.leveler'), min: -36, max: 0, step: 0.5,
+    unit: T('unit.db') },
+  { key: 'gain_db', label: T('audio.trim'), min: -12, max: 12, step: 0.5,
+    unit: T('unit.db') },
 ];
 
-const DECLICK_KNOBS = [
-  { key: 'declick_sensitivity', label: 'Naksujen herkkyys', min: 0, max: 1,
+const DECLICK_KNOBS = () => [
+  { key: 'declick_sensitivity', label: T('audio.declickSensitivity'), min: 0, max: 1,
     step: 0.05 },
 ];
 
-const DUCK_KNOBS = [
-  { key: 'duck_db', label: 'Vaimennus', min: -60, max: 0, step: 1, unit: ' dB',
-    zero: 'ei vaimennusta' },
-  { key: 'duck_lookahead', label: 'Ennakko', min: 0, max: 0.5, step: 0.01, unit: ' s' },
-  { key: 'duck_hold', label: 'Pito', min: 0, max: 2, step: 0.05, unit: ' s' },
-  { key: 'duck_min_open', label: 'Lyhin avaus', min: 0, max: 1, step: 0.05, unit: ' s' },
-  { key: 'duck_dominance_db', label: 'Erotus kovimpaan', min: 0, max: 24, step: 0.5,
-    unit: ' dB' },
-  { key: 'duck_min_closed', label: 'Lyhin vaimennus', min: 0, max: 3, step: 0.1, unit: ' s' },
-  { key: 'duck_fade', label: 'Lasku', min: 0.02, max: 1, step: 0.01, unit: ' s' },
-  { key: 'duck_release', label: 'Paluu', min: 0.02, max: 2, step: 0.02, unit: ' s' },
+const DUCK_KNOBS = () => [
+  { key: 'duck_db', label: T('audio.duckDb'), min: -60, max: 0, step: 1,
+    unit: T('unit.db'), zero: T('audio.duckNone') },
+  { key: 'duck_lookahead', label: T('audio.duckLookahead'), min: 0, max: 0.5,
+    step: 0.01, unit: T('unit.seconds') },
+  { key: 'duck_hold', label: T('audio.duckHold'), min: 0, max: 2, step: 0.05,
+    unit: T('unit.seconds') },
+  { key: 'duck_min_open', label: T('audio.duckMinOpen'), min: 0, max: 1, step: 0.05,
+    unit: T('unit.seconds') },
+  { key: 'duck_dominance_db', label: T('audio.duckDominance'), min: 0, max: 24,
+    step: 0.5, unit: T('unit.db') },
+  { key: 'duck_min_closed', label: T('audio.duckMinClosed'), min: 0, max: 3, step: 0.1,
+    unit: T('unit.seconds') },
+  { key: 'duck_fade', label: T('audio.duckFade'), min: 0.02, max: 1, step: 0.01,
+    unit: T('unit.seconds') },
+  { key: 'duck_release', label: T('audio.duckRelease'), min: 0.02, max: 2, step: 0.02,
+    unit: T('unit.seconds') },
 ];
 
-const ROOM_KNOBS = [
-  { key: 'room_db', label: 'Tilaäänen taso', min: -40, max: 0, step: 1,
-    unit: ' dB puhetta hiljempaa' },
+const ROOM_KNOBS = () => [
+  { key: 'room_db', label: T('audio.roomDb'), min: -40, max: 0, step: 1,
+    unit: T('audio.roomDbUnit') },
 ];
 
-const OVERLAP_RULES = [
-  ['wide', 'Laaja', 'Molemmat äänessä, mennään laajaan.'],
-  ['hold', 'Pidä nykyinen', 'Ei leikata mihinkään.'],
-  ['louder', 'Vahvempi voittaa', 'Kovempi saa kuvan, kun ero on kestänyt.'],
+const OVERLAP_RULES = () => [
+  ['wide', T('overlap.wide'), T('overlap.wideHint')],
+  ['hold', T('overlap.hold'), T('overlap.holdHint')],
+  ['louder', T('overlap.louder'), T('overlap.louderHint')],
 ];
 
 let state = null;               // /api/state
@@ -148,7 +162,7 @@ function fmtDuration(seconds) {
   if (!seconds) return '';
   const h = Math.floor(seconds / 3600);
   const m = Math.round((seconds % 3600) / 60);
-  return h ? `${h} h ${m} min` : `${m} min`;
+  return h ? T('unit.hourMin', { h, m }) : T('unit.min', { n: m });
 }
 
 /* Raidan tekniset tiedot yhdeksi riviksi. Kuvalle mitat ja bitit, äänelle
@@ -167,19 +181,19 @@ function trackFacts(media) {
     const a = p.audio;
     if (!p.video) {
       if (a.codec) bits.push(a.codec);
-      bits.push(`${a.channels} kan.`);
+      bits.push(T('app.channels', { n: a.channels }));
       if (a.rate) bits.push(`${Math.round(a.rate / 1000)} kHz`);
       if (a.depth) bits.push(`${Math.round(a.depth)} bit`);
       if (!a.depth && a.bitrate) bits.push(`${Math.round(a.bitrate / 1000)} kb/s`);
     } else {
-      bits.push(`ääni ${a.codec} ${a.channels} kan.`);
+      bits.push(T('app.audioOf', { codec: a.codec, n: a.channels }));
     }
   }
   const span = [fmtDuration(media.total_duration), fmtSize(media.total_size)]
     .filter(Boolean).join(' · ');
   if (span) bits.push(span);
-  if (media.angle_name) bits.push(`kulma ${media.angle_name}`);
-  if ((media.parts || []).length > 1) bits.push(`${media.parts.length} osaa`);
+  if (media.angle_name) bits.push(T('app.angle', { name: media.angle_name }));
+  if ((media.parts || []).length > 1) bits.push(T('app.parts', { n: media.parts.length }));
   return bits.join(' · ');
 }
 
@@ -210,7 +224,7 @@ function renderTracks() {
     const rows = state.tracks.filter((m) => m.kind === kind);
     if (!rows.length) {
       host.append(Object.assign(document.createElement('p'),
-        { className: 'muted small', textContent: 'ei raitoja' }));
+        { className: 'muted small', textContent: T('app.group.empty') }));
       return;
     }
     rows.forEach((media) => host.append(trackRow(media, kind)));
@@ -251,7 +265,7 @@ function trackRow(media, kind) {
   controls.className = 'controls';
 
   const role = document.createElement('select');
-  ROLE_LABELS.forEach(([value, text]) => {
+  ROLE_LABELS().forEach(([value, text]) => {
     const opt = document.createElement('option');
     opt.value = value; opt.textContent = text;
     if (media.config.role === value) opt.selected = true;
@@ -265,7 +279,7 @@ function trackRow(media, kind) {
 
   const speaker = document.createElement('input');
   speaker.type = 'text';
-  speaker.placeholder = 'Puhuja';
+  speaker.placeholder = T('app.speaker');
   speaker.setAttribute('list', 'speaker-names');
   speaker.value = media.config.speaker || '';
   speaker.disabled = !(media.config.role === 'close' || media.config.role === 'mic');
@@ -280,7 +294,7 @@ function trackRow(media, kind) {
   if (media.config.role === 'mic') {
     const knobs = document.createElement('div');
     knobs.className = 'knobs';
-    TRACK_KNOBS.forEach((spec) => {
+    TRACK_KNOBS().forEach((spec) => {
       knobs.append(knob(spec, media.config[spec.key], (v) => {
         media.config[spec.key] = v;
         schedule();
@@ -293,7 +307,7 @@ function trackRow(media, kind) {
     const gone = (media.parts || []).filter((p) => p.missing).map((p) => p.path);
     row.append(Object.assign(document.createElement('div'), {
       className: 'warn',
-      textContent: 'Tiedostoa ei löydy levyltä: ' + (gone.join(', ') || media.path),
+      textContent: T('app.missingFile', { paths: gone.join(', ') || media.path }),
     }));
   } else if (media.envelope_error) {
     row.append(Object.assign(document.createElement('div'),
@@ -305,7 +319,7 @@ function trackRow(media, kind) {
 function renderGlobals() {
   const host = $('global-list');
   host.textContent = '';
-  GLOBAL_KNOBS.forEach((spec) => {
+  GLOBAL_KNOBS().forEach((spec) => {
     host.append(knob(spec, state.globals[spec.key], (v) => {
       state.globals[spec.key] = v;
       schedule();
@@ -318,7 +332,7 @@ function renderGlobals() {
      sillä ei ole. */
   const longtake = $('longtake-params');
   longtake.textContent = '';
-  LONGTAKE_KNOBS.forEach((spec) => {
+  LONGTAKE_KNOBS().forEach((spec) => {
     if (spec.key === 'wide_hold' && state.globals.long_take_rule === 'stay') return;
     longtake.append(knob(spec, state.globals[spec.key], (v) => {
       const was = !!state.globals[spec.key];
@@ -333,7 +347,7 @@ function renderGlobals() {
 
   const longRules = $('longtake-rules');
   longRules.textContent = '';
-  LONGTAKE_RULES.forEach(([value, title, hint]) => {
+  LONGTAKE_RULES().forEach(([value, title, hint]) => {
     const label = document.createElement('label');
     const radio = document.createElement('input');
     radio.type = 'radio'; radio.name = 'longtake'; radio.value = value;
@@ -352,7 +366,7 @@ function renderGlobals() {
 
   const rules = $('overlap-rules');
   rules.textContent = '';
-  OVERLAP_RULES.forEach(([value, title, hint]) => {
+  OVERLAP_RULES().forEach(([value, title, hint]) => {
     const label = document.createElement('label');
     const radio = document.createElement('input');
     radio.type = 'radio'; radio.name = 'overlap'; radio.value = value;
@@ -369,7 +383,7 @@ function renderGlobals() {
 
   const params = $('overlap-params');
   params.textContent = '';
-  OVERLAP_KNOBS.forEach((spec) => {
+  OVERLAP_KNOBS().forEach((spec) => {
     params.append(knob(spec, state.globals[spec.key], (v) => {
       state.globals[spec.key] = v;
       schedule();
@@ -378,7 +392,7 @@ function renderGlobals() {
 
   renderAudio();
 
-  host.append(resetButton('globals', 'Palauta oletukset'));
+  host.append(resetButton('globals', T('app.reset')));
 
   const title = $('project-title');
   title.value = state.globals.project_name;
@@ -405,7 +419,7 @@ function renderAudio() {
     schedule(0);
   });
   toggle.append(box, Object.assign(document.createElement('span'),
-    { textContent: 'Käsittele mikit' }));
+    { textContent: T('audio.enable') }));
   host.append(toggle);
 
   if (!audio.enabled) return;
@@ -417,10 +431,10 @@ function renderAudio() {
   const plug = document.createElement('label');
   plug.className = 'field';
   plug.append(Object.assign(document.createElement('span'),
-    { textContent: 'Liitännäinen' }));
+    { textContent: T('audio.plugin') }));
   const plugInput = document.createElement('input');
   plugInput.type = 'text';
-  plugInput.placeholder = 'esim. dxRevive — tyhjä = ei liitännäistä';
+  plugInput.placeholder = T('audio.pluginHint');
   plugInput.setAttribute('list', 'plugin-names');
   plugInput.value = pluginName(audio.plugin_path);
   plugInput.addEventListener('change', () => {
@@ -432,7 +446,7 @@ function renderAudio() {
   host.append(plug);
   loadPlugins();
 
-  AUDIO_KNOBS.forEach((spec) => {
+  AUDIO_KNOBS().forEach((spec) => {
     host.append(knob(spec, audio[spec.key], (v) => {
       audio[spec.key] = v;
       schedule();
@@ -450,10 +464,10 @@ function renderAudio() {
     schedule();
   });
   ess.append(essBox, Object.assign(document.createElement('span'),
-    { textContent: 'Maiskausten poisto' }));
+    { textContent: T('audio.declick') }));
   host.append(ess);
   if (audio.declick) {
-    DECLICK_KNOBS.forEach((spec) => {
+    DECLICK_KNOBS().forEach((spec) => {
       host.append(knob(spec, audio[spec.key], (v) => {
         audio[spec.key] = v;
         schedule();
@@ -475,10 +489,10 @@ function renderAudio() {
   const duckLabel = document.createElement('label');
   duckLabel.className = 'check';
   duckLabel.append(duckBox, Object.assign(document.createElement('span'),
-    { textContent: 'Vaimenna toinen mikki puheen ulkopuolella' }));
+    { textContent: T('audio.duck') }));
   host.append(duckLabel);
   if (audio.duck) {
-    DUCK_KNOBS.forEach((spec) => {
+    DUCK_KNOBS().forEach((spec) => {
       host.append(knob(spec, audio[spec.key], (v) => {
         audio[spec.key] = v;
         schedule();
@@ -491,10 +505,10 @@ function renderAudio() {
   const field = document.createElement('label');
   field.className = 'field';
   field.append(Object.assign(document.createElement('span'),
-    { textContent: 'Tilaääni' }));
+    { textContent: T('audio.room') }));
   const select = document.createElement('select');
   const none = document.createElement('option');
-  none.value = ''; none.textContent = 'ei käytössä';
+  none.value = ''; none.textContent = T('audio.roomOff');
   select.append(none);
   state.tracks.filter((t) => t.has_audio && t.has_video).forEach((t) => {
     const opt = document.createElement('option');
@@ -511,7 +525,7 @@ function renderAudio() {
   host.append(field);
 
   if (audio.room_track) {
-    ROOM_KNOBS.forEach((spec) => {
+    ROOM_KNOBS().forEach((spec) => {
       host.append(knob(spec, audio[spec.key], (v) => {
         audio[spec.key] = v;
         schedule();
@@ -522,12 +536,12 @@ function renderAudio() {
   const run = document.createElement('button');
   run.className = 'ghost';
   run.id = 'mix-run';
-  run.textContent = 'Käsittele ääni';
+  run.textContent = T('audio.run');
   run.addEventListener('click', runMix);
-  if (info.progress && info.progress.running) setBusy(run, true, 'Käsitellään…');
+  if (info.progress && info.progress.running) setBusy(run, true, T('audio.running'));
   host.append(run);
 
-  host.append(resetButton('audio', 'Palauta ääniasetukset'));
+  host.append(resetButton('audio', T('app.reset.audio')));
 
   const note = document.createElement('p');
   note.className = 'muted small';
@@ -535,7 +549,7 @@ function renderAudio() {
     const p = info.progress;
     /* Liitännäinen voi olla hidas — dxRevive noin 7x reaaliaika — joten
        pelkkä 2/4 ei riitä kertomaan paljonko vielä menee. */
-    const eta = p.eta ? ` · noin ${fmtLeft(p.eta)} jäljellä` : '';
+    const eta = p.eta ? T('audio.left', { time: fmtLeft(p.eta) }) : '';
     note.textContent = `${p.done}/${p.total}`
       + (p.current ? ' · ' + p.current : '') + eta;
   } else if (info.errors && info.errors.length) {
@@ -546,14 +560,14 @@ function renderAudio() {
        huomaamatta. +26 dB kertoo enemmän kuin "valmis". */
     const gains = Object.values(info.gains || {});
     const lift = gains.length
-      ? ` · nosto ${Math.min(...gains).toFixed(1)}…${Math.max(...gains).toFixed(1)} dB`
+      ? T('audio.readyGain', { low: Math.min(...gains).toFixed(1),
+                               high: Math.max(...gains).toFixed(1) })
       : '';
-    note.textContent = `${info.ready} mikkitiedostoa valmiina`
-      + (info.room ? ` · tilaääni ${info.room}` : '') + lift
-      + '. Vienti käyttää niitä.';
+    note.textContent = T('audio.ready', { n: info.ready })
+      + (info.room ? T('audio.readyRoom', { n: info.room }) : '') + lift
+      + T('audio.readyTail');
   } else {
-    note.textContent = 'Alkuperäisiin tiedostoihin ei kosketa; '
-      + 'käsitelty ääni kirjoitetaan [mix]-kopioiksi niiden viereen.';
+    note.textContent = T('audio.idle');
   }
   host.append(note);
 }
@@ -615,8 +629,8 @@ function pluginPath(name) {
 
 /* Jäljellä oleva aika lyhyesti: minuutit riittävät, sekunnit eivät auta. */
 function fmtLeft(seconds) {
-  if (seconds < 90) return `${Math.round(seconds)} s`;
-  return `${Math.round(seconds / 60)} min`;
+  if (seconds < 90) return T('unit.sec', { n: Math.round(seconds) });
+  return T('unit.min', { n: Math.round(seconds / 60) });
 }
 
 /* Käsittelyn käynnistys ja edistymisen seuranta. */
@@ -629,13 +643,13 @@ async function runMix() {
     });
     const data = await response.json();
     if (!response.ok) {
-      banner(data.detail || 'Äänen käsittely ei käynnistynyt', true);
+      banner(data.detail || T('audio.startFailed'), true);
       return;
     }
     banner('');
     watchMix();
   } catch (err) {
-    banner('Äänen käsittely epäonnistui: ' + err.message, true);
+    banner(T('audio.failed', { error: err.message }), true);
   }
 }
 
@@ -725,8 +739,8 @@ function renderLegend() {
   host.textContent = '';
   if (!latest || !latest.preview) return;
   const entries = latest.preview.speakers.map((s) => [colorFor(s.index),
-    s.has_close ? s.name : `${s.name} (ei lähikuvaa)`]);
-  entries.push([colorFor(-1), 'Laaja']);
+    s.has_close ? s.name : T('legend.noClose', { name: s.name })]);
+  entries.push([colorFor(-1), T('legend.wide')]);
   entries.forEach(([color, text]) => {
     const item = document.createElement('span');
     item.innerHTML = `<i style="background:${color}"></i>${text}`;
@@ -754,7 +768,7 @@ function renderCuts() {
     .map(([k, v]) => `${k} ${v}`).join(' · ');
   $('cut-summary').textContent =
     `${latest.segments.length} kuvaa · ${fmtTime(latest.program.duration)} · ${counts}`;
-  $('counts').textContent = `päätös ${latest.ms} ms`;
+  $('counts').textContent = T('app.decision', { ms: latest.ms });
 }
 
 /* ------------------------------------------------------------ liikenne */
@@ -793,12 +807,12 @@ async function send() {
       banner('');
       drawBar(); renderRuler(); renderLegend(); renderCuts();
     } else {
-      banner((data.problems || ['Tuntematon virhe']).join('\n'));
+      banner((data.problems || [T('app.unknownError')]).join('\n'));
       latest = { ...data, preview: null };
       drawBar(); renderCuts();
     }
   } catch (err) {
-    if (err.name !== 'AbortError') banner('Palvelin ei vastaa: ' + err.message, true);
+    if (err.name !== 'AbortError') banner(T('app.noServer', { error: err.message }), true);
   } finally {
     inflight = null;
   }
@@ -835,7 +849,7 @@ function banner(text, isError) {
 async function exportXml() {
   const button = $('export');
   if (button.disabled) return;
-  setBusy(button, true, 'Viedään…');
+  setBusy(button, true, T('app.exporting'));
   try {
     const response = await fetch('/api/export', {
       method: 'POST',
@@ -844,17 +858,17 @@ async function exportXml() {
     });
     const data = await response.json();
     if (response.ok && data.ok) {
-      const mixed = data.mixed ? ` · ${data.mixed} käsiteltyä ääntä` : '';
+      const mixed = data.mixed ? T('app.exportedMix', { n: data.mixed }) : '';
       $('status').textContent =
-        `${data.cuts} kuvaa → ${data.path.split('/').pop()}${mixed}`;
+        T('app.exported', { cuts: data.cuts, file: data.path.split('/').pop() }) + mixed;
       banner((data.warnings || []).join('\n'));
     } else {
       $('status').textContent = '';
-      banner((data.problems || [data.detail || 'Vienti epäonnistui']).join('\n'), true);
+      banner((data.problems || [data.detail || T('app.exportFailed', { error: '' })]).join('\n'), true);
     }
   } catch (err) {
     $('status').textContent = '';
-    banner('Vienti epäonnistui: ' + err.message, true);
+    banner(T('app.exportFailed', { error: err.message }), true);
   } finally {
     setBusy(button, false);
   }
@@ -864,20 +878,18 @@ async function exportXml() {
 
 function renderHeader() {
   $('project-name').textContent = state.name || '—';
-  const kinds = { project: 'projekti', 'sync-clip': 'synkkaklippi',
-                  multicam: 'monikamera' };
-  const bits = [kinds[state.kind] || state.kind, `${state.fps ?? '?'} fps`,
-                `${state.tracks.length} raitaa`];
-  if (state.parts > 1) bits.push(`${state.parts} osaa`);
+  const bits = [T(`kind.${state.kind}`), T('meta.fps', { fps: state.fps ?? '?' }),
+                T('meta.tracks', { n: state.tracks.length })];
+  if (state.parts > 1) bits.push(T('meta.parts', { n: state.parts }));
   $('project-meta').textContent = bits.join(' · ');
   /* Polut omille riveilleen: yhdellä rivillä ne kietoutuvat toisiinsa eikä
      kumpaakaan pysty lukemaan. */
   const paths = $('paths');
   paths.textContent = '';
-  const lines = [['Vienti', state.output_path],
-                 ['Asetukset', state.settings_path]];
+  const lines = [[T('path.export'), state.output_path],
+                 [T('path.settings'), state.settings_path]];
   if (state.inherited_from) {
-    lines.push(['Roolit peritty', state.inherited_from]);
+    lines.push([T('path.inherited'), state.inherited_from]);
   }
   lines.forEach(([title, value]) => {
     const row = document.createElement('div');
@@ -912,14 +924,62 @@ function watchProgress() {
       renderTracks();
       send();
     } else {
-      $('status').textContent =
-        `verhokäyrät ${p.done}/${p.total}${p.current ? ' · ' + p.current : ''}`;
+      $('status').textContent = T('app.envelopes', { done: p.done, total: p.total })
+        + (p.current ? ' · ' + p.current : '');
     }
   }, 400);
 }
 
+/* Kielivalitsin otsikkoon. Kieli tallentuu asetuksiin ja periytyy jaksosta
+   toiseen, joten se valitaan kerran. */
+function renderLanguage() {
+  const host = $('language');
+  host.textContent = '';
+  (state.languages || ['fi']).forEach((code) => {
+    const button = document.createElement('button');
+    button.className = 'ghost lang';
+    button.type = 'button';
+    button.textContent = code.toUpperCase();
+    button.disabled = code === state.language;
+    button.addEventListener('click', async () => {
+      const data = await (await fetch('/api/language', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: code }),
+      })).json();
+      state.language = data.language;
+      setLang(state.language);
+      redrawAll();
+    });
+    host.append(button);
+  });
+}
+
+/* Kaikki tekstit uusiksi. Piirto on halpaa eikä kieltä vaihdeta usein. */
+function redrawAll() {
+  renderStatic();
+  renderLanguage();
+  renderHeader();
+  renderTracks();
+  renderGlobals();
+  renderLegend();
+  renderCuts();
+}
+
+/* Sivun kiinteät otsikot, jotka eivät synny piirtofunktioissa. */
+function renderStatic() {
+  document.querySelectorAll('[data-t]').forEach((el) => {
+    el.textContent = T(el.dataset.t);
+  });
+  $('reload').textContent = T('app.reload');
+  $('export').innerHTML = `${T('app.export')} <kbd>⌘E</kbd>`;
+}
+
 async function boot() {
   state = await (await fetch('/api/state')).json();
+  setLang(state.language || 'fi');
+  renderStatic();
+  renderLanguage();
   if (state.error) { banner(state.error, true); return; }
   renderHeader();
   renderTracks();
@@ -936,12 +996,12 @@ $('export').addEventListener('click', exportXml);
 $('reload').addEventListener('click', async () => {
   const button = $('reload');
   if (button.disabled) return;
-  setBusy(button, true, 'Luetaan…');
+  setBusy(button, true, T('app.reloading'));
   try {
     state = await (await fetch('/api/reload', { method: 'POST' })).json();
   } catch (err) {
     setBusy(button, false);
-    banner('Lukeminen epäonnistui: ' + err.message, true);
+    banner(T('app.readFailed', { error: err.message }), true);
     return;
   }
   latest = null;

@@ -28,6 +28,7 @@ from fractions import Fraction
 from urllib.parse import unquote, urlparse
 from xml.etree import ElementTree as ET
 
+from ..i18n import t
 from ..model import MediaItem, Placement
 from ..timeline import ZERO, parse_time
 
@@ -555,10 +556,7 @@ def _pick_container(root) -> tuple[ET.Element, str, str]:
     for sequence in root.iter("sequence"):
         if sequence.find("spine") is not None:
             return sequence, "project", "Sekvenssi"
-    raise ReadError(
-        "XML:stä ei löytynyt projektia eikä synkronoitua klippiä. "
-        "Vie Final Cutista joko synkkaklippi tai projekti."
-    )
+    raise ReadError(t("read.no_project"))
 
 
 def _stable_keys(items: list[MediaItem]) -> None:
@@ -576,10 +574,10 @@ def read_fcpxml(path: str) -> Timeline:
     try:
         tree = ET.parse(path)
     except ET.ParseError as exc:
-        raise ReadError(f"XML ei jäsenny: {exc}") from exc
+        raise ReadError(t("read.bad_xml", error=exc)) from exc
     root = tree.getroot()
     if root.tag != "fcpxml":
-        raise ReadError(f"Juurielementti on <{root.tag}>, odotettiin <fcpxml>.")
+        raise ReadError(t("read.bad_root", tag=root.tag))
 
     assets, formats, medias = _collect_resources(root)
     container, kind, name = _pick_container(root)
@@ -596,7 +594,7 @@ def read_fcpxml(path: str) -> Timeline:
         frame_duration = formats.get(container.get("format", ""), {}).get("frame_duration")
 
     if not ctx.hits:
-        raise ReadError("Aikajanalta ei löytynyt yhtään mediaa.")
+        raise ReadError(t("read.no_media"))
 
     # Ryhmitellään esiintymät asseteittain.
     items: dict[str, MediaItem] = {}

@@ -239,3 +239,8 @@ td .swatch { display: inline-block; width: 9px; height: 9px; border-radius: 2px;
 /* Toissijainen painike säädinryhmän lopussa. */
 button.small { font-size: .85em; padding: 4px 9px; margin-top: .6rem; opacity: .8; }
 button.small:hover { opacity: 1; }
+
+/* Kielivalitsin: kaksi pientä nappia, valittu himmeänä. */
+.langs { display: inline-flex; gap: 4px; }
+.langs .lang { font-size: 11px; padding: 4px 8px; letter-spacing: .04em; }
+.langs .lang:disabled { opacity: .45; }

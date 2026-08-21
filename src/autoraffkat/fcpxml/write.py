@@ -17,6 +17,7 @@ from xml.sax.saxutils import quoteattr
 from dataclasses import replace
 
 from ..audio.mix import ROOM_ROLE
+from ..i18n import t
 from ..model import MediaItem, Segment
 from ..timeline import (ZERO, FPS_LABELS, format_time, frames_str, fps_of,
                         to_frames)
@@ -174,15 +175,15 @@ def build_fcpxml(
     replacements = replacements or {}
     room = room or []
     if not segments:
-        raise WriteError("Leikkauslista on tyhjä.")
+        raise WriteError(t("write.empty_cut"))
 
     program_frames = to_frames(program_end - program_start, frame_duration)
     if program_frames <= 0:
-        raise WriteError("Ohjelman kesto on nolla.")
+        raise WriteError(t("write.zero_duration"))
 
     spans = _quantize(segments, program_start, program_frames, frame_duration)
     if not spans:
-        raise WriteError("Leikkauskohdat kutistuivat tyhjiksi.")
+        raise WriteError(t("write.cuts_collapsed"))
     used_segments = [segment for segment, _, _ in spans]
 
     counter = [0]
@@ -212,7 +213,7 @@ def build_fcpxml(
     for key in needed:
         item = media_by_key.get(key)
         if item is None:
-            raise WriteError(f"Mediaa ei löydy: {key}")
+            raise WriteError(t("write.media_missing", key=key))
         fmt_id = None
         if item.has_video:
             fd = item.frame_duration or frame_duration
@@ -243,7 +244,7 @@ def build_fcpxml(
         placement = item.placement_at(seg_start_tl) or (
             item.placements[0] if item.placements else None)
         if placement is None:
-            raise WriteError(f"Medialla {seg.angle} ei ole paikkaa aikajanalla.")
+            raise WriteError(t("write.no_placement", key=seg.angle))
         src_start = placement.source_at(seg_start_tl)
         src_frames = to_frames(src_start, frame_duration)
         if index == 0:
@@ -481,7 +482,7 @@ def _source_resources(path: str, redirects: dict[str, str] | None = None,
     root = tree.getroot()
     resources = root.find("resources")
     if resources is None:
-        raise WriteError("Lähde-XML:stä ei löydy <resources>-lohkoa.")
+        raise WriteError(t("write.no_resources"))
     sequence = root.find(".//sequence")
     seq_format = sequence.get("format", "") if sequence is not None else ""
 
@@ -559,20 +560,20 @@ def build_multicam_fcpxml(
     sellaisenaan, joten multicamin sisäinen synkkaus säilyy bittiä myöten.
     """
     if not segments:
-        raise WriteError("Leikkauslista on tyhjä.")
+        raise WriteError(t("write.empty_cut"))
     if not timeline.multicams:
-        raise WriteError("Aikajanalla ei ole monikameraklippejä.")
+        raise WriteError(t("write.not_multicam"))
 
     frame_duration = timeline.frame_duration
     program_frames = to_frames(program_end - program_start, frame_duration)
     if program_frames <= 0:
-        raise WriteError("Ohjelman kesto on nolla.")
+        raise WriteError(t("write.zero_duration"))
 
     spans = _quantize(segments, program_start, program_frames, frame_duration)
     spans = _split_spans(spans, _boundaries(timeline, program_start,
                                             frame_duration, program_frames))
     if not spans:
-        raise WriteError("Leikkauskohdat kutistuivat tyhjiksi.")
+        raise WriteError(t("write.cuts_collapsed"))
 
     angles_of = {t.key: t.angle_ids for t in timeline.tracks}
 

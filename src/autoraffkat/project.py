@@ -67,6 +67,7 @@ class ProjectSettings:
     tracks: dict[str, TrackConfig] = field(default_factory=dict)
     globals: Globals = field(default_factory=Globals)
     audio: AudioSettings = field(default_factory=AudioSettings)
+    language: str = ""             # "" = järjestelmän mukaan
 
     def config_for(self, key: str) -> TrackConfig:
         """Raidan asetukset, oletuksilla luotuna jos raitaa ei ole ennen nähty."""
@@ -81,6 +82,7 @@ class ProjectSettings:
             "version": FORMAT_VERSION,
             "globals": self.globals.to_json(),
             "audio": self.audio.to_json(),
+            "language": self.language,
             "tracks": {k: v.to_json() for k, v in self.tracks.items()},
         }
 
@@ -91,7 +93,8 @@ class ProjectSettings:
                   if isinstance(v, dict)}
         return cls(tracks=tracks,
                    globals=Globals.from_json(data.get("globals") or {}),
-                   audio=AudioSettings.from_json(data.get("audio") or {}))
+                   audio=AudioSettings.from_json(data.get("audio") or {}),
+                   language=str(data.get("language") or ""))
 
 
 def find_previous(xml_path: str) -> str | None:

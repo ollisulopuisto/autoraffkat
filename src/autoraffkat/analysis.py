@@ -16,6 +16,7 @@ import numpy as np
 from .audio.envelope import FLOOR_DB, EnvelopeError, envelope_for
 from .decide import Grid, SpeakerLanes
 from .fcpxml.read import Timeline
+from .i18n import t
 from .model import (HOP, ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, MediaItem,
                     TrackConfig)
 
@@ -177,7 +178,7 @@ def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
         elif cfg.role == ROLE_MIC:
             name = cfg.speaker.strip()
             if not name:
-                roles.problems.append(f"Mikille «{track.name}» ei ole puhujaa.")
+                roles.problems.append(t("roles.mic_without_speaker", name=track.name))
                 continue
             if name not in roles.speakers:
                 roles.speakers.append(name)
@@ -185,27 +186,24 @@ def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
         elif cfg.role == ROLE_CLOSE:
             name = cfg.speaker.strip()
             if not name:
-                roles.problems.append(f"Lähikuvalle «{track.name}» ei ole puhujaa.")
+                roles.problems.append(t("roles.close_without_speaker", name=track.name))
                 continue
             if name not in roles.speakers:
                 roles.speakers.append(name)
             roles.closes[name] = track.key
 
     if not roles.wide_key:
-        roles.problems.append("Valitse yksi media laajaksi kuvaksi.")
+        roles.problems.append(t("roles.no_wide"))
     if not roles.mics:
-        roles.problems.append("Valitse ainakin yksi mikki ja anna sille puhuja.")
+        roles.problems.append(t("roles.no_mic"))
     for name in roles.speakers:
         if name not in roles.mics:
-            roles.problems.append(f"Puhujalta «{name}» puuttuu mikki.")
+            roles.problems.append(t("roles.speaker_without_mic", name=name))
     # Ilman yhtäkään lähikuvaa päätös on kelvollinen mutta hyödytön: koko
     # ohjelma olisi yhtä laajaa kuvaa. Se on roolituksen puute eikä tulos,
     # joten se sanotaan ääneen eikä viedä XML:ksi.
     if roles.mics and not roles.closes:
-        roles.problems.append(
-            "Yhdelläkään puhujalla ei ole lähikuvaa, joten koko leikkaus olisi "
-            "laajaa. Anna vähintään yhdelle kameralle rooli «Lähikuva» ja "
-            "puhujan nimi.")
+        roles.problems.append(t("roles.no_closeups"))
     return roles
 
 
@@ -233,10 +231,7 @@ def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
     program_start, program_end = program_range(timeline, roles)
     span = float(program_end - program_start)
     if span <= 1.0:
-        raise AnalysisError(
-            "Laajalla kuvalla ja mikeillä ei ole yhteistä aikaa. "
-            "Tarkista roolit ja lähde-XML:n synkkaus."
-        )
+        raise AnalysisError(t("analysis.no_overlap"))
     n = int(span / HOP)
 
     lanes: list[SpeakerLanes] = []

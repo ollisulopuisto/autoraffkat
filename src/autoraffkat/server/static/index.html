@@ -14,7 +14,8 @@
   </div>
   <div class="actions">
     <span id="status" class="muted"></span>
-    <button id="reload" class="ghost" title="Lue XML uudestaan">Lue uudestaan</button>
+    <span id="language" class="langs"></span>
+    <button id="reload" class="ghost">Lue uudestaan</button>
     <button id="export" class="primary">Vie XML <kbd>⌘E</kbd></button>
   </div>
 </header>
@@ -23,33 +24,33 @@
 
 <main>
   <section class="panel tracks">
-    <h2>Raidat</h2>
-    <h3 class="group">Kuva</h3>
+    <h2 data-t="app.tracks">Raidat</h2>
+    <h3 class="group" data-t="app.group.video">Kuva</h3>
     <div id="video-tracks"></div>
-    <h3 class="group">Ääni</h3>
+    <h3 class="group" data-t="app.group.audio">Ääni</h3>
     <div id="audio-tracks"></div>
     <datalist id="speaker-names"></datalist>
   </section>
 
   <section class="panel globals">
-    <h2>Globaalit säätimet</h2>
+    <h2 data-t="app.globals">Globaalit säätimet</h2>
     <div id="global-list"></div>
 
-    <h3>Pitkä puheenvuoro</h3>
+    <h3 data-t="app.longtake">Pitkä puheenvuoro</h3>
     <div id="longtake-params"></div>
     <div id="longtake-rules" class="rules"></div>
 
-    <h3>Päällekkäispuhe</h3>
+    <h3 data-t="app.overlap">Päällekkäispuhe</h3>
     <div id="overlap-rules" class="rules"></div>
     <div id="overlap-params"></div>
 
-    <h3>Ääni</h3>
+    <h3 data-t="app.audio">Ääni</h3>
     <div id="audio-panel"></div>
     <datalist id="plugin-names"></datalist>
 
-    <h3>Projekti</h3>
+    <h3 data-t="app.project">Projekti</h3>
     <label class="field">
-      <span>Nimi</span>
+      <span data-t="app.name">Nimi</span>
       <input id="project-title" type="text" autocomplete="off">
     </label>
     <p class="muted small" id="paths"></p>
@@ -58,7 +59,7 @@
 
 <section class="panel preview">
   <div class="preview-head">
-    <h2>Esikatselu</h2>
+    <h2 data-t="app.preview">Esikatselu</h2>
     <span id="counts" class="muted"></span>
   </div>
   <canvas id="bar" height="120"></canvas>
@@ -68,17 +69,18 @@
 
 <section class="panel cuts">
   <div class="preview-head">
-    <h2>Leikkauslista</h2>
+    <h2 data-t="app.cuts">Leikkauslista</h2>
     <span id="cut-summary" class="muted"></span>
   </div>
   <div class="table-wrap">
     <table id="cut-table">
-      <thead><tr><th>#</th><th>Alku</th><th>Loppu</th><th>Kesto</th><th>Kuva</th></tr></thead>
+      <thead><tr><th data-t="table.index">#</th><th data-t="table.start">Alku</th><th data-t="table.end">Loppu</th><th data-t="table.duration">Kesto</th><th data-t="table.shot">Kuva</th></tr></thead>
       <tbody></tbody>
     </table>
   </div>
 </section>
 
+<script src="/static/i18n.js"></script>
 <script src="/static/app.js"></script>
 </body>
 </html>

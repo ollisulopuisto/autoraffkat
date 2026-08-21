@@ -100,6 +100,19 @@ koko tuonnin. `clip` ja `asset-clip` tuntevat sen, `mc-clip` ei.
 Johdetut tiedostot eivät mene `.fcpxmld`-paketin sisään vaan sen viereen ja
 saavat paketin nimen. Paketti kuuluu Final Cutille.
 
+## Käyttäjälle näkyvä teksti käännetään, koodi ei
+
+Kaikki mitä käyttäjä lukee kulkee käännöksen läpi: palvelimen viestit
+`i18n.py`:n `t()`-funktiolla, selaimen tekstit `static/i18n.js`:n
+`T()`-funktiolla. Uusi virheilmoitus tarkoittaa uutta avainta molempiin
+kieliin — kovakoodattu merkkijono näkyy väärällä kielellä eikä kukaan huomaa
+sitä ennen kuin käyttäjä valittaa.
+
+Koodi, kommentit ja docstringit pysyvät suomeksi. Ne ovat tekijöille.
+
+Kieli on `ContextVar`issa, ei globaalina: äänenkäsittely ajetaan
+taustasäikeessä samaan aikaan kun käyttöliittymä pyytää tilaa.
+
 ## Staattiset tiedostot versioidaan
 
 `index.html` tarjoillaan niin että `app.js` ja `style.css` saavat

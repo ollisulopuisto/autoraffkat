@@ -20,6 +20,8 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .. import probe, project, thumbs
+from ..i18n import LANGUAGES, t
+from .. import i18n
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
 from ..decide import decide
@@ -48,6 +50,7 @@ class AppState:
     progress: dict = field(default_factory=lambda: {"done": 0, "total": 0,
                                                     "current": "", "ready": False})
     load_error: str = ""
+    language: str = field(default_factory=i18n.detect)
     inherited_from: str = ""        # mistä roolit perittiin, "" jos ei mistään
     mix_result: mix.MixResult = field(default_factory=mix.MixResult)
     mix_progress: dict = field(default_factory=lambda: {
@@ -77,6 +80,10 @@ class AppState:
             self.analysis = Analysis(timeline=timeline)
             self.settings = project.load(self.xml_path)
             self._seed_defaults()
+            # Kieli vasta perinnän jälkeen: uudella jaksolla ei ole omia
+            # asetuksia, ja kieli tulee edellisestä kuten muutkin.
+            if self.settings.language:
+                self.language = i18n.normalise(self.settings.language)
         threading.Thread(target=self._analyze, daemon=True).start()
 
     def _inherit(self) -> set[str]:
@@ -103,6 +110,7 @@ class AppState:
         # samat viikosta toiseen samalla kokoonpanolla.
         self.settings.globals = previous.globals
         self.settings.audio = previous.audio
+        self.settings.language = previous.language
         self.inherited_from = source or ""
         return matched
 
@@ -147,7 +155,7 @@ class AppState:
             with self.lock:
                 self.analysis = result
         except Exception as exc:                      # taustasäie ei saa kaatua hiljaa
-            self.load_error = f"Verhokäyrien laskenta epäonnistui: {exc}"
+            self.load_error = t("audio.envelope_failed", error=exc)
             traceback.print_exc()
         finally:
             self.progress["ready"] = True
@@ -229,8 +237,8 @@ class AppState:
                 program_start = float(start)
             except AnalysisError as exc:
                 self.mix_progress["running"] = False
-                self.mix_result = mix.MixResult(errors={"duck": (
-                    f"Vaimennusta ei voi ohjata: {exc}")})
+                self.mix_result = mix.MixResult(
+                    errors={"duck": t("audio.duck_failed", error=exc)})
                 return
 
         def report(done: int, total: int, current: str, eta: float = 0.0) -> None:
@@ -259,7 +267,7 @@ class AppState:
         lasketa kahdesti. Se poistetaan ennen JSONiksi kirjoittamista.
         """
         if self.timeline is None or self.analysis is None:
-            raise HTTPException(409, self.load_error or "XML:ää ei ole luettu.")
+            raise HTTPException(409, self.load_error or t("export.not_loaded"))
         started = time.perf_counter()
         roles = resolve_roles(self.timeline, self.settings.tracks)
         problems = list(roles.problems)
@@ -314,11 +322,10 @@ def _audio_warnings(state: AppState, roles, replacements: dict) -> list[str]:
     if not missing:
         return []
     if state.mix_progress.get("running"):
-        return [f"Äänen käsittely on kesken, joten {len(missing)}/{len(expected)} "
-                "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "
-                "käsittely on valmis — ennen kuin leikkaat Final Cutissa."]
-    return [f"{len(missing)}/{len(expected)} mikkitiedostoa viedään "
-            "käsittelemättömänä: käsittelyä ei ole ajettu tai se epäonnistui."]
+        return [t("export.audio_running", missing=len(missing),
+                  total=len(expected))]
+    return [t("export.audio_missing", missing=len(missing),
+              total=len(expected))]
 
 
 def _track_json(state: AppState, track) -> dict:
@@ -381,6 +388,8 @@ def _state_json(state: AppState) -> dict:
         "globals": state.settings.globals.to_json(),
         "progress": state.progress,
         "inherited_from": state.inherited_from,
+        "language": state.language,
+        "languages": list(LANGUAGES),
         "audio": state.settings.audio.to_json(),
         "mix": {
             "progress": state.mix_progress,
@@ -402,6 +411,26 @@ def create_app(state: AppState) -> FastAPI:
     """
     app = FastAPI(title="autoraffkat", docs_url=None, redoc_url=None)
 
+    @app.middleware("http")
+    async def use_language(request, call_next):
+        """Kieli pyynnön kontekstiin ennen kuin mitään viestejä syntyy."""
+        i18n.set_language(state.language)
+        return await call_next(request)
+
+    @app.post("/api/language")
+    def set_language(payload: dict):
+        """Käyttöliittymän kieli. Tallentuu asetuksiin ja periytyy jaksosta
+        toiseen, kuten muutkin asetukset."""
+        state.language = i18n.normalise(payload.get("language"))
+        i18n.set_language(state.language)
+        with state.lock:
+            state.settings.language = state.language
+            try:
+                project.save(state.xml_path, state.settings)
+            except OSError:
+                pass                       # kieli ei ole tallentamisen arvoinen virhe
+        return {"language": state.language, "languages": list(LANGUAGES)}
+
     @app.get("/")
     def index():
         """Käyttöliittymän sivu, tyyli ja skripti muokkausajalla versioituna.
@@ -410,7 +439,7 @@ def create_app(state: AppState) -> FastAPI:
         tulos on rikkinäinen tavalla jota kukaan ei osaa yhdistää välimuistiin.
         """
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        for name in ("app.js", "style.css"):
+        for name in ("app.js", "i18n.js", "style.css"):
             stamp = int((STATIC_DIR / name).stat().st_mtime)
             html = html.replace(f"/static/{name}", f"/static/{name}?v={stamp}")
         return Response(html, media_type="text/html")
@@ -424,7 +453,7 @@ def create_app(state: AppState) -> FastAPI:
         latausvaiheeseen — selain pyytää nämä omaan tahtiinsa.
         """
         if state.timeline is None:
-            raise HTTPException(404, "XML:ää ei ole luettu.")
+            raise HTTPException(404, t("export.not_loaded"))
         for item in state.timeline.track_media(track):
             path = thumbs.for_item(item)
             if path:
@@ -472,7 +501,7 @@ def create_app(state: AppState) -> FastAPI:
                 project.save(state.xml_path, state.settings)
             except OSError as exc:
                 result.setdefault("problems", []).append(
-                    f"Asetuksia ei voitu tallentaa: {exc}")
+                    t("export.settings_failed", error=exc))
         return result
 
     @app.post("/api/export")
@@ -499,12 +528,11 @@ def create_app(state: AppState) -> FastAPI:
                     mic_tracks.append((key, name))
             out_path = project.default_output_path(state.xml_path)
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
-                raise HTTPException(400, "Vienti osuisi lähde-XML:n päälle.")
+                raise HTTPException(400, t("export.would_overwrite"))
             if os.path.dirname(out_path).endswith(project.BUNDLE_EXT):
                 # Paketti kuuluu Final Cutille. Jos polku joskus laskettaisiin
                 # sinne, se on virhe eikä asia jota yritetään silti.
-                raise HTTPException(
-                    400, "Vienti osuisi Final Cutin .fcpxmld-paketin sisään.")
+                raise HTTPException(400, t("export.inside_bundle"))
             try:
                 # Käsitelty ääni otetaan mukaan jos se on olemassa ja
                 # ajan tasalla. Vanhentunutta ei käytetä hiljaa.
@@ -548,7 +576,7 @@ def create_app(state: AppState) -> FastAPI:
         seuraavat viennit käyttävät niitä ilman uutta ajoa.
         """
         if state.timeline is None:
-            raise HTTPException(409, state.load_error or "XML:ää ei ole luettu.")
+            raise HTTPException(409, state.load_error or t("export.not_loaded"))
         if state.mix_progress.get("running"):
             return {"ok": True, "running": True}
         with state.lock:
@@ -564,7 +592,7 @@ def create_app(state: AppState) -> FastAPI:
         """Näytä tiedosto Finderissa — pikku mukavuus vientipainikkeen viereen."""
         path = str(payload.get("path", ""))
         if not path or not os.path.exists(path):
-            raise HTTPException(404, "Tiedostoa ei ole.")
+            raise HTTPException(404, t("export.file_missing"))
         os.system(f"open -R {path!r}")
         return {"ok": True}
 

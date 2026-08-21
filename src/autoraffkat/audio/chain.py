@@ -33,6 +33,8 @@ from pathlib import Path
 
 import numpy as np
 
+from ..i18n import t
+
 # Ylipäästön jyrkkyys ja kompressorien ajat. automixer ilmaisi kompressorin
 # RMS-ikkunana; pedalboard puhuu hyökkäys- ja palautusajoista, joten nopea ja
 # hidas vaihe on kirjoitettu tähän auki.
@@ -84,12 +86,12 @@ def load_plugin(path: str):
     if not path:
         return None
     if not os.path.exists(path):
-        raise ChainError(f"Liitännäistä ei löydy: {path}")
+        raise ChainError(t("audio.plugin_missing", path=path))
     try:
         return pedalboard.load_plugin(path)
     except Exception as exc:
-        raise ChainError(
-            f"Liitännäistä ei voitu ladata: {os.path.basename(path)} — {exc}") from exc
+        raise ChainError(t("audio.plugin_failed",
+                           name=os.path.basename(path), error=exc)) from exc
 
 
 def loudness(mono: np.ndarray, rate: int) -> float | None:
@@ -231,8 +233,8 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     if plugin is not None:
         audio = plugin.process(audio, rate, reset=True)
         if audio.shape[1] != frames:
-            raise ChainError(
-                f"Liitännäinen muutti pituutta ({frames} → {audio.shape[1]}).")
+            raise ChainError(t("audio.plugin_length", before=frames,
+                               after=audio.shape[1]))
 
     # 2.–3. Siivous ennen mittausta.
     cleanup = _board(
@@ -288,8 +290,8 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
         lift += trimmed
 
     if audio.shape[1] != frames:
-        raise ChainError(
-            f"Käsittely muutti pituutta ({frames} → {audio.shape[1]}).")
+        raise ChainError(t("audio.chain_length", before=frames,
+                           after=audio.shape[1]))
 
     lag = lag_samples(original, audio[0], rate) if original is not None else 0
     return audio, ChainResult(frames=frames, channels=audio.shape[0],

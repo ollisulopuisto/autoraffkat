@@ -462,3 +462,48 @@ def test_index_versions_its_assets(scratch_xml):
     body = TestClient(create_app(state)).get("/").text
     assert "/static/app.js?v=" in body
     assert "/static/style.css?v=" in body
+
+
+def test_server_messages_follow_the_language(scratch_xml):
+    """Suomenkielinen banneri englanninkielisessä käyttöliittymässä on
+    huonompi kuin ei käännöstä lainkaan."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+
+    client.post("/api/language", json={"language": "en"})
+    result = client.post("/api/settings", json={"tracks": {}, "globals": {}}).json()
+    assert not result["ok"]
+    assert any("No speaker has a close-up" in p for p in result["problems"]), \
+        result["problems"]
+
+    client.post("/api/language", json={"language": "fi"})
+    result = client.post("/api/settings", json={"tracks": {}, "globals": {}}).json()
+    assert any("Yhdelläkään puhujalla" in p for p in result["problems"]), \
+        result["problems"]
+
+
+def test_language_is_remembered_and_inherited(fixture_dir, tmp_path):
+    """Kieli valitaan kerran, ei joka jaksossa."""
+    import shutil
+    from autoraffkat import project
+
+    previous = tmp_path / "jakso53.fcpxmld"
+    previous.mkdir()
+    settings = project.ProjectSettings(tracks={k: v for k, v in _multicam_tracks().items()})
+    settings.language = "en"
+    project.save(str(previous / "Info.fcpxml"), settings)
+
+    current = tmp_path / "jakso54.fcpxmld"
+    current.mkdir()
+    shutil.copy(fixture_dir / "multicam.fcpxml", current / "Info.fcpxml")
+    state = AppState(xml_path=str(current / "Info.fcpxml"))
+    state.load()
+    assert state.language == "en"
+
+
+def test_unknown_language_falls_back(scratch_xml):
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    assert client.post("/api/language", json={"language": "kl"}).json()["language"] == "fi"

@@ -138,11 +138,12 @@ src/autoraffkat/
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
   preview.py         palkin tiivistys selaimelle
   project.py         asetukset JSONina XML:n viereen
+  i18n.py            palvelimen viestit kahdella kielellä
   probe.py           tiedostojen tekniset tiedot ffprobella
   thumbs.py          ruutu kameratiedoston puolivälistä
   pick.py            lähteen etsintä ja valinta käynnistyksessä
   server/app.py      HTTP-rajapinta
-  server/static/     käyttöliittymä
+  server/static/     käyttöliittymä (i18n.js = selaimen tekstit)
 ```
 
 Yksityiskohtainen perustelu: [`DESIGN.md`](DESIGN.md).
@@ -304,6 +305,19 @@ Siitä tulee varoitus vientipainikkeen jälkeen.
 **Uusi vienti ei tuo Final Cutissa tehtyjä muokkauksia mukanaan.** Se on uusi
 projekti. Siksi käsittely kannattaa ajaa loppuun ennen kuin viet ja alat
 leikata.
+
+## Kieli
+
+Käyttöliittymä on suomeksi ja englanniksi; valitsin on otsikkorivillä.
+Oletuskieli tulee järjestelmästä (`AUTORAFFKAT_LANG`, `LANG`), ja valinta
+tallentuu asetuksiin ja periytyy jaksosta toiseen kuten muutkin asetukset.
+
+Myös palvelimen viestit käännetään: englanninkielisessä käyttöliittymässä ei
+näy suomenkielisiä virheilmoituksia. Selaimen tekstit ovat
+`server/static/i18n.js`:ssä ja palvelimen `i18n.py`:ssä.
+
+Koodi, kommentit ja docstringit ovat suomeksi. Ne ovat tekijöille, eivät
+käyttäjälle.
 
 ## Raitalista
 

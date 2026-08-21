@@ -33,6 +33,7 @@ from pathlib import Path
 import numpy as np
 
 from ..decide import _runs, drop_short, open_windows, trim_end
+from ..i18n import t
 from ..model import HOP, AudioSettings
 from . import chain
 from .chain import ChainError
@@ -127,10 +128,10 @@ def ensure_readable(path: str) -> str:
              "-c:a", "pcm_f32le", str(tmp)],
             capture_output=True, text=True, timeout=TIMEOUT)
     except (OSError, subprocess.TimeoutExpired) as exc:
-        raise MixError(f"Äänen purku epäonnistui: {exc}") from exc
+        raise MixError(t("audio.extract_failed", name=exc)) from exc
     if done.returncode != 0 or not tmp.exists():
         tail = (done.stderr or "").strip().splitlines()
-        raise MixError(f"Äänen purku epäonnistui: {os.path.basename(path)}"
+        raise MixError(t("audio.extract_failed", name=os.path.basename(path))
                        + (f" — {tail[-1]}" if tail else ""))
     tmp.replace(target)
     return str(target)
@@ -223,7 +224,8 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
         audio = handle.read(handle.frames)
         rate = handle.samplerate
     if audio.shape[1] == 0:
-        raise MixError(f"Tyhjä äänitiedosto: {os.path.basename(job['source'])}")
+        raise MixError(t("audio.empty_file",
+                         name=os.path.basename(job["source"])))
     if job.get("mono") and audio.shape[0] > 1:
         audio = audio.mean(axis=0, keepdims=True)
 
@@ -242,10 +244,9 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
-        raise MixError(
-            f"Liitännäinen siirsi ääntä {info.lag} näytettä "
-            f"({info.lag / rate * 1000:.0f} ms): {os.path.basename(job['source'])}. "
-            "Kuva ja ääni erkanisivat, joten tulosta ei käytetä.")
+        raise MixError(t("audio.plugin_shifted", samples=info.lag,
+                         ms=info.lag / rate * 1000,
+                         name=os.path.basename(job["source"])))
 
     tmp = job["target"] + ".tmp.wav"
     with AudioFile(tmp, "w", rate, audio.shape[0],
@@ -254,9 +255,9 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
     written = frame_count(tmp)
     if written is not None and written != info.frames:
         os.remove(tmp)
-        raise MixError(
-            f"Kirjoitettu tiedosto on eri pituinen ({info.frames} → {written}): "
-            f"{os.path.basename(job['source'])}.")
+        raise MixError(t("audio.written_length", before=info.frames,
+                         after=written,
+                         name=os.path.basename(job["source"])))
     os.replace(tmp, job["target"])
     return info.gain_db
 
@@ -333,7 +334,8 @@ def process(timeline, roles, settings: AudioSettings, grid=None,
     todo = []
     for job in jobs:
         if not os.path.exists(job["source"]):
-            result.errors[job["key"]] = f"Lähdetiedostoa ei löydy: {job['source']}"
+            result.errors[job["key"]] = t("audio.source_missing",
+                                          path=job["source"])
         elif is_current(job["source"], job["target"]):
             result.skipped += 1
             _record(result, job)
