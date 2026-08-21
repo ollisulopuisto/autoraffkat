@@ -81,6 +81,14 @@ kirjasto ei tee mitä nimi lupaa, molemmat mitattuja:
   −15,8:aan ja huiput nollaan. Tilalla on `peak_guard`, staattinen vaimennus
   joka ei koskaan nosta.
 
+## Mikki kulmaan, tilaääni lanelle — ja miksi
+
+Mikkiääni menee vientiin monikameraklipin sisään (`mc-source`), joten se ei
+voi irrota synkasta vaikka käyttäjä leikkaisi Final Cutissa miten tahansa.
+Tilaääni on liitetty klippi, koska `mc-source` ei tunne tasoa — ja siksi se
+**voi** irrota rippausleikkauksessa. Jos tilaäänelle joskus keksii tavan
+mennä kulmaksi tasoineen, se on parannus.
+
 ## Final Cut on ankarampi kuin oma lukija
 
 Vienti on tarkistettava Final Cutin omaa DTD:tä vasten

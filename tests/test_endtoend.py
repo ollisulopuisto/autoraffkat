@@ -352,3 +352,41 @@ def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
     assert result["ok"] and result["mixed"] == 0
     assert "%5Bmix%5D" not in ET.tostring(ET.parse(result["path"]).getroot(),
                                           encoding="unicode")
+
+
+def test_export_warns_when_audio_is_still_processing(scratch_xml):
+    """Kesken käsittelyn vietäessä tulos on ehjä mutta käsittelemätön.
+
+    Sitä ei huomaa Final Cutissa ennen kuin kuuntelee, ja silloin leikkaus on
+    jo tehty — uusi vienti ei tuo tehtyjä muokkauksia mukanaan.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+    state.settings.audio.enabled = True
+    state.mix_progress["running"] = True
+
+    client = TestClient(create_app(state))
+    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+               "globals": {}, "audio": {"enabled": True}}
+    result = client.post("/api/export", json=payload).json()
+    assert result["ok"] and result["mixed"] == 0
+    assert any("kesken" in w for w in result["warnings"])
+
+
+def test_export_is_quiet_when_audio_is_off(scratch_xml):
+    """Ilman äänenkäsittelyä ei ole mitään varoitettavaa."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+    client = TestClient(create_app(state))
+    result = client.post("/api/export", json={
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": {}, "audio": {"enabled": False}}).json()
+    assert result["ok"] and result["warnings"] == []

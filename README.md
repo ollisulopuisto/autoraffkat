@@ -237,6 +237,28 @@ leikkaukseen roolilla `effects.Tilaääni` asetetun verran puhetta hiljemmalle.
 Se ei ole kulma vaan liitetty klippi, joten se jatkuu leikkausten yli.
 Kompressointia siihen ei tehdä: kompressoitu tilaääni pumppaa.
 
+### Järjestys: käsittele, vie, leikkaa
+
+Tässä järjestyksessä ja tästä syystä:
+
+**Mikkiääni ei voi irrota synkasta Final Cutissa.** Se menee vientiin
+monikameraklipin sisään (`mc-source srcEnable="audio"`), joten kuva ja ääni
+liikkuvat yhdessä riippumatta siitä miten leikkaat.
+
+**Tilaääni voi irrota.** Se on liitetty klippi lanella −1, koska `mc-source`
+ei tunne tasoa. Jos poistat aikajanalta jakson ja suljet aukon, tarina
+lyhenee mutta liitetty klippi ei — tilaääni siirtyy poistetun verran. Katkaise
+tilaääni samasta kohdasta, tai jätä se pois jos aiot leikata paljon.
+
+**Vienti kesken käsittelyn on ehjä mutta käsittelemätön.** Tiedostot
+kirjoitetaan väliaikaisen kautta, joten puolikasta ei näy koskaan — mutta
+vienti viittaa vain valmiisiin, eli keskeneräiset jäävät raa'aksi ääneksi.
+Siitä tulee varoitus vientipainikkeen jälkeen.
+
+**Uusi vienti ei tuo Final Cutissa tehtyjä muokkauksia mukanaan.** Se on uusi
+projekti. Siksi käsittely kannattaa ajaa loppuun ennen kuin viet ja alat
+leikata.
+
 ## Rajaukset
 
 Videon toisto ja aaltomuodon piirto eivät kuulu tähän versioon.

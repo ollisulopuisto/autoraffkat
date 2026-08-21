@@ -270,6 +270,30 @@ class AppState:
         }
 
 
+def _audio_warnings(state: AppState, roles, replacements: dict) -> list[str]:
+    """Kertoo jos vienti käyttää raakaa ääntä vaikka käsittely on päällä.
+
+    Vienti viittaa vain valmiisiin tiedostoihin, joten kesken käsittelyn
+    vietäessä tulos on ehjä mutta käsittelemätön. Se on juuri sellainen ero
+    jota ei huomaa Final Cutissa ennen kuin kuuntelee — ja silloin leikkaus on
+    jo tehty, eikä uusi vienti tuo tehtyjä muokkauksia mukanaan.
+    """
+    if state.timeline is None or not state.settings.audio.enabled:
+        return []
+    expected = {item.key
+                for keys in roles.mics.values() for key in keys
+                for item in state.timeline.track_media(key) if item.path}
+    missing = expected - set(replacements)
+    if not missing:
+        return []
+    if state.mix_progress.get("running"):
+        return [f"Äänen käsittely on kesken, joten {len(missing)}/{len(expected)} "
+                "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "
+                "käsittely on valmis — ennen kuin leikkaat Final Cutissa."]
+    return [f"{len(missing)}/{len(expected)} mikkitiedostoa viedään "
+            "käsittelemättömänä: käsittelyä ei ole ajettu tai se epäonnistui."]
+
+
 def _track_json(state: AppState, track) -> dict:
     """Yksi raita käyttöliittymälle: rooli, säätimet ja osat.
 
@@ -420,6 +444,7 @@ def create_app(state: AppState) -> FastAPI:
                 replacements = {k: v for k, v in result.replacements.items()
                                 if os.path.exists(v)}
                 room = [(k, v) for k, v in result.room if os.path.exists(v)]
+                warnings = _audio_warnings(state, roles, replacements)
                 if state.timeline.multicams:
                     # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman
                     # voi vaihtaa Final Cutissa jälkikäteen.
@@ -442,7 +467,8 @@ def create_app(state: AppState) -> FastAPI:
                 raise HTTPException(400, str(exc)) from exc
             project.save(state.xml_path, state.settings)
         return {"ok": True, "path": out_path, "cuts": len(decision.segments),
-                "mixed": len(replacements), "room": len(room)}
+                "mixed": len(replacements), "room": len(room),
+                "warnings": warnings}
 
     @app.post("/api/mix")
     def run_mix(payload: dict | None = None):

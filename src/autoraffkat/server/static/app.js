@@ -694,7 +694,7 @@ async function exportXml() {
       const mixed = data.mixed ? ` · ${data.mixed} käsiteltyä ääntä` : '';
       $('status').textContent =
         `${data.cuts} kuvaa → ${data.path.split('/').pop()}${mixed}`;
-      banner('');
+      banner((data.warnings || []).join('\n'));
     } else {
       $('status').textContent = '';
       banner((data.problems || [data.detail || 'Vienti epäonnistui']).join('\n'), true);
