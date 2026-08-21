@@ -120,148 +120,166 @@ main {
 
 /* ------------------------------------------------------------ raidat */
 
-/* Raitarivi. Sama kolmen sarakkeen ruudukko kuvalla ja äänellä: pikkukuva
-   vasemmalla, nimi ja tekniset tiedot keskellä, säätimet oikealla kiinteän
-   levyisenä. Mikkirivi näyttää parinsa kuvan, joten sarake varataan
-   molemmille — muuten rivit eivät osu samalle linjalle eikä paria näe.
-   Nimi ei saa venyttää saraketta: pitkiä tiedostonimiä on aina. */
-/* Raitalista on piuhojen tausta: paneelin vasen reuna jätetään vapaaksi,
-   koska piuha kulkee siellä eikä saa mennä rivin päältä. */
-.panel.tracks { position: relative; padding-left: 58px; }
-.cables {
-  position: absolute; inset: 0;
-  pointer-events: none;
-  z-index: 2;
-}
+/* Kytkentätaulu. Rivi on paikka: kuva vasemmalla, ääni oikealla ja puhujan
+   nimi kerran keskellä. Pari on siis kahden vierekkäisen solun asia eikä
+   kahden kaukana toisistaan olevan rivin — piuha on vaakasuora viiva, jota ei
+   tarvitse mitata eikä piirtää uudestaan, ja ristiin menevä piuha on
+   mahdottomuus eikä vältettävä tilanne. */
 
-.track {
+.patch { display: flex; flex-direction: column; gap: 6px; }
+
+.slot {
   --tint: var(--line);
   display: grid;
-  grid-template-columns: 96px 132px minmax(0, 1fr) 290px;
-  gap: 6px 14px;
-  align-items: center;
-  padding: 12px 8px;
-  border-top: 1px solid var(--line);
-  border-left: 4px solid transparent;
-  border-radius: 6px;
-  transition: background-color .15s ease, border-left-color .15s ease,
-              box-shadow .15s ease, opacity .15s ease;
-}
-.track:first-child { border-top: 0; }
-
-/* Puhujan väri on koko rivin sävy, ei vain reunapalkki: pari tunnistuu siitä
-   että kaksi riviä ovat samanvärisiä, vaikka niiden välissä on ryhmäotsikko. */
-.track.is-tinted {
-  border-left-color: var(--tint);
-  background: color-mix(in srgb, var(--tint) 7%, transparent);
-}
-.track.is-highlighted { background: color-mix(in srgb, var(--tint) 18%, transparent); }
-.track.is-pinned {
-  background: color-mix(in srgb, var(--tint) 20%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--tint) 60%, transparent);
-}
-.track.is-dimmed { opacity: .3; }
-
-/* Pikkukuvan paikka varataan aina, jotta sarakkeet pysyvät linjassa myös
-   rivillä jolla kuvaa ei ole. */
-.track .thumb-slot { position: relative; width: 132px; aspect-ratio: 16 / 9; }
-.track .thumb {
-  width: 100%; height: 100%;
-  border-radius: 5px; object-fit: cover;
-  background: #12151b; display: block;
-}
-.track .thumb-missing { visibility: hidden; }
-
-/* Mikkirivin peilikuva: parin kamera himmeänä ja mikkimerkillä, jottei sitä
-   sekoita kuvaraitaan. Ääniraidasta ei näe kasvoja, ja juuri kasvot kertovat
-   kenen mikki on. */
-.thumb-slot.mirror .thumb { opacity: .5; }
-.thumb-slot.mirror::after {
-  content: ""; position: absolute; inset: 0; border-radius: 5px;
-  border: 1px solid color-mix(in srgb, var(--tint) 55%, transparent);
-}
-.thumb-slot .badge {
-  position: absolute; left: 5px; bottom: 5px;
-  width: 20px; height: 20px; border-radius: 50%;
-  display: flex; align-items: center; justify-content: center;
-  background: rgba(10, 12, 16, .82);
-  border: 1px solid var(--tint);
-  color: var(--tint);
-}
-.thumb-slot .badge svg { width: 11px; height: 11px; display: block; }
-
-/* Pari puuttuu: tyhjä paikka näyttää sen, pelkkä teksti ei. */
-.thumb-slot.unlinked {
-  border: 1px dashed var(--warn);
-  border-radius: 5px;
-  opacity: .45;
+  grid-template-columns: minmax(0, 1fr) 132px minmax(0, 1fr);
+  align-items: stretch;
 }
 
-.track .meta { min-width: 0; }
-.track .pinnable { cursor: pointer; }
-.track .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis;
-               white-space: nowrap; }
-.track .tags { font-size: 11px; color: var(--muted); margin-top: 3px;
-               line-height: 1.5; }
-.track .tags .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
-                    margin-right: 5px; vertical-align: middle; }
-
-/* Puhujamerkki omassa sarakkeessaan. Sama merkki lähikuvalla ja mikillä, ja
-   nimenomaan samalla kohdalla: piuha piirtyy merkistä merkkiin, ja pystysuora
-   piuha lyhyestä matkasta on ainoa joka luetaan yhteydeksi. */
-.track .chip-cell { min-width: 0; }
-.track .chip {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  gap: 5px;
-  padding: 2px 9px 2px 7px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text);
-  background: color-mix(in srgb, var(--tint) 26%, transparent);
-  border: 1px solid color-mix(in srgb, var(--tint) 60%, transparent);
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.track .chip .dot {
-  width: 6px; height: 6px; border-radius: 50%;
-  background: var(--tint); flex-shrink: 0;
-}
-.track .chip .label { overflow: hidden; text-overflow: ellipsis; }
-
-/* Parin nimi jää nimen alle tekstiksi: merkki kertoo kuka, tämä minkä
-   tiedoston kanssa. */
-.track .paired-label {
-  display: block;
-  margin-top: 4px;
-  font-size: 11px;
-  color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.track .paired-label.unlinked { color: var(--warn); }
-
-/* Rooli ja puhuja vierekkäin, jotta ne eivät vie kahta riviä. */
-.track .controls { display: grid; grid-template-columns: 130px 150px; gap: 10px; }
-.track .controls select, .track .controls input { min-width: 0; }
-
-.track .knobs { grid-column: 3 / -1; display: none; gap: 18px; }
-.track.is-mic .knobs { display: flex; flex-wrap: wrap; }
-.track .warn { color: var(--warn); font-size: 12px; grid-column: 3 / -1; }
-
-/* Ryhmäotsikko raitalistan sisällä. */
-.tracks h3.group {
+.patch-head { align-items: end; }
+.col-head {
   font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
-  color: var(--muted); margin: 18px 0 2px; font-weight: 600;
+  color: var(--muted); font-weight: 600; padding: 0 9px 2px;
 }
-.tracks h3.group:first-of-type { margin-top: 6px; }
+.patch-head .col-head:last-child { text-align: right; }
 
-@media (max-width: 1100px) {
-  .track { grid-template-columns: 84px 100px minmax(0, 1fr); }
-  .track .thumb-slot { width: 100px; }
-  .track .controls { grid-column: 2 / -1; }
-  .track .knobs, .track .warn { grid-column: 2 / -1; }
+/* Solu. Tyhjä solu kertoo mitä siihen kuuluu: juuri tyhjä kohta on se jota
+   käyttäjä etsii, ja katkoreuna erottaa sen täytetystä ilman selitystä. */
+.cell {
+  min-width: 0;
+  display: flex; flex-direction: column; justify-content: center; gap: 6px;
+  min-height: 66px;
+  padding: 7px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  transition: background-color .12s ease, border-color .12s ease;
+}
+.cell.empty { border: 1px dashed var(--line); }
+.cell .placeholder {
+  text-align: center; color: var(--muted);
+  font-size: 11.5px; letter-spacing: .04em;
+}
+
+/* Puhujan väri on koko paikan sävy. Ulkoreunan palkit sulkevat parin väliinsä
+   samalla tavalla kuin rivin reunapalkki ennen sulki yhden raidan. */
+.slot.is-tinted .cell:not(.empty) {
+  background: color-mix(in srgb, var(--tint) 7%, transparent);
+  border-color: color-mix(in srgb, var(--tint) 20%, transparent);
+}
+.slot.is-tinted .cell-video { border-left: 3px solid var(--tint); }
+.slot.is-tinted .cell-audio { border-right: 3px solid var(--tint); }
+
+.cell.is-target { border-color: color-mix(in srgb, var(--accent) 45%, transparent); }
+.cell.is-over {
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+/* Keskisarake. Viiva kulkee nimikentän takaa, joten kenttä näyttää siltä
+   mihin piuha on kytketty. Viiva on olemassa vain kun molemmat päät ovat:
+   puuttuva pari on juuri se mikä rivistä pitää nähdä lukematta. */
+.strip {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 8px;
+}
+.strip.linked::before {
+  content: "";
+  position: absolute; left: 1px; right: 1px; top: 50%;
+  height: 7px; margin-top: -3.5px;
+  background:
+    radial-gradient(circle at 3.5px 50%, var(--tint) 3px, transparent 3.5px),
+    radial-gradient(circle at calc(100% - 3.5px) 50%, var(--tint) 3px, transparent 3.5px),
+    linear-gradient(to right, var(--tint), var(--tint));
+  background-size: 100% 100%, 100% 100%, 100% 2px;
+  background-position: 0 0, 0 0, 0 50%;
+  background-repeat: no-repeat;
+  opacity: .9;
+}
+.strip .speaker {
+  position: relative; z-index: 1;
+  text-align: center; font-size: 12.5px; padding: 5px 6px;
+}
+.strip-label {
+  position: relative; z-index: 1;
+  background: var(--panel); padding: 2px 7px; border-radius: 5px;
+  font-size: 11px; letter-spacing: .06em; text-transform: uppercase;
+  color: var(--muted);
+}
+
+/* Kortti on raita. Se ei ole kiinni missään: sen paikka kertoo roolin ja
+   puhujan, joten siirtäminen on ainoa säädin jota se tarvitsee. */
+.card {
+  min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #191c22;
+  cursor: grab;
+}
+.card:active { cursor: grabbing; }
+.card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card.is-picked { border-color: var(--accent);
+                  box-shadow: 0 0 0 1px var(--accent); }
+.card.is-dragging { opacity: .4; }
+
+.card-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.card .thumb {
+  width: 84px; aspect-ratio: 16 / 9; flex: none;
+  object-fit: cover; border-radius: 4px; background: #101216;
+}
+.card .thumb-missing { visibility: hidden; }
+.card .glyph {
+  width: 26px; height: 26px; flex: none;
+  display: grid; place-items: center; color: var(--tint);
+}
+.card .glyph svg { width: 17px; height: 17px; }
+.card .meta { min-width: 0; }
+.card .name { font-weight: 500; font-size: 13px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .tags { font-size: 11px; color: var(--muted); margin-top: 2px;
+              overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card .warn { color: var(--warn); font-size: 11.5px; }
+
+/* Mikin säätimet kortin sisällä. Kapeampi kuin paneelissa, koska sarake on
+   puolet entisestä leveydestä. */
+.card .knobs { display: flex; flex-direction: column; gap: 2px; }
+.card .knob { flex: 1 1 auto; gap: 7px; }
+.card .knob label { min-width: 58px; font-size: 11px; }
+.card .knob output { min-width: 44px; font-size: 11px; }
+
+/* Uuden puhujan rivi. Himmeä kunnes siihen ollaan pudottamassa. */
+.slot-new .cell { min-height: 44px; opacity: .55; }
+.slot-new .cell.is-target, .slot-new .cell.is-over { opacity: 1; }
+
+/* Käyttämättömät. Varasto eikä rivi: paikattomalla raidalla ei ole paria. */
+#tray { margin-top: 16px; }
+.tray-head { display: flex; align-items: baseline; justify-content: space-between;
+             gap: 12px; margin-bottom: 6px; }
+.tray-head h3.group {
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin: 0; font-weight: 600;
+}
+.tray-box {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  min-height: 56px; padding: 8px;
+  border: 1px dashed var(--line); border-radius: 8px;
+}
+.tray-box.empty { justify-content: center; }
+.tray-box .card { flex: 1 1 240px; max-width: 340px; }
+.tray-box.is-over { border-color: var(--accent);
+                    background: color-mix(in srgb, var(--accent) 12%, transparent); }
+
+/* Kapealla ruudulla sarakkeet eivät mahdu vierekkäin. Silloin paikka on
+   pinossa: nimi ensin ja sen alla kuva ja ääni — sama ryhmittely, eri suunta. */
+@media (max-width: 900px) {
+  .slot { grid-template-columns: minmax(0, 1fr); gap: 2px; }
+  .patch-head { display: none; }
+  .strip { order: -1; justify-content: flex-start; padding: 6px 0 2px; }
+  .strip.linked::before { display: none; }
+  .strip .speaker { text-align: left; width: 170px; }
+  .slot { padding-bottom: 6px; border-bottom: 1px solid var(--line); }
+  .slot.is-tinted .cell-audio { border-right: 0; border-left: 3px solid var(--tint); }
 }
 
 select, input[type="text"] {

@@ -64,9 +64,8 @@ function makeElement(tag) {
       return new Proxy({}, { get: () => () => {}, set: () => true });
     },
     focus() {},
-    /* Sijainti ja koko: piuhat mitataan merkkien reunoista, joten ilman
-       tätä drawCables palaisi heti eikä testaisi mitään. Jokainen elementti
-       saa oman y:n, jotta kaari lasketaan oikeasti. */
+    /* Sijainti ja koko: esikatselupalkki ja viivain laskevat leveydestä,
+       joten ilman tätä ne palaisivat heti eivätkä testaisi mitään. */
     getBoundingClientRect() {
       const y = (this._index || 0) * 40;
       return { left: 40, top: y, right: 140, bottom: y + 20,
@@ -83,6 +82,17 @@ function makeElement(tag) {
   return el;
 }
 
+/* Raahauksen dataTransfer. Kytkentätaulu kirjoittaa siihen raidan avaimen ja
+   lukee sen pudotuksessa; ilman tätä koko raahauspolku jäisi ajamatta. */
+function transfer() {
+  const data = {};
+  return {
+    effectAllowed: '', dropEffect: '',
+    setData(type, value) { data[type] = String(value); },
+    getData(type) { return data[type] || ''; },
+  };
+}
+
 /* Laukaisee kaikki tallennetut käsittelijät. Poikkeukset kerätään, koska yksi
    rikkinäinen käsittelijä ei saa estää muiden testaamista. */
 let fired = 0;
@@ -95,7 +105,7 @@ function fireAll(report) {
         fired += 1;
         try {
           fn.call(el, { target: el, preventDefault() {}, metaKey: false,
-                        ctrlKey: false, key: 'a' });
+                        ctrlKey: false, key: 'a', dataTransfer: transfer() });
         } catch (err) {
           report(`${el.tagName}.${type}`, err);
         }
@@ -254,6 +264,30 @@ for (const lang of ['fi', 'en']) {
       let first = null;
       fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
       if (first) throw first;
+    });
+
+    /* Kytkentätaulu: kortin siirto paikasta toiseen. Piirto yksin ei aja
+       sijoitusta lainkaan, ja juuri sijoitus on se joka kirjoittaa raidan
+       roolin ja puhujan — eli koko taulun tarkoitus. */
+    run(`${tag} kytkentätaulu`, () => {
+      const video = fresh.tracks.find((t) => t.kind === 'video');
+      const audio = fresh.tracks.find((t) => t.kind === 'audio');
+      if (!video || !audio) return;
+      context.assign(video, { kind: 'shared', side: 'video', name: '' });
+      context.assign(audio, { kind: 'shared', side: 'audio', name: '' });
+      if (fresh.audio.room_track !== audio.key) throw new Error('tilaääni ei asettunut');
+      context.assign(audio, { kind: 'tray', side: 'any', name: '' });
+      if (audio.config.role !== 'unused') throw new Error('varastoon jäi rooli');
+      const name = context.newSpeakerName();
+      context.assign(video, { kind: 'speaker', side: 'video', name });
+      context.assign(audio, { kind: 'speaker', side: 'audio', name });
+      const { slots } = context.buildSlots();
+      if (!slots.some((sl) => sl.video.length && sl.audio.length)) {
+        throw new Error('pari ei päätynyt samaan paikkaan');
+      }
+      context.pickUp(video);
+      context.renderTracks();
+      context.pickUp(video);
     });
 
     /* Käsittelyn ollessa kesken piirto menee eri haaraan. */

@@ -189,6 +189,8 @@ The interface uses these; they work for scripting too.
 | `POST /api/settings` | controls in, cut list and preview out |
 | `POST /api/export` | writes the cut XML, returns the path |
 | `POST /api/reload` | re-reads the source XML from disk |
+| `POST /api/open` | switches to another XML by path |
+| `POST /api/pick` | opens the Finder dialog and returns the chosen path |
 | `POST /api/mix` | starts audio processing in the background |
 | `GET /api/thumb?track=` | a frame from that track's camera file |
 | `GET /api/defaults` | factory settings, for the reset buttons |
@@ -217,17 +219,32 @@ not for users.
 
 ## Track list
 
-Picture and sound are separate groups: they have different roles and different
-controls.
+The track list is a patch bay. Each row is one speaker: their camera on the
+left, their microphone on the right, their name typed once in between. A short
+cable is drawn across when both ends are in place, and a gap where one is
+missing.
 
-Picture tracks show a frame from the middle of the file. In a multicam the
+Roling is done by moving cards, not by choosing from menus. Drag a card into a
+slot — or click the card and then the slot, which does the same thing and works
+from the keyboard. Where the card lands is what it becomes: a camera in a
+speaker's slot is that speaker's close-up, a sound file is their microphone.
+The top row is for the tracks that belong to everyone, the wide shot and the
+room tone. Anything you haven't placed waits in **Unused** below the bay, and
+dragging a card back there takes it out of the edit.
+
+The name is typed once per speaker, on the row, so a close-up and a microphone
+cannot drift apart over a typo. Drop a card on **+ new speaker** and a new row
+appears, named and ready to rename.
+
+Picture cards show a frame from the middle of the file. In a multicam the
 angles are called `1`, `2` and `3`, and the filename doesn't say which speaker
 a camera is pointed at either, so without a picture the roling is guesswork.
 The frame is extracted on request and cached.
 
-Each row states what the file actually is: dimensions, frame rate, codec and
+Each card states what the file actually is: dimensions, frame rate, codec and
 bit rate for picture; channels, sample rate and bit depth for sound; plus the
-combined duration and size of every part.
+combined duration and size of every part. A microphone card carries its own
+sensitivity and gain.
 
 ## Controls and defaults
 

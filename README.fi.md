@@ -191,6 +191,8 @@ Käyttöliittymä käyttää näitä; samat kelpaavat skriptaukseen.
 | `POST /api/settings` | säätimet sisään, leikkauslista ja esikatselu ulos |
 | `POST /api/export` | kirjoittaa leikatun XML:n, palauttaa polun |
 | `POST /api/reload` | lukee lähde-XML:n uudestaan levyltä |
+| `POST /api/open` | vaihtaa toiseen XML:ään polun perusteella |
+| `POST /api/pick` | avaa Finderin valintaikkunan ja palauttaa polun |
 
 ```
 curl -s -X POST localhost:8731/api/export \
@@ -345,16 +347,30 @@ käyttäjälle.
 
 ## Raitalista
 
-Kuva ja ääni ovat omina ryhminään: niillä on eri roolit ja eri säätimet.
+Raitalista on kytkentätaulu. Yksi rivi on yksi puhuja: kamera vasemmalla, mikki
+oikealla ja nimi kerran niiden välissä. Kun molemmat päät ovat paikallaan,
+väliin piirtyy piuha; jos toinen puuttuu, väliin jää aukko.
 
-Kuvaraidat näyttävät ruudun tiedoston puolivälistä. Monikamerassa kulmat ovat
+Roolitus tehdään kortteja siirtämällä, ei valikoista valitsemalla. Vedä kortti
+paikkaansa — tai klikkaa ensin korttia ja sitten paikkaa, mikä tekee saman ja
+toimii myös näppäimistöltä. Paikka kertoo mikä kortista tulee: kamera puhujan
+paikassa on hänen lähikuvansa ja äänitiedosto hänen mikkinsä. Ylin rivi on
+niille raidoille jotka kuuluvat kaikille, eli laajalle kuvalle ja tilaäänelle.
+Sijoittamattomat raidat odottavat taulun alla **Käyttämättömissä**, ja kortin
+vetäminen sinne ottaa sen pois leikkauksesta.
+
+Nimi kirjoitetaan kerran riville, joten lähikuva ja mikki eivät voi erkaantua
+kirjoitusvirheen takia. Pudota kortti kohtaan **+ uusi puhuja**, niin uusi rivi
+syntyy nimettynä ja valmiina nimettäväksi uudelleen.
+
+Kuvakortit näyttävät ruudun tiedoston puolivälistä. Monikamerassa kulmat ovat
 `1`, `2` ja `3` eikä tiedostonimikään kerro kumpaa puhujaa kamera kuvaa, joten
 ilman kuvaa roolitus on arvailua. Ruutu puretaan vasta kun sitä pyydetään ja
 jää välimuistiin.
 
-Kummallakin rivillä lukee mitä tiedosto on: mitat, ruutunopeus, koodekki ja
-bittinopeus kuvalle, kanavat, näytetaajuus ja bittisyvyys äänelle, sekä
-yhteiskesto ja -koko kaikista osista.
+Kortissa lukee mitä tiedosto on: mitat, ruutunopeus, koodekki ja bittinopeus
+kuvalle, kanavat, näytetaajuus ja bittisyvyys äänelle, sekä yhteiskesto ja
+-koko kaikista osista. Mikkikortissa ovat sen omat herkkyys ja vahvistus.
 
 ## Säätimet ja oletukset
 

@@ -128,21 +128,44 @@ Code, comments and docstrings stay in Finnish. They are for the maintainers.
 The language is a `ContextVar`, not a global: audio processing runs in a
 background thread while the interface is asking for state.
 
-## The pair is drawn, not explained
+## The pair is a row, not a drawing
 
-A close-up and its microphone are one thing in two rows, and the interface has
-to say so without being read. Four things do it, and they depend on each other:
-the speaker chip sits in its **own grid column**, identical on both rows; the
-row carries the speaker colour as a `--tint` custom property (background, left
-border, hover, pin); the microphone row shows its close-up's thumbnail; and
-`drawCables` draws a patch cable from chip to chip.
+A close-up and its microphone are one thing, and the interface has to say so
+without being read. It is a patch bay: one **slot** per row — video cell on the
+left, audio cell on the right, the speaker's name once in the strip between
+them. The pair is adjacency, so the cable is a horizontal line in a fixed-width
+strip. It is CSS, not geometry: nothing is measured, nothing is redrawn on
+hover or resize, and a crossing cable is not possible to express. The whole
+`drawCables` / `chipEls` / `getBoundingClientRect` machinery that the two-list
+layout needed is gone, and it should not come back.
 
-The cable is measured, not laid out: `chipEls` keeps the chip and the row for
-each track key, and the positions come from `getBoundingClientRect` after the
-rows are on screen. So anything that moves a row has to redraw — renderTracks,
-pinning, hovering, window resize. Each speaker gets a lane of its own outside
-the rows' left edge, which is why `.panel.tracks` has the extra left padding:
-cables crossing the rows or each other say nothing.
+The top row is for the tracks that belong to nobody: the wide shot and the room
+tone. They are shared by the whole episode the way the other rows belong to one
+person. Unassigned tracks live in a tray below the bay, not as rows — a track
+with no slot has no pair and therefore no row.
+
+**A slot sets the role.** `assign()` is the only place that writes
+`config.role` and `config.speaker`, and it derives both from where the card
+landed: video into a speaker slot is `close`, audio is `mic`, video into the
+shared slot is `wide`, audio into it is `audio.room_track`, and the tray is
+`unused`. There is no role menu any more. Add a new role and it needs a place
+to sit, not a new option in a list.
+
+**The name is written once.** It lives on the slot, so a pair cannot break by a
+typo on the second track — which is what the old per-track text field made easy
+and invisible. Renaming a slot writes to every member track.
+
+**Drag and click are one path.** `picked` holds the lifted track key; both
+`dragstart` and a click on a card set it, and every drop target reads it.
+`dataTransfer` carries the key too, but only as the native affordance — a
+browser will not let `dragover` read it, and the keyboard has no `dataTransfer`
+at all. `dropTarget()` wires all four events in one place so the mouse and the
+keyboard cannot end up disagreeing about what is allowed.
+
+Below 900 px the two columns cannot sit side by side. Then the slot stacks —
+name first, then its video and audio cards — which is the same grouping in a
+different direction, and the connector is hidden because adjacency already says
+it.
 
 ## The interface has a smoke test, and it is not optional
 
