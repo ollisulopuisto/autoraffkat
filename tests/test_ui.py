@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from autoraffkat.model import Globals, TrackConfig, ROLE_CLOSE, ROLE_MIC, ROLE_WIDE
+from autoraffkat.model import ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, Globals, TrackConfig
 from autoraffkat.server.app import AppState, _state_json, create_app
 
 STATIC = Path(__file__).resolve().parents[1] / "src" / "autoraffkat" / "server" / "static"
@@ -141,3 +141,11 @@ def test_every_visible_string_is_translated_in_both_languages():
         assert any(k.startswith(prefix + ".") for k in strings["fi"]), prefix
     missing = sorted(used - strings["fi"])
     assert not missing, f"i18n.js:stä puuttuu: {missing}"
+
+
+def test_static_icon_files_exist():
+    """Varmistaa että käyttöliittymän tarvitsemat kuvakkeet ovat olemassa."""
+    for name in ("favicon.ico", "favicon.png", "apple-touch-icon.png"):
+        icon_file = STATIC / name
+        assert icon_file.is_file(), f"{name} puuttuu staattisista tiedostoista"
+        assert icon_file.stat().st_size > 0, f"{name} on tyhjä tiedosto"

@@ -56,6 +56,15 @@ def make_dmg(app_path: Path | None = None, output: Path | None = None) -> int:
         # kukaan ei lue mutta kaikki osaavat.
         os.symlink("/Applications", staging / "Applications")
 
+        # Levykuvan oma kuvake jos saatavilla
+        for icon_name in ("autoraffkat.icns", "icon.icns"):
+            icon_file = ROOT_DIR / "assets" / icon_name
+            if icon_file.exists():
+                shutil.copy2(icon_file, staging / ".VolumeIcon.icns")
+                if shutil.which("SetFile"):
+                    _run(["SetFile", "-a", "C", str(staging)])
+                break
+
         if target.exists():
             target.unlink()
         print(f"Pakataan {target.name}…")

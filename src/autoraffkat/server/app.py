@@ -454,9 +454,11 @@ def create_app(state: AppState) -> FastAPI:
         tulos on rikkinäinen tavalla jota kukaan ei osaa yhdistää välimuistiin.
         """
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        for name in ("app.js", "i18n.js", "style.css"):
-            stamp = int((STATIC_DIR / name).stat().st_mtime)
-            html = html.replace(f"/static/{name}", f"/static/{name}?v={stamp}")
+        for name in ("app.js", "i18n.js", "style.css", "favicon.ico", "favicon.png", "favicon.svg", "apple-touch-icon.png", "icon.png"):
+            static_file = STATIC_DIR / name
+            if static_file.exists():
+                stamp = int(static_file.stat().st_mtime)
+                html = html.replace(f"/static/{name}", f"/static/{name}?v={stamp}")
         return Response(html, media_type="text/html")
 
     @app.get("/api/thumb")
