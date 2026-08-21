@@ -241,3 +241,64 @@ def test_multicam_defaults_guess_speakers_from_mic_names(scratch_xml):
     assert state.settings.tracks["vieras Track2"].speaker == "Vieras"
     # Kameroita ei arvata: kulmat ovat 1, 2, 3 eikä niistä näe mitään.
     assert state.settings.tracks["CLOSE_A"].role == "unused"
+
+
+def test_all_wide_is_a_problem_not_a_result(scratch_xml):
+    """Ilman lähikuvia leikkaus olisi yhtä laajaa kuvaa — se on puute."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    tracks = {k: v.to_json() for k, v in _multicam_tracks().items()}
+    tracks["CLOSE_A"]["role"] = "unused"
+    tracks["CLOSE_B"]["role"] = "unused"
+    result = client.post("/api/settings",
+                         json={"tracks": tracks, "globals": {}}).json()
+    assert not result["ok"]
+    assert any("lähikuvaa" in problem for problem in result["problems"])
+
+
+def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
+    """Kamera ei kerro kumpaa puhujaa se kuvaa, mutta viime jakso kertoo."""
+    import shutil
+    from autoraffkat import project
+
+    previous = tmp_path / "jakso53.fcpxmld"
+    previous.mkdir()
+    project.save(str(previous / "Info.fcpxml"),
+                 project.ProjectSettings(
+                     tracks={k: v for k, v in _multicam_tracks().items()},
+                     globals=Globals(min_shot=4.0)))
+
+    current = tmp_path / "jakso54.fcpxmld"
+    current.mkdir()
+    shutil.copy(fixture_dir / "multicam.fcpxml", current / "Info.fcpxml")
+
+    state = AppState(xml_path=str(current / "Info.fcpxml"))
+    state.load()
+    assert state.settings.tracks["CLOSE_A"].role == "close"
+    assert state.settings.tracks["CLOSE_A"].speaker == "Olli"
+    assert state.settings.tracks["WIDE"].role == "wide"
+    assert state.settings.globals.min_shot == 4.0
+    assert state.inherited_from.endswith("jakso53.fcpxmld/Info.autoraffkat.json")
+
+
+def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
+    import shutil
+    from autoraffkat import project
+
+    other = tmp_path / "jakso53.fcpxmld"
+    other.mkdir()
+    project.save(str(other / "Info.fcpxml"), project.ProjectSettings(
+        tracks={"WIDE": TrackConfig(role=ROLE_CLOSE, speaker="Väärin")}))
+
+    current = tmp_path / "jakso54.fcpxmld"
+    current.mkdir()
+    xml = current / "Info.fcpxml"
+    shutil.copy(fixture_dir / "multicam.fcpxml", xml)
+    project.save(str(xml), project.ProjectSettings(
+        tracks={"WIDE": TrackConfig(role=ROLE_WIDE)}))
+
+    state = AppState(xml_path=str(xml))
+    state.load()
+    assert state.settings.tracks["WIDE"].role == "wide"
+    assert state.inherited_from == ""

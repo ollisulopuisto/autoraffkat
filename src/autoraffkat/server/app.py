@@ -46,6 +46,7 @@ class AppState:
     progress: dict = field(default_factory=lambda: {"done": 0, "total": 0,
                                                     "current": "", "ready": False})
     load_error: str = ""
+    inherited_from: str = ""        # mistä roolit perittiin, "" jos ei mistään
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ---------------------------------------------------------- lataus
@@ -57,6 +58,7 @@ class AppState:
         käyttöliittymä voi näyttää sen ja käyttäjä voi korjata viennin.
         """
         self.load_error = ""
+        self.inherited_from = ""
         self.progress = {"done": 0, "total": 0, "current": "", "ready": False}
         try:
             timeline = read_fcpxml(self.xml_path)
@@ -71,21 +73,48 @@ class AppState:
             self._seed_defaults()
         threading.Thread(target=self._analyze, daemon=True).start()
 
-    def _seed_defaults(self) -> None:
-        """Ensimmäisellä avauksella arvataan roolit nimien perusteella.
+    def _inherit(self) -> set[str]:
+        """Roolit edellisestä jaksosta. Palauttaa täsmänneet raita-avaimet.
 
-        Puhujaehdotus tulee mikkitiedoston ensimmäisestä sanasta, koska
-        äänitteet nimetään käytännössä aina puhujan mukaan. Kamerat jäävät
-        nimeämättä: monikamerassa kulmat ovat ``1``, ``2``, ``3``, eikä niistä
-        voi päätellä mitään.
+        Kamera ei kerro itsestään kumpaa puhujaa se kuvaa, eikä sitä voi
+        päätellä XML:stä — mutta edellinen jakso samasta sarjasta kertoo, ja
+        raita-avaimet on johdettu tiedostonimistä juuri siksi että ne kestävät
+        jaksosta toiseen. Tyhjä lomake on huonompi oletus kuin viime kerran
+        kokoonpano.
+        """
+        assert self.timeline is not None
+        source = project.find_previous(self.xml_path)
+        previous = project.read(source) if source else None
+        if previous is None:
+            return set()
+        matched = {t.key for t in self.timeline.tracks if t.key in previous.tracks}
+        if not matched:
+            return set()
+        for key in matched:
+            self.settings.tracks[key] = previous.tracks[key]
+        # Säätimet ovat leikkaajan makua, eivät jakson ominaisuus.
+        self.settings.globals = previous.globals
+        self.inherited_from = source or ""
+        return matched
+
+    def _seed_defaults(self) -> None:
+        """Ensimmäisellä avauksella täytetään roolit niin pitkälle kuin voi.
+
+        Järjestys on paras ensin: edellisen jakson roolit, sitten nimistä
+        arvaaminen. Puhujaehdotus tulee mikkitiedoston ensimmäisestä sanasta,
+        koska äänitteet nimetään käytännössä aina puhujan mukaan. Kameroita ei
+        arvata: monikamerassa kulmat ovat ``1``, ``2``, ``3``.
         """
         assert self.timeline is not None
         if self.settings.tracks:
             for track in self.timeline.tracks:
                 self.settings.config_for(track.key)
             return
+        inherited = self._inherit()
         for track in self.timeline.tracks:
             cfg = self.settings.config_for(track.key)
+            if track.key in inherited:
+                continue
             lowered = track.name.lower()
             if track.has_audio and not track.has_video:
                 cfg.role = ROLE_MIC
@@ -239,6 +268,7 @@ def _state_json(state: AppState) -> dict:
         "tracks": tracks,
         "globals": state.settings.globals.to_json(),
         "progress": state.progress,
+        "inherited_from": state.inherited_from,
         "error": state.load_error,
     }
 

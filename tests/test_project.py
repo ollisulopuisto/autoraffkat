@@ -1,5 +1,9 @@
+import json
+import os
+
 from autoraffkat import project
 from autoraffkat.model import Globals, TrackConfig
+from autoraffkat.project import ProjectSettings
 
 
 def test_round_trip(tmp_path):
@@ -39,3 +43,46 @@ def test_unknown_keys_are_ignored(tmp_path):
     settings = project.load(str(xml))
     assert settings.globals.min_shot == 3
     assert settings.tracks["a"].role == "mic"
+
+
+def _write_settings(path, tracks, min_shot=2.5):
+    """Asetustiedosto suoraan levylle, ilman lähde-XML:ää."""
+    settings = ProjectSettings(
+        tracks={k: TrackConfig(**v) for k, v in tracks.items()},
+        globals=Globals(min_shot=min_shot))
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(settings.to_json(), fh)
+    return path
+
+
+def test_previous_is_found_beside_and_above(tmp_path):
+    """Sarjan edellinen jakso on joko naapurissa tai naapuripaketissa."""
+    bundle = tmp_path / "jakso54.fcpxmld"
+    bundle.mkdir()
+    xml = bundle / "Info.fcpxml"
+    older = tmp_path / "jakso53.fcpxmld"
+    older.mkdir()
+    previous = _write_settings(older / "Info.autoraffkat.json",
+                               {"CAM 1": {"role": "close", "speaker": "Olli"}})
+    assert project.find_previous(str(xml)) == str(previous)
+
+
+def test_previous_ignores_our_own_settings(tmp_path):
+    xml = tmp_path / "jakso.fcpxml"
+    _write_settings(tmp_path / "jakso.autoraffkat.json", {"CAM 1": {"role": "wide"}})
+    assert project.find_previous(str(xml)) is None
+
+
+def test_previous_takes_the_newest(tmp_path):
+    xml = tmp_path / "uusi.fcpxml"
+    old = _write_settings(tmp_path / "a.autoraffkat.json", {"CAM 1": {"role": "wide"}})
+    new = _write_settings(tmp_path / "b.autoraffkat.json", {"CAM 1": {"role": "close"}})
+    os.utime(old, (1_000_000, 1_000_000))
+    assert project.find_previous(str(xml)) == str(new)
+
+
+def test_broken_settings_read_as_none(tmp_path):
+    path = tmp_path / "rikki.autoraffkat.json"
+    path.write_text("{ ei tätä voi lukea", encoding="utf-8")
+    assert project.read(str(path)) is None
+    assert project.read(str(tmp_path / "ei-ole.json")) is None

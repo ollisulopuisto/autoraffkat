@@ -37,7 +37,13 @@ päätöskerroksen, ja esikatselupalkki näyttää lopputuloksen ilman XML-kierr
 
 Vienti kirjoittaa uuden tiedoston `jakso-leikattu.fcpxml`; lähde-XML:ää ei
 kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
-viereen, joten seuraava jakso alkaa edellisen asetuksilla.
+viereen.
+
+Uusi jakso perii roolit edellisestä: raita-avaimet on johdettu
+tiedostonimistä, joten `STATUS CAM 1` on sama kamera myös ensi viikolla.
+Perintä haetaan XML:n hakemistosta, sen yläpuolelta ja yläpuolen
+`.fcpxmld`-paketeista, ja lähde näkyy otsikon alla rivillä «Roolit peritty».
+Jakson omat asetukset ohittavat perinnän aina.
 
 ### Asennus
 

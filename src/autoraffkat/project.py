@@ -7,6 +7,7 @@ vaihtuvat joka viennillä.
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 from dataclasses import dataclass, field
@@ -20,10 +21,13 @@ FORMAT_VERSION = 1
 OUTPUT_SUFFIX = "-leikattu"
 
 
+SETTINGS_SUFFIX = ".autoraffkat.json"
+
+
 def settings_path(xml_path: str) -> str:
     """Asetustiedoston polku: ``jakso.fcpxml`` -> ``jakso.autoraffkat.json``."""
     base, _ = os.path.splitext(os.path.abspath(xml_path))
-    return f"{base}.autoraffkat.json"
+    return f"{base}{SETTINGS_SUFFIX}"
 
 
 def default_output_path(xml_path: str) -> str:
@@ -66,21 +70,53 @@ class ProjectSettings:
         return cls(tracks=tracks, globals=Globals.from_json(data.get("globals") or {}))
 
 
+def find_previous(xml_path: str) -> str | None:
+    """Lähin aiempi asetustiedosto, tai ``None``.
+
+    Sarjassa jokainen jakso on oma vientinsä mutta sama kokoonpano: samat
+    kamerat, samat mikit, samat puhujat. Raita-avaimet johdetaan
+    tiedostonimistä, joten ne täsmäävät jaksosta toiseen — silloin edellisen
+    jakson roolit ovat oikea oletus, ja tyhjä lomake on väärä.
+
+    Etsintä ei mene syvälle: XML:n oma hakemisto, sen yläpuoli ja yläpuolen
+    ``.fcpxmld``-paketit. Kauempaa löytyvä tiedosto olisi arvaus.
+    """
+    own = settings_path(xml_path)
+    here = os.path.dirname(own)
+    above = os.path.dirname(here)
+    patterns = [
+        os.path.join(here, f"*{SETTINGS_SUFFIX}"),
+        os.path.join(above, f"*{SETTINGS_SUFFIX}"),
+        os.path.join(above, "*.fcpxmld", f"*{SETTINGS_SUFFIX}"),
+    ]
+    found: set[str] = set()
+    for pattern in patterns:
+        found.update(glob.glob(pattern))
+    found.discard(own)
+    if not found:
+        return None
+    return max(found, key=os.path.getmtime)
+
+
 def load(xml_path: str) -> ProjectSettings:
     """Lukee asetukset XML:n vierestä.
 
     Puuttuva tai rikkinäinen tiedosto ei ole virhe vaan tuottaa oletukset:
     asetukset ovat mukavuus, eivät ehto työskentelylle.
     """
-    path = settings_path(xml_path)
+    return read(settings_path(xml_path)) or ProjectSettings()
+
+
+def read(path: str) -> ProjectSettings | None:
+    """Lukee yhden asetustiedoston. ``None`` jos sitä ei ole tai se on rikki."""
     if not os.path.exists(path):
-        return ProjectSettings()
+        return None
     try:
         with open(path, encoding="utf-8") as fh:
             return ProjectSettings.from_json(json.load(fh))
     except (OSError, json.JSONDecodeError, TypeError, ValueError):
         # Rikkinäinen asetustiedosto ei saa estää työskentelyä.
-        return ProjectSettings()
+        return None
 
 
 def save(xml_path: str, settings: ProjectSettings) -> str:

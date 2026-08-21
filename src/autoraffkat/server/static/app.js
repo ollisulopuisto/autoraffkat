@@ -430,8 +430,22 @@ function renderHeader() {
                 `${state.tracks.length} raitaa`];
   if (state.parts > 1) bits.push(`${state.parts} osaa`);
   $('project-meta').textContent = bits.join(' · ');
-  $('paths').textContent =
-    `Vienti: ${state.output_path}\nAsetukset: ${state.settings_path}`;
+  /* Polut omille riveilleen: yhdellä rivillä ne kietoutuvat toisiinsa eikä
+     kumpaakaan pysty lukemaan. */
+  const paths = $('paths');
+  paths.textContent = '';
+  const lines = [['Vienti', state.output_path],
+                 ['Asetukset', state.settings_path]];
+  if (state.inherited_from) {
+    lines.push(['Roolit peritty', state.inherited_from]);
+  }
+  lines.forEach(([title, value]) => {
+    const row = document.createElement('div');
+    row.className = 'path';
+    row.innerHTML = `<b>${title}</b> `;
+    row.append(document.createTextNode(value));
+    paths.append(row);
+  });
 }
 
 /* Verhokäyrien edistyminen. Roolit saa nimetä laskennan aikana; kun se

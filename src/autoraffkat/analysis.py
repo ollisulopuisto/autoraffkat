@@ -198,6 +198,14 @@ def resolve_roles(timeline: Timeline, tracks: dict[str, TrackConfig]) -> Roles:
     for name in roles.speakers:
         if name not in roles.mics:
             roles.problems.append(f"Puhujalta «{name}» puuttuu mikki.")
+    # Ilman yhtäkään lähikuvaa päätös on kelvollinen mutta hyödytön: koko
+    # ohjelma olisi yhtä laajaa kuvaa. Se on roolituksen puute eikä tulos,
+    # joten se sanotaan ääneen eikä viedä XML:ksi.
+    if roles.mics and not roles.closes:
+        roles.problems.append(
+            "Yhdelläkään puhujalla ei ole lähikuvaa, joten koko leikkaus olisi "
+            "laajaa. Anna vähintään yhdelle kameralle rooli «Lähikuva» ja "
+            "puhujan nimi.")
     return roles
 
 

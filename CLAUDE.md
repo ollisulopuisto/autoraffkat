@@ -38,6 +38,14 @@ rooleja, säätimiä tai `Segment.angle`ia puhuu raita-avaimista. Ilman tätä
 `Roles.wide_key` ja `closes` olisivat listoja ja jokainen niitä lukeva kohta
 joutuisi käsittelemään monta avainta.
 
+## Roolit peritään jaksosta toiseen
+
+Uusi jakso ilman omia asetuksia lukee lähimmän aiemman
+`*.autoraffkat.json`-tiedoston ja ottaa siitä täsmäävien raita-avainten
+roolit. Tämä on koko syy siihen, että raita-avain johdetaan tiedostonimestä
+eikä kulman nimestä tai `angleID`:stä: sarjassa kamerat pysyvät, kulmanumerot
+eivät. Jos avaimen johtamista muuttaa, perintä lakkaa toimimasta hiljaisesti.
+
 ## Herkkyys ja vahvistus eivät ole sama asia
 
 Herkkyys on kynnys pohjakohinan yli, joten vahvistus ei siirrä sitä — pohja
