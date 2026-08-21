@@ -440,3 +440,25 @@ def test_declick_sensitivity_round_trips(scratch_xml):
         "tracks": {}, "globals": {},
         "audio": {"enabled": True, "declick": True, "declick_sensitivity": 0.8}})
     assert state.settings.audio.declick_sensitivity == 0.8
+
+
+def test_tracks_carry_kind_and_file_facts(scratch_xml):
+    """Roolitus tarvitsee tiedon siitä mikä tiedosto on kyseessä."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    tracks = {t["key"]: t for t in client.get("/api/state").json()["tracks"]}
+    assert tracks["WIDE"]["kind"] == "video"
+    assert tracks["olli Track1"]["kind"] == "audio"
+    # Kesto ja koko lasketaan yhteen kaikista osista.
+    assert tracks["WIDE"]["total_duration"] > 0
+    assert tracks["WIDE"]["total_size"] > 0
+
+
+def test_index_versions_its_assets(scratch_xml):
+    """Vanha tyyli uuden skriptin kanssa rikkoo asettelun huomaamatta."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    body = TestClient(create_app(state)).get("/").text
+    assert "/static/app.js?v=" in body
+    assert "/static/style.css?v=" in body

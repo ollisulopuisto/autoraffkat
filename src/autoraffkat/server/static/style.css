@@ -120,30 +120,55 @@ main {
 
 /* ------------------------------------------------------------ raidat */
 
+/* Raitarivi. Kuvarivillä pikkukuva vasemmalla, äänirivillä ei — molemmilla
+   nimi ja tekniset tiedot keskellä, säätimet oikealla kiinteän levyisenä.
+   Nimi ei saa venyttää saraketta: pitkiä tiedostonimiä on aina. */
 .track {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr) 130px 150px;
-  gap: 10px 12px;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  gap: 6px 14px;
   align-items: center;
-  padding: 10px 0;
+  padding: 12px 0;
   border-top: 1px solid var(--line);
 }
+.track-video { grid-template-columns: 132px minmax(0, 1fr) 290px; }
 .track:first-child { border-top: 0; }
+
+.track .thumb {
+  width: 132px; aspect-ratio: 16 / 9;
+  border-radius: 5px; object-fit: cover;
+  background: #12151b; display: block;
+}
+.track .thumb-missing { visibility: hidden; }
+
+.track .meta { min-width: 0; }
 .track .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis;
                white-space: nowrap; }
-.track .tags { font-size: 11px; color: var(--muted); }
+.track .tags { font-size: 11px; color: var(--muted); margin-top: 3px;
+               line-height: 1.5; }
 .track .tags .dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%;
                     margin-right: 5px; vertical-align: middle; }
+
+/* Rooli ja puhuja vierekkäin, jotta ne eivät vie kahta riviä. */
+.track .controls { display: grid; grid-template-columns: 130px 150px; gap: 10px; }
+.track .controls select, .track .controls input { min-width: 0; }
+
 .track .knobs { grid-column: 1 / -1; display: none; gap: 18px; }
-/* Pikkukuva pitää sarakkeensa myös mikkiriveillä, jotta nimet ovat linjassa. */
-.track .thumb { width: 96px; aspect-ratio: 16 / 9; border-radius: 4px;
-                object-fit: cover; background: #12151b; display: block; }
-.track .thumb-empty { border: 1px dashed var(--line); }
 .track.is-mic .knobs { display: flex; flex-wrap: wrap; }
 .track .warn { color: var(--warn); font-size: 12px; grid-column: 1 / -1; }
-@media (max-width: 900px) {
-  .track { grid-template-columns: 64px minmax(0, 1fr) 110px 120px; }
-  .track .thumb { width: 64px; }
+
+/* Ryhmäotsikko raitalistan sisällä. */
+.tracks h3.group {
+  font-size: 11px; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--muted); margin: 18px 0 2px; font-weight: 600;
+}
+.tracks h3.group:first-of-type { margin-top: 6px; }
+
+@media (max-width: 1100px) {
+  .track { grid-template-columns: minmax(0, 1fr); }
+  .track-video { grid-template-columns: 100px minmax(0, 1fr); }
+  .track .thumb { width: 100px; }
+  .track .controls { grid-column: 1 / -1; }
 }
 
 select, input[type="text"] {

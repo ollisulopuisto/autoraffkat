@@ -100,6 +100,13 @@ koko tuonnin. `clip` ja `asset-clip` tuntevat sen, `mc-clip` ei.
 Johdetut tiedostot eivät mene `.fcpxmld`-paketin sisään vaan sen viereen ja
 saavat paketin nimen. Paketti kuuluu Final Cutille.
 
+## Staattiset tiedostot versioidaan
+
+`index.html` tarjoillaan niin että `app.js` ja `style.css` saavat
+muokkausajan kyselyparametriksi. Ilman sitä selain tarjoilee vanhaa tyyliä
+uuden skriptin kanssa, ja asettelu hajoaa tavalla jota kukaan ei osaa
+yhdistää välimuistiin. Näin kävi kerran jo.
+
 ## Testit
 
 `tests/make_fixture.py` syntetisoi aineiston ffmpegillä: siniaaltopurskeet

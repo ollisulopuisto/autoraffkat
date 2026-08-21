@@ -136,6 +136,53 @@ function knob(spec, value, onChange) {
   return wrap;
 }
 
+/* Tiedostokoko ja kesto lyhyesti. Tarkkuus ei auta: erot ovat suuruusluokkia. */
+function fmtSize(bytes) {
+  if (!bytes) return '';
+  if (bytes >= 1e9) return `${(bytes / 1e9).toFixed(1)} GB`;
+  if (bytes >= 1e6) return `${Math.round(bytes / 1e6)} MB`;
+  return `${Math.round(bytes / 1e3)} kt`;
+}
+
+function fmtDuration(seconds) {
+  if (!seconds) return '';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return h ? `${h} h ${m} min` : `${m} min`;
+}
+
+/* Raidan tekniset tiedot yhdeksi riviksi. Kuvalle mitat ja bitit, äänelle
+   kanavat ja bittisyvyys — eli se mistä huomaa jos jokin on väärin. */
+function trackFacts(media) {
+  const p = media.probe || {};
+  const bits = [];
+  if (p.video) {
+    const v = p.video;
+    bits.push(`${v.width}×${v.height}`);
+    if (v.fps) bits.push(`${Math.round(v.fps * 100) / 100} fps`);
+    if (v.codec) bits.push(v.codec);
+    if (v.bitrate) bits.push(`${Math.round(v.bitrate / 1e6)} Mb/s`);
+  }
+  if (p.audio) {
+    const a = p.audio;
+    if (!p.video) {
+      if (a.codec) bits.push(a.codec);
+      bits.push(`${a.channels} kan.`);
+      if (a.rate) bits.push(`${Math.round(a.rate / 1000)} kHz`);
+      if (a.depth) bits.push(`${Math.round(a.depth)} bit`);
+      if (!a.depth && a.bitrate) bits.push(`${Math.round(a.bitrate / 1000)} kb/s`);
+    } else {
+      bits.push(`ääni ${a.codec} ${a.channels} kan.`);
+    }
+  }
+  const span = [fmtDuration(media.total_duration), fmtSize(media.total_size)]
+    .filter(Boolean).join(' · ');
+  if (span) bits.push(span);
+  if (media.angle_name) bits.push(`kulma ${media.angle_name}`);
+  if ((media.parts || []).length > 1) bits.push(`${media.parts.length} osaa`);
+  return bits.join(' · ');
+}
+
 /* ------------------------------------------------------------ raidat */
 
 /* Puhujan indeksi väripaletissa. Tulee palvelimen esikatselusta, jotta palkki,
@@ -150,106 +197,109 @@ function speakerIndex(name) {
    määrää mitkä säätimet riviin kuuluvat. Puhujakenttien arvot kerätään
    datalistiin, jotta toisen raidan puhujan voi valita kirjoittamatta. */
 function renderTracks() {
-  const host = $('track-list');
-  host.textContent = '';
   const names = new Set();
   state.tracks.forEach((m) => { if (m.config.speaker) names.add(m.config.speaker); });
   $('speaker-names').innerHTML = [...names]
     .map((n) => `<option value="${n.replace(/"/g, '&quot;')}">`).join('');
 
-  state.tracks.forEach((media) => {
-    const row = document.createElement('div');
-    row.className = 'track';
-    if (media.config.role === 'mic') row.classList.add('is-mic');
-
-    /* Ruutu kuvasta: kulmien nimet ovat 1, 2 ja 3, eikä niistä näe kuka on
-       kuvassa. Ladataan laiskasti, koska purku on ffmpegiä. */
-    if (media.thumb) {
-      const thumb = document.createElement('img');
-      thumb.className = 'thumb';
-      thumb.loading = 'lazy';
-      thumb.alt = '';
-      thumb.src = `/api/thumb?track=${encodeURIComponent(media.key)}`;
-      thumb.addEventListener('error', () => thumb.remove());
-      row.append(thumb);
-    } else {
-      row.append(Object.assign(document.createElement('div'),
-        { className: 'thumb thumb-empty' }));
+  /* Kuva ja ääni omiin ryhmiinsä: niillä on eri roolit, eri säätimet ja
+     kuvalla pikkukuva. Sekaisin lueteltuna kumpikaan ei ole luettava. */
+  [['video-tracks', 'video'], ['audio-tracks', 'audio']].forEach(([id, kind]) => {
+    const host = $(id);
+    host.textContent = '';
+    const rows = state.tracks.filter((m) => m.kind === kind);
+    if (!rows.length) {
+      host.append(Object.assign(document.createElement('p'),
+        { className: 'muted small', textContent: 'ei raitoja' }));
+      return;
     }
-
-    const left = document.createElement('div');
-    const name = document.createElement('div');
-    name.className = 'name';
-    name.textContent = media.name;
-    /* Monikamerassa raita on sama kulma useassa osassa, joten koko
-       tiedostolista kuuluu vihjeeseen — nimi yksin ei kerro mistä on kyse. */
-    name.title = (media.parts || []).map((p) => p.path || p.name).join('\n')
-      || media.path || media.name;
-    const tags = document.createElement('div');
-    tags.className = 'tags';
-    const bits = [];
-    if (media.has_video) bits.push(`kuva ${media.width}×${media.height}`);
-    if (media.has_audio) bits.push(`ääni ${media.audio_channels} kan.`);
-    if (media.fps) bits.push(`${media.fps} fps`);
-    if (media.angle_name) bits.push(`kulma ${media.angle_name}`);
-    if ((media.parts || []).length > 1) bits.push(`${media.parts.length} osaa`);
-    tags.textContent = bits.join(' · ');
-    left.append(name, tags);
-
-    const role = document.createElement('select');
-    ROLE_LABELS.forEach(([value, text]) => {
-      const opt = document.createElement('option');
-      opt.value = value; opt.textContent = text;
-      if (media.config.role === value) opt.selected = true;
-      role.append(opt);
-    });
-    role.addEventListener('change', () => {
-      media.config.role = role.value;
-      renderTracks();
-      schedule(0);
-    });
-
-    const speaker = document.createElement('input');
-    speaker.type = 'text';
-    speaker.placeholder = 'Puhuja';
-    speaker.setAttribute('list', 'speaker-names');
-    speaker.value = media.config.speaker || '';
-    speaker.disabled = !(media.config.role === 'close' || media.config.role === 'mic');
-    speaker.addEventListener('input', () => {
-      media.config.speaker = speaker.value;
-      schedule();
-    });
-    speaker.addEventListener('change', renderLegend);
-
-    row.append(left, role, speaker);
-
-    if (media.config.role === 'mic') {
-      const knobs = document.createElement('div');
-      knobs.className = 'knobs';
-      TRACK_KNOBS.forEach((spec) => {
-        knobs.append(knob(spec, media.config[spec.key], (v) => {
-          media.config[spec.key] = v;
-          schedule();
-        }));
-      });
-      row.append(knobs);
-    }
-
-    if (media.missing) {
-      const gone = (media.parts || []).filter((p) => p.missing).map((p) => p.path);
-      const warn = document.createElement('div');
-      warn.className = 'warn';
-      warn.textContent = 'Tiedostoa ei löydy levyltä: ' + (gone.join(', ') || media.path);
-      row.append(warn);
-    } else if (media.envelope_error) {
-      const warn = document.createElement('div');
-      warn.className = 'warn';
-      warn.textContent = media.envelope_error;
-      row.append(warn);
-    }
-
-    host.append(row);
+    rows.forEach((media) => host.append(trackRow(media, kind)));
   });
+}
+
+/* Yksi raitarivi. Kuvarivillä on pikkukuva, äänirivillä ei — muuten sama. */
+function trackRow(media, kind) {
+  const row = document.createElement('div');
+  row.className = `track track-${kind}`;
+  if (media.config.role === 'mic') row.classList.add('is-mic');
+
+  if (kind === 'video') {
+    const thumb = document.createElement('img');
+    thumb.className = 'thumb';
+    thumb.loading = 'lazy';
+    thumb.alt = '';
+    thumb.src = `/api/thumb?track=${encodeURIComponent(media.key)}`;
+    thumb.addEventListener('error', () => thumb.classList.add('thumb-missing'));
+    row.append(thumb);
+  }
+
+  const left = document.createElement('div');
+  left.className = 'meta';
+  const name = document.createElement('div');
+  name.className = 'name';
+  name.textContent = media.name;
+  /* Koko tiedostolista vihjeeseen: monikamerassa raita on sama kulma
+     useassa osassa, eikä nimi yksin kerro mistä on kyse. */
+  name.title = (media.parts || []).map((p) => p.path || p.name).join('\n')
+    || media.path || media.name;
+  const tags = document.createElement('div');
+  tags.className = 'tags';
+  tags.textContent = trackFacts(media);
+  left.append(name, tags);
+
+  const controls = document.createElement('div');
+  controls.className = 'controls';
+
+  const role = document.createElement('select');
+  ROLE_LABELS.forEach(([value, text]) => {
+    const opt = document.createElement('option');
+    opt.value = value; opt.textContent = text;
+    if (media.config.role === value) opt.selected = true;
+    role.append(opt);
+  });
+  role.addEventListener('change', () => {
+    media.config.role = role.value;
+    renderTracks();
+    schedule(0);
+  });
+
+  const speaker = document.createElement('input');
+  speaker.type = 'text';
+  speaker.placeholder = 'Puhuja';
+  speaker.setAttribute('list', 'speaker-names');
+  speaker.value = media.config.speaker || '';
+  speaker.disabled = !(media.config.role === 'close' || media.config.role === 'mic');
+  speaker.addEventListener('input', () => {
+    media.config.speaker = speaker.value;
+    schedule();
+  });
+  speaker.addEventListener('change', renderLegend);
+  controls.append(role, speaker);
+  row.append(left, controls);
+
+  if (media.config.role === 'mic') {
+    const knobs = document.createElement('div');
+    knobs.className = 'knobs';
+    TRACK_KNOBS.forEach((spec) => {
+      knobs.append(knob(spec, media.config[spec.key], (v) => {
+        media.config[spec.key] = v;
+        schedule();
+      }));
+    });
+    row.append(knobs);
+  }
+
+  if (media.missing) {
+    const gone = (media.parts || []).filter((p) => p.missing).map((p) => p.path);
+    row.append(Object.assign(document.createElement('div'), {
+      className: 'warn',
+      textContent: 'Tiedostoa ei löydy levyltä: ' + (gone.join(', ') || media.path),
+    }));
+  } else if (media.envelope_error) {
+    row.append(Object.assign(document.createElement('div'),
+      { className: 'warn', textContent: media.envelope_error }));
+  }
+  return row;
 }
 
 function renderGlobals() {

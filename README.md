@@ -138,6 +138,8 @@ src/autoraffkat/
   decide.py          kynnykset, kestot, päällekkäispuhe    NOPEA
   preview.py         palkin tiivistys selaimelle
   project.py         asetukset JSONina XML:n viereen
+  probe.py           tiedostojen tekniset tiedot ffprobella
+  thumbs.py          ruutu kameratiedoston puolivälistä
   pick.py            lähteen etsintä ja valinta käynnistyksessä
   server/app.py      HTTP-rajapinta
   server/static/     käyttöliittymä
@@ -302,6 +304,19 @@ Siitä tulee varoitus vientipainikkeen jälkeen.
 **Uusi vienti ei tuo Final Cutissa tehtyjä muokkauksia mukanaan.** Se on uusi
 projekti. Siksi käsittely kannattaa ajaa loppuun ennen kuin viet ja alat
 leikata.
+
+## Raitalista
+
+Kuva ja ääni ovat omina ryhminään: niillä on eri roolit ja eri säätimet.
+
+Kuvaraidat näyttävät ruudun tiedoston puolivälistä. Monikamerassa kulmat ovat
+`1`, `2` ja `3` eikä tiedostonimikään kerro kumpaa puhujaa kamera kuvaa, joten
+ilman kuvaa roolitus on arvailua. Ruutu puretaan vasta kun sitä pyydetään ja
+jää välimuistiin.
+
+Kummallakin rivillä lukee mitä tiedosto on: mitat, ruutunopeus, koodekki ja
+bittinopeus kuvalle, kanavat, näytetaajuus ja bittisyvyys äänelle, sekä
+yhteiskesto ja -koko kaikista osista.
 
 ## Säätimet ja oletukset
 

@@ -19,7 +19,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .. import project, thumbs
+from .. import probe, project, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
 from ..decide import decide
@@ -332,9 +332,17 @@ def _track_json(state: AppState, track) -> dict:
     span = state.timeline.track_span(track.key) or (0, 0)
     first = items[0] if items else None
     errors = [state.analysis.errors.get(m.key, "") for m in items] if state.analysis else []
+    facts = probe.info(first.path) if first and first.path else {}
     return {
         "key": track.key,
         "name": track.name,
+        "kind": "video" if track.has_video else "audio",
+        "probe": facts,
+        # Osien yhteiskesto ja -koko: raita on yksi asia, vaikka tiedostoja
+        # olisi monta.
+        "total_size": sum((probe.info(m.path).get("size") or 0) for m in items),
+        "total_duration": sum((probe.info(m.path).get("duration") or 0)
+                              for m in items),
         "path": first.path if first else "",
         "missing": any(m.path and not os.path.exists(m.path) for m in items),
         "has_video": track.has_video,
@@ -396,8 +404,16 @@ def create_app(state: AppState) -> FastAPI:
 
     @app.get("/")
     def index():
-        """Käyttöliittymän sivu."""
-        return FileResponse(STATIC_DIR / "index.html")
+        """Käyttöliittymän sivu, tyyli ja skripti muokkausajalla versioituna.
+
+        Ilman versiota selain tarjoilee vanhaa tyyliä uuden skriptin kanssa, ja
+        tulos on rikkinäinen tavalla jota kukaan ei osaa yhdistää välimuistiin.
+        """
+        html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
+        for name in ("app.js", "style.css"):
+            stamp = int((STATIC_DIR / name).stat().st_mtime)
+            html = html.replace(f"/static/{name}", f"/static/{name}?v={stamp}")
+        return Response(html, media_type="text/html")
 
     @app.get("/api/thumb")
     def thumb(track: str):
