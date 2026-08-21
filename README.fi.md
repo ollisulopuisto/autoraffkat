@@ -13,7 +13,8 @@ missään vaiheessa.
 
 *Yksi rivi per puhuja: kamera, nimi ja mikki. Palkki alla on koko jakso
 yhdellä silmäyksellä, ja sen alla oleva lista on jokainen leikkaus jonka
-vienti tekee.*
+vienti tekee. Kuvassa leikataan historiaohjelma
+[Peter & Peterin](https://www.youtube.com/@peterpeterhistoria) jaksoa 53.*
 
 ## Käyttö
 

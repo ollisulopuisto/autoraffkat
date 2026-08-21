@@ -10,7 +10,9 @@ is ever rendered.
 
 *One row per speaker: their camera, their name, their microphone. The bar below
 is the whole episode at a glance; the list under it is every cut the export
-will make.*
+will make. Pictured: editing episode 53 of
+[Peter & Peter](https://www.youtube.com/@peterpeterhistoria), a Finnish show
+about history.*
 
 ## Usage
 
