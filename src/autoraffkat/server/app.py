@@ -32,6 +32,7 @@ from ..fcpxml.write import (
 )
 from ..i18n import LANGUAGES, t
 from ..model import (
+    DEFAULT_PROJECT_NAME,
     LONGTAKE_RULES,
     OVERLAP_RULES,
     ROLE_MIC,
@@ -198,7 +199,7 @@ class AppState:
             g.long_take_rule = raw["long_take_rule"]
         self._apply_audio(payload.get("audio") or {})
         if "project_name" in raw:
-            g.project_name = str(raw["project_name"])[:120] or "Raakaleikkaus"
+            g.project_name = str(raw["project_name"])[:120] or DEFAULT_PROJECT_NAME
 
     def _apply_audio(self, raw: dict) -> None:
         """Äänenkäsittelyn asetukset. Ei käynnistä käsittelyä — se on hidas."""

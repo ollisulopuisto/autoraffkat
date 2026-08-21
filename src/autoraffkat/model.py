@@ -26,6 +26,12 @@ LONGTAKE_RETURN = "return"     # laaja välissä, takaisin samaan puhujaan
 LONGTAKE_STAY = "stay"         # laajaan ja siihen jäädään puhujan vaihtoon asti
 LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY)
 
+# Viedyn projektin oletusnimi. Se näkyy Final Cutin selaimessa, eli on yhtä
+# lailla käyttäjälle näkyvää tekstiä kuin viennin tiedostonimi. Asetuksissa
+# oleva nimi voittaa tämän ja periytyy jaksosta toiseen, joten vaihtuminen
+# koskee vain uusia projekteja.
+DEFAULT_PROJECT_NAME = "Rough cut"
+
 
 @dataclass
 class Placement:
@@ -136,7 +142,7 @@ class Globals:
     wide_every: float = 15.0       # katkaise laajaan näin pitkän pätkän jälkeen, 0 = ei koskaan
     wide_hold: float = 4.0         # laajan kesto ennen paluuta, s (vain «return»)
     long_take_rule: str = LONGTAKE_RETURN
-    project_name: str = "Raakaleikkaus"
+    project_name: str = DEFAULT_PROJECT_NAME
 
     def to_json(self) -> dict:
         return asdict(self)

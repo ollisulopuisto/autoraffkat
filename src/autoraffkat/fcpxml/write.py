@@ -18,7 +18,7 @@ from dataclasses import replace
 
 from ..audio.mix import ROOM_ROLE
 from ..i18n import t
-from ..model import MediaItem, Segment
+from ..model import DEFAULT_PROJECT_NAME, MediaItem, Segment
 from ..timeline import (ZERO, FPS_LABELS, format_time, frames_str, fps_of,
                         to_frames)
 
@@ -158,7 +158,7 @@ def build_fcpxml(
     frame_duration: Fraction,
     program_start: Fraction,
     program_end: Fraction,
-    project_name: str = "Raakaleikkaus",
+    project_name: str = DEFAULT_PROJECT_NAME,
     version: str = "1.10",
     replacements: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
@@ -549,7 +549,7 @@ def build_multicam_fcpxml(
     mic_tracks: list[tuple[str, str]],
     program_start: Fraction,
     program_end: Fraction,
-    project_name: str = "Raakaleikkaus",
+    project_name: str = DEFAULT_PROJECT_NAME,
     replacements: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
 ) -> str:
