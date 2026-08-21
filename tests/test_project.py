@@ -86,3 +86,36 @@ def test_broken_settings_read_as_none(tmp_path):
     path.write_text("{ ei tätä voi lukea", encoding="utf-8")
     assert project.read(str(path)) is None
     assert project.read(str(tmp_path / "ei-ole.json")) is None
+
+
+def test_bundle_keeps_its_derived_files_outside(tmp_path):
+    """Final Cutin paketin sisään ei kirjoiteta mitään."""
+    bundle = tmp_path / "pp 53.fcpxmld"
+    bundle.mkdir()
+    xml = str(bundle / "Info.fcpxml")
+    # Nimi tulee paketista, ei sen sisällön Info-tiedostosta.
+    assert project.settings_path(xml) == str(tmp_path / "pp 53.autoraffkat.json")
+    assert project.default_output_path(xml) == str(tmp_path / "pp 53-leikattu.fcpxml")
+    for path in (project.settings_path(xml), project.default_output_path(xml)):
+        assert not os.path.dirname(path).endswith(".fcpxmld")
+
+
+def test_plain_xml_is_unchanged(tmp_path):
+    xml = str(tmp_path / "jakso.fcpxml")
+    assert project.settings_path(xml) == str(tmp_path / "jakso.autoraffkat.json")
+    assert project.default_output_path(xml) == str(tmp_path / "jakso-leikattu.fcpxml")
+
+
+def test_settings_left_inside_a_bundle_are_still_read(tmp_path):
+    """Vanhat asetukset paketin sisällä eivät katoa, mutta uudet menevät ulos."""
+    bundle = tmp_path / "pp 53.fcpxmld"
+    bundle.mkdir()
+    xml = str(bundle / "Info.fcpxml")
+    _write_settings(bundle / "Info.autoraffkat.json",
+                    {"CAM 1": {"role": "wide"}}, min_shot=7.0)
+    loaded = project.load(xml)
+    assert loaded.tracks["CAM 1"].role == "wide"
+    assert loaded.globals.min_shot == 7.0
+
+    written = project.save(xml, loaded)
+    assert written == str(tmp_path / "pp 53.autoraffkat.json")

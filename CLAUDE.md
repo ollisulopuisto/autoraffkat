@@ -52,6 +52,17 @@ Herkkyys on kynnys pohjakohinan yli, joten vahvistus ei siirrä sitä — pohja
 siirtyy saman verran. Vahvistus vaikuttaa vain mikkien keskinäiseen vertailuun
 päällekkäispuheessa. Jos tämän muuttaa, säätimet alkavat vaikuttaa toisiinsa.
 
+## Final Cut on ankarampi kuin oma lukija
+
+Vienti on tarkistettava Final Cutin omaa DTD:tä vasten
+(`/Applications/Final Cut Pro.app/.../Interchange.framework/.../FCPXMLv1_*.dtd`,
+`xmllint --dtdvalid`). Oma lukija hyväksyy paljon enemmän kuin tuonti: kerran
+`mc-clip`iin kirjoitettiin `tcFormat`, joka kelpasi lukijalle mutta kaatoi
+koko tuonnin. `clip` ja `asset-clip` tuntevat sen, `mc-clip` ei.
+
+Johdetut tiedostot eivät mene `.fcpxmld`-paketin sisään vaan sen viereen ja
+saavat paketin nimen. Paketti kuuluu Final Cutille.
+
 ## Testit
 
 `tests/make_fixture.py` syntetisoi aineiston ffmpegillä: siniaaltopurskeet

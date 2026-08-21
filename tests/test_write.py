@@ -178,3 +178,34 @@ def test_multicam_refuses_a_plain_timeline(fixture_dir):
     with pytest.raises(WriteError):
         build_multicam_fcpxml(tl, [Segment("WIDE.mp4", "Laaja", 0.0, 5.0)], [],
                               Fraction(0), Fraction(5), "Ei monikameraa")
+
+
+# --------------------------------------------------- Final Cutin oma mittapuu
+
+
+def test_multicam_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    """Oma lukija hyväksyy enemmän kuin tuonti; DTD on se raja joka ratkaisee.
+
+    Tämä testi on olemassa siksi, että ``mc-clip``iin kirjoitettiin kerran
+    ``tcFormat``, jota DTD ei tunne. Lukija ei siitä välittänyt, Final Cut
+    hylkäsi koko tiedoston.
+    """
+    _, xml = _multicam_cut(fixture_dir)
+    validate_fcpxml(xml, "multicam.fcpxml")
+
+
+def test_flat_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    _, xml = _cut(fixture_dir)
+    validate_fcpxml(xml, "flat.fcpxml")
+
+
+def test_multicam_gap_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    """Osien väliin jäävä aukko on omaa merkintäänsä, ei mc-clip."""
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    # Ohjelma jatkuu multicamien loputtua, joten loppuun tulee <gap>.
+    segments = [Segment("WIDE", "Laaja", 0.0, 36.0),
+                Segment("CLOSE_A", "Olli", 36.0, 44.0)]
+    xml = build_multicam_fcpxml(tl, segments, [("olli Track1", "Olli")],
+                                Fraction(0), Fraction(44), "Aukolla")
+    assert "<gap" in xml
+    validate_fcpxml(xml, "gap.fcpxml")

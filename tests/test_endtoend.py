@@ -279,7 +279,7 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
     assert state.settings.tracks["CLOSE_A"].speaker == "Olli"
     assert state.settings.tracks["WIDE"].role == "wide"
     assert state.settings.globals.min_shot == 4.0
-    assert state.inherited_from.endswith("jakso53.fcpxmld/Info.autoraffkat.json")
+    assert state.inherited_from.endswith("jakso53.autoraffkat.json")
 
 
 def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):

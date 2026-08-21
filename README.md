@@ -39,6 +39,11 @@ Vienti kirjoittaa uuden tiedoston `jakso-leikattu.fcpxml`; lähde-XML:ää ei
 kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
 viereen.
 
+Kun lähde on `.fcpxmld`-paketti, kumpikaan tiedosto ei mene paketin sisään
+vaan sen viereen ja saa paketin nimen: `pp 53 multicam.fcpxmld` tuottaa
+`pp 53 multicam-leikattu.fcpxml` ja `pp 53 multicam.autoraffkat.json`.
+Paketti kuuluu Final Cutille.
+
 Uusi jakso perii roolit edellisestä: raita-avaimet on johdettu
 tiedostonimistä, joten `STATUS CAM 1` on sama kamera myös ensi viikolla.
 Perintä haetaan XML:n hakemistosta, sen yläpuolelta ja yläpuolen
@@ -187,6 +192,9 @@ kesken leikkauksen voi vaihtaa.
 ```
 uv run pytest
 ```
+
+Vienti tarkistetaan Final Cutin omaa DTD:tä vasten, jos Final Cut on
+asennettuna — oma lukija hyväksyy enemmän kuin tuonti.
 
 Testiaineisto syntetisoidaan ffmpegillä: siniaaltopurskeita tunnetuissa
 kohdissa, joten päätöksen oikeellisuus on tarkistettavissa ilman oikeaa

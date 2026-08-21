@@ -341,6 +341,11 @@ def create_app(state: AppState) -> FastAPI:
             out_path = project.default_output_path(state.xml_path)
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
                 raise HTTPException(400, "Vienti osuisi lähde-XML:n päälle.")
+            if os.path.dirname(out_path).endswith(project.BUNDLE_EXT):
+                # Paketti kuuluu Final Cutille. Jos polku joskus laskettaisiin
+                # sinne, se on virhe eikä asia jota yritetään silti.
+                raise HTTPException(
+                    400, "Vienti osuisi Final Cutin .fcpxmld-paketin sisään.")
             try:
                 if state.timeline.multicams:
                     # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman

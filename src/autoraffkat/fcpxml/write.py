@@ -451,7 +451,6 @@ def build_multicam_fcpxml(
             f"name={quoteattr(f'{seg.label} {index + 1:02d}')}",
             f'start="{frames_str(start_frames, frame_duration)}"',
             f'duration="{frames_str(b - a, frame_duration)}"',
-            'tcFormat="NDF"',
         ]
         sources = _mc_sources(video_angle, audio_angles, mc.angle_roles)
         if sources:

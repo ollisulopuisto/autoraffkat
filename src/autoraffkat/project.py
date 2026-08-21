@@ -22,12 +22,33 @@ OUTPUT_SUFFIX = "-leikattu"
 
 
 SETTINGS_SUFFIX = ".autoraffkat.json"
+BUNDLE_EXT = ".fcpxmld"
+BUNDLE_INNER = "Info.fcpxml"
+
+
+def derived_base(xml_path: str) -> str:
+    """Tähän lähteeseen kuuluvien tiedostojen kantanimi ilman päätettä.
+
+    ``.fcpxmld`` on Final Cutin oma paketti. Sen sisään ei kirjoiteta mitään:
+    paketti kuuluu Final Cutille, ja sen sisältö voi vaihtua viennin mukana.
+    Johdetut tiedostot menevät paketin **viereen** ja saavat paketin nimen,
+    joka on muutenkin luettavampi kuin ``Info``.
+    """
+    path = os.path.abspath(xml_path)
+    folder = os.path.dirname(path)
+    if os.path.basename(path) == BUNDLE_INNER and folder.endswith(BUNDLE_EXT):
+        return folder[:-len(BUNDLE_EXT)]
+    return os.path.splitext(path)[0]
 
 
 def settings_path(xml_path: str) -> str:
     """Asetustiedoston polku: ``jakso.fcpxml`` -> ``jakso.autoraffkat.json``."""
-    base, _ = os.path.splitext(os.path.abspath(xml_path))
-    return f"{base}{SETTINGS_SUFFIX}"
+    return f"{derived_base(xml_path)}{SETTINGS_SUFFIX}"
+
+
+def legacy_settings_path(xml_path: str) -> str:
+    """Vanha sijainti paketin sisällä. Luetaan, ei kirjoiteta."""
+    return f"{os.path.splitext(os.path.abspath(xml_path))[0]}{SETTINGS_SUFFIX}"
 
 
 def default_output_path(xml_path: str) -> str:
@@ -36,8 +57,7 @@ def default_output_path(xml_path: str) -> str:
     Erillinen nimi on tahallinen: vienti ei saa osua lähde-XML:n päälle, koska
     silmukassa palataan aina samaan lähteeseen.
     """
-    base, ext = os.path.splitext(os.path.abspath(xml_path))
-    return f"{base}{OUTPUT_SUFFIX}{ext or '.fcpxml'}"
+    return f"{derived_base(xml_path)}{OUTPUT_SUFFIX}.fcpxml"
 
 
 @dataclass
@@ -87,7 +107,9 @@ def find_previous(xml_path: str) -> str | None:
     patterns = [
         os.path.join(here, f"*{SETTINGS_SUFFIX}"),
         os.path.join(above, f"*{SETTINGS_SUFFIX}"),
-        os.path.join(above, "*.fcpxmld", f"*{SETTINGS_SUFFIX}"),
+        # Vanhemmat asetukset ovat pakettien sisällä.
+        os.path.join(here, f"*{BUNDLE_EXT}", f"*{SETTINGS_SUFFIX}"),
+        os.path.join(above, f"*{BUNDLE_EXT}", f"*{SETTINGS_SUFFIX}"),
     ]
     found: set[str] = set()
     for pattern in patterns:
@@ -104,7 +126,9 @@ def load(xml_path: str) -> ProjectSettings:
     Puuttuva tai rikkinäinen tiedosto ei ole virhe vaan tuottaa oletukset:
     asetukset ovat mukavuus, eivät ehto työskentelylle.
     """
-    return read(settings_path(xml_path)) or ProjectSettings()
+    return (read(settings_path(xml_path))
+            or read(legacy_settings_path(xml_path))
+            or ProjectSettings())
 
 
 def read(path: str) -> ProjectSettings | None:

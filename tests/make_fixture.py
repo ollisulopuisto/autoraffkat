@@ -262,11 +262,11 @@ def write_multicam_xml(path: str, parts: dict) -> None:
         'tcFormat="NDF" audioLayout="stereo" audioRate="48k">',
         "          <spine>",
         f'            <mc-clip ref="mA" offset="0s" name="A-osa" start="0s" '
-        f'duration="{half}/25s" tcFormat="NDF">',
+        f'duration="{half}/25s">',
         mc_sources("A"),
         "            </mc-clip>",
         f'            <mc-clip ref="mB" offset="{half}/25s" name="B-osa" '
-        f'start="{half}/25s" duration="{frames - half}/25s" tcFormat="NDF">',
+        f'start="{half}/25s" duration="{frames - half}/25s">',
         mc_sources("B"),
         "            </mc-clip>",
         "          </spine>",
