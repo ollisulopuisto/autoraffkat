@@ -13,7 +13,7 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
-def build(clean: bool = False, fetch_bins: bool = True) -> int:
+def build(clean: bool = False, fetch_bins: bool = True, dmg: bool = False) -> int:
     os.chdir(ROOT_DIR)
 
     bin_dir = ROOT_DIR / "bin"
@@ -45,6 +45,9 @@ def build(clean: bool = False, fetch_bins: bool = True) -> int:
         app_bundle = dist_dir / "autoraffkat.app"
         if app_bundle.exists():
             print(f"\nValmis! macOS-sovelluspaketti löytyy polusta:\n  {app_bundle}")
+        if dmg:
+            from make_dmg import make_dmg
+            return make_dmg(app_path=app_bundle)
     elif sys.platform.startswith("win"):
         exe_file = dist_dir / "autoraffkat" / "autoraffkat.exe"
         if exe_file.exists():
@@ -57,9 +60,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Käännä autoraffkat itsenäiseksi työpöytäsovellukseksi.")
     parser.add_argument("--clean", action="store_true", help="Puhdista väliaikaiset build-hakemistot ennen käännöstä")
     parser.add_argument("--no-fetch", action="store_false", dest="fetch", help="Älä lataa ffmpeg-binäärejä automaattisesti")
+    parser.add_argument("--dmg", action="store_true", help="Pakkaa valmis paketti myös levykuvaksi (vain macOS)")
     args = parser.parse_args()
 
-    sys.exit(build(clean=args.clean, fetch_bins=args.fetch))
+    sys.exit(build(clean=args.clean, fetch_bins=args.fetch, dmg=args.dmg))
 
 
 if __name__ == "__main__":

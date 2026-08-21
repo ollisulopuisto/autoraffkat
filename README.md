@@ -66,6 +66,19 @@ uv sync            # or: pip install -e .
 Requires Python 3.11+, ffmpeg, and macOS for the file dialog and thumbnails.
 Everything else is cross-platform.
 
+### Desktop app
+
+```
+uv run python scripts/build_app.py          # dist/autoraffkat.app
+uv run python scripts/build_app.py --dmg    # …and dist/autoraffkat.dmg
+```
+
+The build bundles static ffmpeg and ffprobe binaries, downloading them into
+`bin/` on the first run. `scripts/make_dmg.py` packs an already-built app on
+its own; it copies with `ditto` rather than a plain file copy, because the
+signature covers extended attributes and symlinks and a plain copy breaks it
+in a way that only shows up on somebody else's machine.
+
 ## Input
 
 Three kinds of source are supported:

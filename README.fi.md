@@ -67,6 +67,20 @@ brew install ffmpeg
 uv sync            # tai: pip install -e .
 ```
 
+### Työpöytäsovellus
+
+```
+uv run python scripts/build_app.py          # dist/autoraffkat.app
+uv run python scripts/build_app.py --dmg    # …ja dist/autoraffkat.dmg
+```
+
+Käännös niputtaa mukaan staattiset ffmpeg- ja ffprobe-binäärit ja hakee ne
+`bin/`-hakemistoon ensimmäisellä kerralla. `scripts/make_dmg.py` pakkaa jo
+käännetyn paketin erikseen. Se kopioi `ditto`lla eikä tavallisella
+tiedostokopiolla: allekirjoitus kattaa myös laajennetut attribuutit ja
+symlinkit, ja tavallinen kopio rikkoo sen niin että vika näkyy vasta toisen
+käyttäjän koneella.
+
 ## Sisäänluku
 
 Tuetaan kolmea lähdettä:
