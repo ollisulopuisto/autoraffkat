@@ -101,6 +101,13 @@ jobs:
       - name: Fetch binaries
         run: uv run python scripts/fetch_binaries.py --os windows
 
+      # macOSilla ffmpeg tulee brew'sta polkuun; Windowsissa se ladataan
+      # `bin`-hakemistoon, josta testit eivät sitä löydä: aineiston synteesi
+      # ajaa `ffmpeg`in suoraan polusta.
+      - name: Put bundled ffmpeg on PATH
+        shell: pwsh
+        run: Add-Content $env:GITHUB_PATH "$env:GITHUB_WORKSPACE\bin"
+
       - name: Tests
         run: uv run pytest -q
 
