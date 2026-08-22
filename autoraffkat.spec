@@ -145,8 +145,8 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "autoraffkat",
             "CFBundleDisplayName": "autoraffkat",
-            "CFBundleVersion": "2026.8.22.1",
-            "CFBundleShortVersionString": "2026.8.22.1",
+            "CFBundleVersion": "2026.8.22.48",
+            "CFBundleShortVersionString": "2026.8.22.48",
             "CFBundleIconFile": bundle_icon_file,
             "NSHighResolutionCapable": "True",
             "NSRequiresAquaSystemAppearance": "False",

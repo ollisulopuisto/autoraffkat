@@ -28,9 +28,9 @@ _current: ContextVar[str] = ContextVar("language", default=DEFAULT)
 CATALOG: dict[str, dict[str, str]] = {
     "read.no_project": {
         "fi": "XML:stä ei löytynyt projektia eikä synkronoitua klippiä. "
-              "Vie Final Cutista joko synkkaklippi tai projekti.",
+        "Vie Final Cutista joko synkkaklippi tai projekti.",
         "en": "No project or synchronised clip found in the XML. "
-              "Export either a sync clip or a project from Final Cut.",
+        "Export either a sync clip or a project from Final Cut.",
     },
     "read.bad_xml": {
         "fi": "XML ei jäsenny: {error}",
@@ -66,17 +66,17 @@ CATALOG: dict[str, dict[str, str]] = {
     },
     "roles.no_closeups": {
         "fi": "Yhdelläkään puhujalla ei ole lähikuvaa, joten koko leikkaus "
-              "olisi laajaa. Anna vähintään yhdelle kameralle rooli "
-              "«Lähikuva» ja puhujan nimi.",
+        "olisi laajaa. Anna vähintään yhdelle kameralle rooli "
+        "«Lähikuva» ja puhujan nimi.",
         "en": "No speaker has a close-up, so the whole edit would be the "
-              "wide shot. Give at least one camera the role “Close-up” and "
-              "a speaker name.",
+        "wide shot. Give at least one camera the role “Close-up” and "
+        "a speaker name.",
     },
     "analysis.no_overlap": {
         "fi": "Laajalla kuvalla ja mikeillä ei ole yhteistä aikaa. "
-              "Tarkista roolit ja lähde-XML:n synkkaus.",
+        "Tarkista roolit ja lähde-XML:n synkkaus.",
         "en": "The wide shot and the microphones share no common time. "
-              "Check the roles and the sync in the source XML.",
+        "Check the roles and the sync in the source XML.",
     },
     "write.empty_cut": {
         "fi": "Leikkauslista on tyhjä.",
@@ -128,17 +128,17 @@ CATALOG: dict[str, dict[str, str]] = {
     },
     "export.audio_running": {
         "fi": "Äänen käsittely on kesken, joten {missing}/{total} "
-              "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "
-              "käsittely on valmis — ennen kuin leikkaat Final Cutissa.",
+        "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "
+        "käsittely on valmis — ennen kuin leikkaat Final Cutissa.",
         "en": "Audio processing is still running, so {missing}/{total} "
-              "microphone files are exported unprocessed. Export again once "
-              "it finishes — before you start editing in Final Cut.",
+        "microphone files are exported unprocessed. Export again once "
+        "it finishes — before you start editing in Final Cut.",
     },
     "export.audio_missing": {
         "fi": "{missing}/{total} mikkitiedostoa viedään käsittelemättömänä: "
-              "käsittelyä ei ole ajettu tai se epäonnistui.",
+        "käsittelyä ei ole ajettu tai se epäonnistui.",
         "en": "{missing}/{total} microphone files are exported unprocessed: "
-              "processing has not been run, or it failed.",
+        "processing has not been run, or it failed.",
     },
     "audio.envelope_failed": {
         "fi": "Verhokäyrien laskenta epäonnistui: {error}",
@@ -178,16 +178,14 @@ CATALOG: dict[str, dict[str, str]] = {
     },
     "audio.plugin_shifted": {
         "fi": "Liitännäinen siirsi ääntä {samples} näytettä ({ms:.0f} ms): "
-              "{name}. Kuva ja ääni erkanisivat, joten tulosta ei käytetä.",
+        "{name}. Kuva ja ääni erkanisivat, joten tulosta ei käytetä.",
         "en": "The plug-in shifted the audio by {samples} samples "
-              "({ms:.0f} ms): {name}. Picture and sound would drift apart, "
-              "so the result is not used.",
+        "({ms:.0f} ms): {name}. Picture and sound would drift apart, "
+        "so the result is not used.",
     },
     "audio.written_length": {
-        "fi": "Kirjoitettu tiedosto on eri pituinen ({before} → {after}): "
-              "{name}.",
-        "en": "The written file has a different length ({before} → {after}): "
-              "{name}.",
+        "fi": "Kirjoitettu tiedosto on eri pituinen ({before} → {after}): {name}.",
+        "en": "The written file has a different length ({before} → {after}): {name}.",
     },
 }
 

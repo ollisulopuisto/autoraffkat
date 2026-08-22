@@ -88,7 +88,7 @@ def format_name(width: int, height: int, frame_duration: Fraction) -> str:
     """Final Cutin formaattinimi, esim. ``FFVideoFormat1080p25``."""
     label = FPS_LABELS.get(fps_of(frame_duration))
     if label is None:
-        return f"FFVideoFormatRateUndefined"
+        return "FFVideoFormatRateUndefined"
     return f"FFVideoFormat{height}p{label}"
 
 

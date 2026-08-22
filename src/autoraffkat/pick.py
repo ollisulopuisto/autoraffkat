@@ -42,8 +42,10 @@ def resolve(path: str) -> str:
 # suomenkielinen tunnus tunnistetaan yhä: levyllä on jo `-leikattu`-viennejä,
 # eikä tunnuksen vaihtuminen saa tehdä niistä kelvollisia lähteitä.
 _OUTPUT_RE = re.compile(
-    "(" + "|".join(re.escape(s) for s in (OUTPUT_SUFFIX, *LEGACY_OUTPUT_SUFFIXES))
-    + r")( v\d+)?$")
+    "("
+    + "|".join(re.escape(s) for s in (OUTPUT_SUFFIX, *LEGACY_OUTPUT_SUFFIXES))
+    + r")( v\d+)?$"
+)
 
 
 def _is_output(path: str) -> bool:
@@ -119,30 +121,31 @@ def ask(paths: list[str]) -> str | None:
 # AppleScript kelpuuttaa myös paketin, koska ``.fcpxmld`` on Finderille
 # tiedosto. Jos tyyppirajaus ei löydä mitään, kysytään hakemistoa: silloin
 # käyttäjällä on paketti, jota järjestelmä ei tunne paketiksi.
-_CHOOSE_FILE = '''
+_CHOOSE_FILE = """
 try
     set f to choose file with prompt {prompt} of type {{"fcpxml", "fcpxmld"}} {start}
     return POSIX path of f
 on error number -128
     return ""
 end try
-'''
+"""
 
-_CHOOSE_FOLDER = '''
+_CHOOSE_FOLDER = """
 try
     set f to choose folder with prompt {prompt} {start}
     return POSIX path of f
 on error number -128
     return ""
 end try
-'''
+"""
 
 
 def _osascript(script: str) -> str | None:
     """Ajaa AppleScriptin. Palauttaa tulosteen tai ``None`` jos ei onnistu."""
     try:
-        done = subprocess.run(["osascript", "-e", script],
-                              capture_output=True, text=True, timeout=300)
+        done = subprocess.run(
+            ["osascript", "-e", script], capture_output=True, text=True, timeout=300
+        )
     except (OSError, subprocess.TimeoutExpired):
         return None
     if done.returncode != 0:
@@ -161,13 +164,13 @@ def native(directory: str = "", force: bool = False) -> str | None:
     if not force and not interactive():
         return None
     prompt = '"Valitse Final Cutista viety FCPXML"'
-    start = (f'default location POSIX file "{directory}"' if directory else "")
+    start = f'default location POSIX file "{directory}"' if directory else ""
     for template in (_CHOOSE_FILE, _CHOOSE_FOLDER):
         result = _osascript(template.format(prompt=prompt, start=start))
         if result:
             return resolve(result.rstrip("/"))
         if result == "":
-            return None            # käyttäjä perui, ei yritetä uudestaan
+            return None  # käyttäjä perui, ei yritetä uudestaan
     return None
 
 

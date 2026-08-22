@@ -8,10 +8,8 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import os
 import platform
 import shutil
-import sys
 import tempfile
 import urllib.request
 import zipfile
@@ -30,13 +28,26 @@ from pathlib import Path
 # koneesta ja päivästä toiseen, eikä ulkopuolisen palvelimen vaihtama tiedosto
 # saa päätyä pakettiin huomaamatta.
 MACOS_RELEASE = "b6.1.1"
-MACOS_BASE = ("https://github.com/eugeneware/ffmpeg-static/releases/download/"
-              f"{MACOS_RELEASE}")
+MACOS_BASE = (
+    f"https://github.com/eugeneware/ffmpeg-static/releases/download/{MACOS_RELEASE}"
+)
 MACOS_SHA256 = {
-    ("arm64", "ffmpeg"): "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
-    ("arm64", "ffprobe"): "bb2db6f5d8cef919da12fbf592119a987202a8c060a886f3cab091f9cab90b64",
-    ("x86_64", "ffmpeg"): "ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894",
-    ("x86_64", "ffprobe"): "fa3add0ce901f7241abe0dfc0155d958fc834aca3f8ce61f87cc712ae669c1e0",
+    (
+        "arm64",
+        "ffmpeg",
+    ): "a90e3db6a3fd35f6074b013f948b1aa45b31c6375489d39e572bea3f18336584",
+    (
+        "arm64",
+        "ffprobe",
+    ): "bb2db6f5d8cef919da12fbf592119a987202a8c060a886f3cab091f9cab90b64",
+    (
+        "x86_64",
+        "ffmpeg",
+    ): "ebdddc936f61e14049a2d4b549a412b8a40deeff6540e58a9f2a2da9e6b18894",
+    (
+        "x86_64",
+        "ffprobe",
+    ): "fa3add0ce901f7241abe0dfc0155d958fc834aca3f8ce61f87cc712ae669c1e0",
 }
 
 WINDOWS_ARCHIVE = "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip"
@@ -47,7 +58,8 @@ def _verify(path: Path, expected: str) -> None:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     if digest != expected:
         raise SystemExit(
-            f"Tarkistussumma ei täsmää: {path.name}\n  odotettu {expected}\n  saatu    {digest}")
+            f"Tarkistussumma ei täsmää: {path.name}\n  odotettu {expected}\n  saatu    {digest}"
+        )
 
 
 def _arch_of(path: Path) -> str:
@@ -69,7 +81,9 @@ def download_file(url: str, dest: Path) -> None:
     urllib.request.urlretrieve(url, str(dest))
 
 
-def fetch_binaries(target_os: str | None = None, output_dir: Path | None = None) -> Path:
+def fetch_binaries(
+    target_os: str | None = None, output_dir: Path | None = None
+) -> Path:
     sys_name = (target_os or platform.system()).lower()
     machine = platform.machine().lower()
     if machine in ("aarch64", "arm64"):
@@ -131,8 +145,12 @@ def fetch_binaries(target_os: str | None = None, output_dir: Path | None = None)
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Hae staattiset ffmpeg- ja ffprobe-binäärit.")
-    parser.add_argument("--os", choices=["darwin", "windows", "linux"], help="Kohdekäyttöjärjestelmä")
+    parser = argparse.ArgumentParser(
+        description="Hae staattiset ffmpeg- ja ffprobe-binäärit."
+    )
+    parser.add_argument(
+        "--os", choices=["darwin", "windows", "linux"], help="Kohdekäyttöjärjestelmä"
+    )
     parser.add_argument("--dest", type=Path, help="Kohdehakemisto (oletus: ./bin)")
     args = parser.parse_args()
 

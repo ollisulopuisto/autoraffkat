@@ -10,7 +10,12 @@ def test_sync_clip(fixture_dir):
     assert tl.kind == "sync-clip"
     assert tl.frame_duration == Fraction(1, 25)
     assert [m.key for m in tl.media] == [
-        "WIDE.mp4", "CLOSE_A.mp4", "CLOSE_B.mp4", "MIC_A.wav", "MIC_B.wav"]
+        "WIDE.mp4",
+        "CLOSE_A.mp4",
+        "CLOSE_B.mp4",
+        "MIC_A.wav",
+        "MIC_B.wav",
+    ]
     wide = tl.media[0]
     assert wide.has_video and not wide.has_audio
     assert wide.width == 1920 and wide.height == 1080
@@ -24,7 +29,7 @@ def test_project_offsets_are_relative_to_parent_start(fixture_dir):
     for item in tl.media:
         placement = item.placements[0]
         assert placement.offset == 0, item.key
-        assert placement.start == 1        # spinellä start=25/25s
+        assert placement.start == 1  # spinellä start=25/25s
         assert placement.duration == 35
 
 
@@ -57,7 +62,12 @@ def test_multicam_groups_angles_across_parts(fixture_dir):
     assert tl.kind == "multicam"
     assert len(tl.media) == 10
     assert [t.key for t in tl.tracks] == [
-        "WIDE", "CLOSE_A", "CLOSE_B", "host Track1", "guest Track2"]
+        "WIDE",
+        "CLOSE_A",
+        "CLOSE_B",
+        "host Track1",
+        "guest Track2",
+    ]
     for track in tl.tracks:
         assert len(track.media_keys) == 2, track.key
         # Raidan väli kattaa molemmat osat, ei vain jälkimmäistä.
@@ -78,7 +88,7 @@ def test_multicam_content_is_clipped_to_its_part(fixture_dir):
 def test_multicam_angle_gap_shifts_source_time(fixture_dir):
     """Kulman alussa oleva aukko siirtää lähdeaikaa, ei aikajanaa."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    wide = tl.media_by_key()["WIDE 02.mp4"]          # osassa B sekunnin aukko
+    wide = tl.media_by_key()["WIDE 02.mp4"]  # osassa B sekunnin aukko
     assert wide.file_time_at(Fraction(18)) == 18
     assert wide.file_time_at(Fraction(30)) == 30
 
@@ -86,7 +96,9 @@ def test_multicam_angle_gap_shifts_source_time(fixture_dir):
 def test_multicam_records_its_parts(fixture_dir):
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     assert [(mc.offset, mc.duration, mc.start) for mc in tl.multicams] == [
-        (0, 18, 0), (18, 18, 18)]
+        (0, 18, 0),
+        (18, 18, 18),
+    ]
     assert all(len(mc.angle_ids) == 5 for mc in tl.multicams)
 
 

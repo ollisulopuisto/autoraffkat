@@ -17,8 +17,7 @@ from .audio.envelope import FLOOR_DB, EnvelopeError, envelope_for
 from .decide import Grid, SpeakerLanes
 from .fcpxml.read import Timeline
 from .i18n import t
-from .model import (HOP, ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, MediaItem,
-                    TrackConfig)
+from .model import HOP, ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, MediaItem, TrackConfig
 
 SMOOTH_SECONDS = 0.10
 NOISE_PERCENTILE = 20.0
@@ -37,8 +36,9 @@ def _smooth(db: np.ndarray, seconds: float) -> np.ndarray:
     return np.convolve(db, kernel, mode="same").astype(np.float32)
 
 
-def align(item: MediaItem, envelope: np.ndarray, program_start: Fraction,
-          n: int) -> tuple[np.ndarray, np.ndarray]:
+def align(
+    item: MediaItem, envelope: np.ndarray, program_start: Fraction, n: int
+) -> tuple[np.ndarray, np.ndarray]:
     """Verhokäyrä aikajanan ruudukolle. Palauttaa (dB, onko mediaa)."""
     out = np.full(n, FLOOR_DB, dtype=np.float32)
     valid = np.zeros(n, dtype=bool)
@@ -67,8 +67,9 @@ def align(item: MediaItem, envelope: np.ndarray, program_start: Fraction,
     return out, valid
 
 
-def availability(items: MediaItem | list[MediaItem], program_start: Fraction,
-                 n: int) -> np.ndarray:
+def availability(
+    items: MediaItem | list[MediaItem], program_start: Fraction, n: int
+) -> np.ndarray:
     """Missä ruudukon kohdissa raidalla on kuvaa.
 
     Raita voi koostua useasta assetista — monikamerassa sama kulma on oma
@@ -94,7 +95,9 @@ class Analysis:
     timeline: Timeline
     envelopes: dict[str, np.ndarray] = field(default_factory=dict)
     errors: dict[str, str] = field(default_factory=dict)
-    _aligned: dict[tuple, tuple[np.ndarray, np.ndarray, float]] = field(default_factory=dict)
+    _aligned: dict[tuple, tuple[np.ndarray, np.ndarray, float]] = field(
+        default_factory=dict
+    )
 
     def media_by_key(self) -> dict[str, MediaItem]:
         """Mediat avaimella haettavina."""
@@ -112,25 +115,34 @@ class Analysis:
         if hit is None:
             env = self.envelopes.get(item.key)
             if env is None:
-                hit = (np.full(n, FLOOR_DB, dtype=np.float32),
-                       np.zeros(n, dtype=bool), FLOOR_DB)
+                hit = (
+                    np.full(n, FLOOR_DB, dtype=np.float32),
+                    np.zeros(n, dtype=bool),
+                    FLOOR_DB,
+                )
             else:
                 db, valid = align(item, env, program_start, n)
                 db = _smooth(db, SMOOTH_SECONDS)
                 # Pohjakohina riippuu vain verhokäyrästä, ei säätimistä, joten
                 # se lasketaan kerran tähän välimuistiin.
-                floor = (float(np.percentile(db[valid], NOISE_PERCENTILE))
-                         if valid.any() else FLOOR_DB)
+                floor = (
+                    float(np.percentile(db[valid], NOISE_PERCENTILE))
+                    if valid.any()
+                    else FLOOR_DB
+                )
                 hit = (db, valid, floor)
             self._aligned[cache_key] = hit
         return hit
 
 
-def analyze(timeline: Timeline, progress=None, keys: list[str] | None = None) -> Analysis:
+def analyze(
+    timeline: Timeline, progress=None, keys: list[str] | None = None
+) -> Analysis:
     """Laskee tai lukee välimuistista verhokäyrät. Hidas — ajetaan kerran."""
     analysis = Analysis(timeline=timeline)
-    targets = [m for m in timeline.media
-               if m.has_audio and (keys is None or m.key in keys)]
+    targets = [
+        m for m in timeline.media if m.has_audio and (keys is None or m.key in keys)
+    ]
     for index, item in enumerate(targets):
         if progress is not None:
             progress(index, len(targets), item.name)
@@ -156,8 +168,8 @@ class Roles:
 
     wide_key: str = ""
     speakers: list[str] = field(default_factory=list)
-    mics: dict[str, list[str]] = field(default_factory=dict)     # puhuja -> mikit
-    closes: dict[str, str] = field(default_factory=dict)         # puhuja -> lähikuva
+    mics: dict[str, list[str]] = field(default_factory=dict)  # puhuja -> mikit
+    closes: dict[str, str] = field(default_factory=dict)  # puhuja -> lähikuva
     problems: list[str] = field(default_factory=list)
 
 
@@ -223,8 +235,9 @@ def program_range(timeline: Timeline, roles: Roles) -> tuple[Fraction, Fraction]
     return max(s[0] for s in spans), min(s[1] for s in spans)
 
 
-def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
-               roles: Roles | None = None) -> tuple[Grid, Fraction, Fraction]:
+def build_grid(
+    analysis: Analysis, tracks: dict[str, TrackConfig], roles: Roles | None = None
+) -> tuple[Grid, Fraction, Fraction]:
     """Ruudukko päätöskerrokselle. Ajetaan joka säädöllä — pysyttävä millisekunneissa."""
     timeline = analysis.timeline
     roles = roles or resolve_roles(timeline, tracks)
@@ -261,9 +274,13 @@ def build_grid(analysis: Analysis, tracks: dict[str, TrackConfig],
             items = timeline.track_media(close_key)
             if items:
                 avail = availability(items, program_start, n)
-        lanes.append(SpeakerLanes(name=name, level=level, on=on,
-                                  close_key=close_key, available=avail))
+        lanes.append(
+            SpeakerLanes(
+                name=name, level=level, on=on, close_key=close_key, available=avail
+            )
+        )
 
-    grid = Grid(n=n, program_start=float(program_start), speakers=lanes,
-                wide_key=roles.wide_key)
+    grid = Grid(
+        n=n, program_start=float(program_start), speakers=lanes, wide_key=roles.wide_key
+    )
     return grid, program_start, program_end

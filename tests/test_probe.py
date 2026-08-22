@@ -23,6 +23,7 @@ def test_audio_facts(fixture_dir):
     path = fixture_dir / "MIC_A.wav"
     if not path.exists():
         import pytest
+
         pytest.skip("fixturen mediaa ei ole")
     facts = probe.info(str(path))
     assert facts["audio"]["channels"] == 1
@@ -37,6 +38,7 @@ def test_result_is_cached(fixture_dir):
     path = fixture_dir / "MIC_A.wav"
     if not path.exists():
         import pytest
+
         pytest.skip("fixturen mediaa ei ole")
     first = probe.info(str(path))
     assert probe.info(str(path)) is first

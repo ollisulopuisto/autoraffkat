@@ -19,7 +19,9 @@ import pytest
 from autoraffkat.model import ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, Globals, TrackConfig
 from autoraffkat.server.app import AppState, _state_json, create_app
 
-STATIC = Path(__file__).resolve().parents[1] / "src" / "autoraffkat" / "server" / "static"
+STATIC = (
+    Path(__file__).resolve().parents[1] / "src" / "autoraffkat" / "server" / "static"
+)
 SMOKE = Path(__file__).parent / "ui_smoke.js"
 
 needs_node = pytest.mark.skipif(shutil.which("node") is None, reason="node puuttuu")
@@ -50,9 +52,12 @@ def test_interface_renders_without_errors(scratch_xml, tmp_path):
         time.sleep(0.05)
 
     from fastapi.testclient import TestClient
+
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _roles().items()},
-               "globals": Globals().to_json()}
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _roles().items()},
+        "globals": Globals().to_json(),
+    }
     latest = client.post("/api/settings", json=payload).json()
     assert latest.get("ok"), latest.get("problems")
 
@@ -63,7 +68,10 @@ def test_interface_renders_without_errors(scratch_xml, tmp_path):
 
     done = subprocess.run(
         ["node", str(SMOKE), str(STATIC), str(state_file), str(latest_file)],
-        capture_output=True, text=True, timeout=120)
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     assert done.returncode == 0, done.stderr or done.stdout
 
 
@@ -80,20 +88,37 @@ def test_smoke_catches_an_undefined_variable(tmp_path):
     text = app.read_text(encoding="utf-8")
     marker = "function renderLegend() {"
     assert marker in text
-    app.write_text(text.replace(marker, marker + "\n  puuttuvaMuuttuja.x;", 1),
-                   encoding="utf-8")
+    app.write_text(
+        text.replace(marker, marker + "\n  puuttuvaMuuttuja.x;", 1), encoding="utf-8"
+    )
 
     empty = tmp_path / "empty.json"
-    empty.write_text(json.dumps({
-        "tracks": [], "globals": Globals().to_json(), "audio": {},
-        "mix": {"progress": {}}, "languages": ["fi", "en"], "language": "fi",
-        "kind": "multicam", "fps": 25, "parts": 2,
-        "output_path": "/x", "settings_path": "/y", "name": "t",
-    }), encoding="utf-8")
+    empty.write_text(
+        json.dumps(
+            {
+                "tracks": [],
+                "globals": Globals().to_json(),
+                "audio": {},
+                "mix": {"progress": {}},
+                "languages": ["fi", "en"],
+                "language": "fi",
+                "kind": "multicam",
+                "fps": 25,
+                "parts": 2,
+                "output_path": "/x",
+                "settings_path": "/y",
+                "name": "t",
+            }
+        ),
+        encoding="utf-8",
+    )
 
     done = subprocess.run(
         ["node", str(SMOKE), str(broken), str(empty), str(empty)],
-        capture_output=True, text=True, timeout=120)
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
     assert done.returncode != 0
     assert "puuttuvaMuuttuja" in (done.stderr + done.stdout)
 
@@ -129,7 +154,8 @@ def test_every_visible_string_is_translated_in_both_languages():
     assert strings["fi"], "i18n.js:n avaimia ei löytynyt"
     assert strings["fi"] == strings["en"], (
         f"vain fi: {sorted(strings['fi'] - strings['en'])}, "
-        f"vain en: {sorted(strings['en'] - strings['fi'])}")
+        f"vain en: {sorted(strings['en'] - strings['fi'])}"
+    )
 
     app = (STATIC / "app.js").read_text(encoding="utf-8")
     html = (STATIC / "index.html").read_text(encoding="utf-8")
@@ -145,7 +171,13 @@ def test_every_visible_string_is_translated_in_both_languages():
 
 def test_static_icon_files_exist():
     """Varmistaa että käyttöliittymän tarvitsemat kuvakkeet ovat olemassa."""
-    for name in ("favicon.ico", "favicon.png", "favicon.svg", "apple-touch-icon.png", "icon.png"):
+    for name in (
+        "favicon.ico",
+        "favicon.png",
+        "favicon.svg",
+        "apple-touch-icon.png",
+        "icon.png",
+    ):
         icon_file = STATIC / name
         assert icon_file.is_file(), f"{name} puuttuu staattisista tiedostoista"
         assert icon_file.stat().st_size > 0, f"{name} on tyhjä tiedosto"
@@ -154,6 +186,7 @@ def test_static_icon_files_exist():
 def test_root_icon_endpoints_return_ok(scratch_xml):
     """Selainten suoraan kyselemät juuripolut /favicon.ico ja /apple-touch-icon.png toimivat."""
     from fastapi.testclient import TestClient
+
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     client = TestClient(create_app(state))
 

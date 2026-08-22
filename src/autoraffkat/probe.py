@@ -28,11 +28,27 @@ def _run(path: str) -> dict:
     try:
         ffprobe_bin = get_binary_path("ffprobe")
         done = subprocess.run(
-            [ffprobe_bin, "-v", "error", "-show_format", "-show_streams",
-             "-of", "json", path],
-            capture_output=True, text=True, timeout=TIMEOUT)
+            [
+                ffprobe_bin,
+                "-v",
+                "error",
+                "-show_format",
+                "-show_streams",
+                "-of",
+                "json",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+        )
         return json.loads(done.stdout or "{}") if done.returncode == 0 else {}
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        FileNotFoundError,
+    ):
         return {}
 
 

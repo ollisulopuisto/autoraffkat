@@ -32,6 +32,7 @@ def test_cache_path_follows_the_file(tmp_path):
 
 def test_audio_only_media_has_no_thumbnail(fixture_dir):
     from autoraffkat.fcpxml.read import read_fcpxml
+
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     mic = timeline.media_by_key()["host a Track1.wav"]
     assert thumbs.for_item(mic) is None
@@ -41,10 +42,12 @@ def test_audio_only_media_has_no_thumbnail(fixture_dir):
 def test_thumbnail_is_taken_from_the_middle(fixture_dir):
     """Alku on asettelua ja loppu pakkaamista; puoliväli on kuvausta."""
     from autoraffkat.fcpxml.read import read_fcpxml
+
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     item = timeline.media_by_key()["WIDE 01.mp4"]
     if not os.path.exists(item.path):
         import pytest
+
         pytest.skip("fixturen mediaa ei ole")
     path = thumbs.for_item(item)
     assert path and os.path.getsize(path) > 0

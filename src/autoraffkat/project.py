@@ -42,7 +42,7 @@ def derived_base(xml_path: str) -> str:
     path = os.path.abspath(xml_path)
     folder = os.path.dirname(path)
     if os.path.basename(path) == BUNDLE_INNER and folder.endswith(BUNDLE_EXT):
-        return folder[:-len(BUNDLE_EXT)]
+        return folder[: -len(BUNDLE_EXT)]
     return os.path.splitext(path)[0]
 
 
@@ -91,7 +91,7 @@ class ProjectSettings:
     tracks: dict[str, TrackConfig] = field(default_factory=dict)
     globals: Globals = field(default_factory=Globals)
     audio: AudioSettings = field(default_factory=AudioSettings)
-    language: str = ""             # "" = järjestelmän mukaan
+    language: str = ""  # "" = järjestelmän mukaan
 
     def config_for(self, key: str) -> TrackConfig:
         """Raidan asetukset, oletuksilla luotuna jos raitaa ei ole ennen nähty."""
@@ -112,13 +112,17 @@ class ProjectSettings:
 
     @classmethod
     def from_json(cls, data: dict) -> "ProjectSettings":
-        tracks = {k: TrackConfig.from_json(v)
-                  for k, v in (data.get("tracks") or {}).items()
-                  if isinstance(v, dict)}
-        return cls(tracks=tracks,
-                   globals=Globals.from_json(data.get("globals") or {}),
-                   audio=AudioSettings.from_json(data.get("audio") or {}),
-                   language=str(data.get("language") or ""))
+        tracks = {
+            k: TrackConfig.from_json(v)
+            for k, v in (data.get("tracks") or {}).items()
+            if isinstance(v, dict)
+        }
+        return cls(
+            tracks=tracks,
+            globals=Globals.from_json(data.get("globals") or {}),
+            audio=AudioSettings.from_json(data.get("audio") or {}),
+            language=str(data.get("language") or ""),
+        )
 
 
 def find_previous(xml_path: str) -> str | None:
@@ -157,9 +161,11 @@ def load(xml_path: str) -> ProjectSettings:
     Puuttuva tai rikkinäinen tiedosto ei ole virhe vaan tuottaa oletukset:
     asetukset ovat mukavuus, eivät ehto työskentelylle.
     """
-    return (read(settings_path(xml_path))
-            or read(legacy_settings_path(xml_path))
-            or ProjectSettings())
+    return (
+        read(settings_path(xml_path))
+        or read(legacy_settings_path(xml_path))
+        or ProjectSettings()
+    )
 
 
 def read(path: str) -> ProjectSettings | None:

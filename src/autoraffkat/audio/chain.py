@@ -28,6 +28,7 @@ asia jota ei sallita.
 from __future__ import annotations
 
 import os
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -50,14 +51,45 @@ LEVEL_RATIO = 1.5
 # siitä ettei summa säröydy.
 CEILING_DB = -1.0
 
-# Mistä liitännäisiä etsitään. Vain vakiopaikat: väärä polku olisi pahempi
-# kuin ei polkua.
-PLUGIN_DIRS = (
-    "/Library/Audio/Plug-Ins/VST3",
-    "~/Library/Audio/Plug-Ins/VST3",
-    "/Library/Audio/Plug-Ins/Components",
-    "~/Library/Audio/Plug-Ins/Components",
-)
+
+# Mistä liitännäisiä etsitään. Vakiopaikat käyttöjärjestelmän mukaan.
+def _standard_plugin_dirs() -> tuple[str, ...]:
+    if sys.platform == "darwin":
+        return (
+            "/Library/Audio/Plug-Ins/VST3",
+            "~/Library/Audio/Plug-Ins/VST3",
+            "/Library/Audio/Plug-Ins/Components",
+            "~/Library/Audio/Plug-Ins/Components",
+        )
+    elif sys.platform.startswith("linux"):
+        return (
+            "/usr/lib/vst3",
+            "/usr/local/lib/vst3",
+            "~/.vst3",
+            "~/.local/lib/vst3",
+        )
+    elif sys.platform == "win32":
+        common_files = os.environ.get(
+            "CommonProgramFiles", r"C:\Program Files\Common Files"
+        )
+        common_files_x86 = os.environ.get(
+            "CommonProgramFiles(x86)", r"C:\Program Files (x86)\Common Files"
+        )
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        dirs = [
+            os.path.join(common_files, "VST3"),
+            os.path.join(common_files_x86, "VST3"),
+        ]
+        if local_app_data:
+            dirs.append(os.path.join(local_app_data, "Programs", "Common", "VST3"))
+        return tuple(dirs)
+    return (
+        "/Library/Audio/Plug-Ins/VST3",
+        "~/Library/Audio/Plug-Ins/VST3",
+    )
+
+
+PLUGIN_DIRS = _standard_plugin_dirs()
 
 
 class ChainError(Exception):
@@ -90,19 +122,21 @@ def load_plugin(path: str):
     try:
         return pedalboard.load_plugin(path)
     except Exception as exc:
-        raise ChainError(t("audio.plugin_failed",
-                           name=os.path.basename(path), error=exc)) from exc
+        raise ChainError(
+            t("audio.plugin_failed", name=os.path.basename(path), error=exc)
+        ) from exc
 
 
 def loudness(mono: np.ndarray, rate: int) -> float | None:
     """Integroitu äänekkyys, tai ``None`` jos ei mitattavissa."""
     import pyloudnorm as pyln
 
-    if mono.size < rate:                      # alle sekunti: ei mitattavaa
+    if mono.size < rate:  # alle sekunti: ei mitattavaa
         return None
     try:
-        value = float(pyln.Meter(rate).integrated_loudness(
-            np.asarray(mono, dtype=np.float64)))
+        value = float(
+            pyln.Meter(rate).integrated_loudness(np.asarray(mono, dtype=np.float64))
+        )
     except Exception:
         return None
     if not np.isfinite(value) or value < -70.0:
@@ -110,8 +144,9 @@ def loudness(mono: np.ndarray, rate: int) -> float | None:
     return value
 
 
-def lag_samples(before: np.ndarray, after: np.ndarray, rate: int,
-                bin_ms: float = 1.0) -> int:
+def lag_samples(
+    before: np.ndarray, after: np.ndarray, rate: int, bin_ms: float = 1.0
+) -> int:
     """Signaalien välinen viive näytteinä.
 
     Ristikorrelaatio lasketaan verhokäyristä eikä aallonmuodosta, koska
@@ -166,7 +201,7 @@ def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarra
         for cluster in np.split(index, np.flatnonzero(np.diff(index) > 1) + 1):
             start = max(0, int(cluster[0]) - 10)
             end = min(data.size, int(cluster[-1]) + 10)
-            if end - start >= int(0.01 * rate):   # yli 10 ms ei ole naksu
+            if end - start >= int(0.01 * rate):  # yli 10 ms ei ole naksu
                 continue
             before = np.arange(max(0, start - 20), start)
             after = np.arange(end, min(data.size, end + 20))
@@ -174,7 +209,8 @@ def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarra
                 continue
             reference = np.concatenate([before, after])
             out[channel, start:end] = np.interp(
-                np.arange(start, end), reference, data[reference])
+                np.arange(start, end), reference, data[reference]
+            )
     return out
 
 
@@ -207,13 +243,20 @@ class ChainResult:
 
     frames: int
     channels: int
-    gain_db: float          # normalisoinnin nosto
+    gain_db: float  # normalisoinnin nosto
     measured_lufs: float | None
-    lag: int                # liitännäisen aiheuttama siirtymä näytteinä
+    lag: int  # liitännäisen aiheuttama siirtymä näytteinä
 
 
-def process(audio: np.ndarray, rate: int, settings, gain_db: float,
-            speech: bool, target_lufs: float | None, plugin=None) -> tuple:
+def process(
+    audio: np.ndarray,
+    rate: int,
+    settings,
+    gain_db: float,
+    speech: bool,
+    target_lufs: float | None,
+    plugin=None,
+) -> tuple:
     """Ajaa ketjun. ``audio`` on muotoa ``(kanavat, näytteet)``.
 
     Palauttaa ``(käsitelty, ChainResult)``. Pituus ei muutu; jos jokin vaihe
@@ -233,18 +276,20 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     if plugin is not None:
         audio = plugin.process(audio, rate, reset=True)
         if audio.shape[1] != frames:
-            raise ChainError(t("audio.plugin_length", before=frames,
-                               after=audio.shape[1]))
+            raise ChainError(
+                t("audio.plugin_length", before=frames, after=audio.shape[1])
+            )
 
     # 2.–3. Siivous ennen mittausta.
     cleanup = _board(
         pedalboard.HighpassFilter(cutoff_frequency_hz=settings.high_pass_hz)
-        if settings.high_pass_hz > 0 else None)
+        if settings.high_pass_hz > 0
+        else None
+    )
     if len(cleanup):
         audio = cleanup(audio, rate, reset=True)
     if speech and getattr(settings, "declick", False):
-        audio = declick(audio, rate,
-                        getattr(settings, "declick_sensitivity", 0.5))
+        audio = declick(audio, rate, getattr(settings, "declick_sensitivity", 0.5))
 
     # 4. Normalisointi siivotusta signaalista.
     measured = loudness(audio.mean(axis=0), rate) if target_lufs is not None else None
@@ -254,12 +299,19 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     if speech:
         board = _board(
             pedalboard.Gain(gain_db=lift) if lift else None,
-            pedalboard.Compressor(threshold_db=settings.peak_threshold_db,
-                                  ratio=PEAK_RATIO, attack_ms=PEAK_ATTACK_MS,
-                                  release_ms=PEAK_RELEASE_MS),
-            pedalboard.Compressor(threshold_db=settings.leveler_threshold_db,
-                                  ratio=LEVEL_RATIO, attack_ms=LEVEL_ATTACK_MS,
-                                  release_ms=LEVEL_RELEASE_MS))
+            pedalboard.Compressor(
+                threshold_db=settings.peak_threshold_db,
+                ratio=PEAK_RATIO,
+                attack_ms=PEAK_ATTACK_MS,
+                release_ms=PEAK_RELEASE_MS,
+            ),
+            pedalboard.Compressor(
+                threshold_db=settings.leveler_threshold_db,
+                ratio=LEVEL_RATIO,
+                attack_ms=LEVEL_ATTACK_MS,
+                release_ms=LEVEL_RELEASE_MS,
+            ),
+        )
         if len(board):
             audio = board(audio, rate, reset=True)
 
@@ -274,7 +326,8 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
         lift += correction
         tail = _board(
             pedalboard.Gain(gain_db=correction) if correction else None,
-            pedalboard.Gain(gain_db=gain_db) if gain_db else None)
+            pedalboard.Gain(gain_db=gain_db) if gain_db else None,
+        )
         if len(tail):
             audio = tail(audio, rate, reset=True)
         audio, trimmed = peak_guard(audio)
@@ -282,25 +335,36 @@ def process(audio: np.ndarray, rate: int, settings, gain_db: float,
     else:
         # Tilaääni jätetään koskematta muuten: kompressoitu tilaääni pumppaa,
         # eikä taso siirry, joten yksi mittaus riittää.
-        board = _board(pedalboard.Gain(gain_db=lift) if lift else None,
-                       pedalboard.Gain(gain_db=gain_db) if gain_db else None)
+        board = _board(
+            pedalboard.Gain(gain_db=lift) if lift else None,
+            pedalboard.Gain(gain_db=gain_db) if gain_db else None,
+        )
         if len(board):
             audio = board(audio, rate, reset=True)
         audio, trimmed = peak_guard(audio)
         lift += trimmed
 
     if audio.shape[1] != frames:
-        raise ChainError(t("audio.chain_length", before=frames,
-                           after=audio.shape[1]))
+        raise ChainError(t("audio.chain_length", before=frames, after=audio.shape[1]))
 
     lag = lag_samples(original, audio[0], rate) if original is not None else 0
-    return audio, ChainResult(frames=frames, channels=audio.shape[0],
-                              gain_db=round(lift, 2), measured_lufs=measured,
-                              lag=lag)
+    return audio, ChainResult(
+        frames=frames,
+        channels=audio.shape[0],
+        gain_db=round(lift, 2),
+        measured_lufs=measured,
+        lag=lag,
+    )
 
 
-def apply_duck(audio: np.ndarray, rate: int, closed: list[tuple[int, int]],
-               depth_db: float, fade: float, release: float = 0.0) -> np.ndarray:
+def apply_duck(
+    audio: np.ndarray,
+    rate: int,
+    closed: list[tuple[int, int]],
+    depth_db: float,
+    fade: float,
+    release: float = 0.0,
+) -> np.ndarray:
     """Vaimentaa annetut jaksot ja liu'uttaa reunat.
 
     Liu'ut ovat epäsymmetriset ja desibeliasteikolla. Lasku on nopea, koska se
@@ -336,13 +400,14 @@ def apply_duck(audio: np.ndarray, rate: int, closed: list[tuple[int, int]],
         if body_end > body_start:
             audio[:, body_start:body_end] *= level
         if head > 0:
-            audio[:, start:start + head] *= _ramp_db(0.0, depth_db, head)
+            audio[:, start : start + head] *= _ramp_db(0.0, depth_db, head)
         if tail > 0:
-            audio[:, end - tail:end] *= _ramp_db(depth_db, 0.0, tail)
+            audio[:, end - tail : end] *= _ramp_db(depth_db, 0.0, tail)
     return audio
 
 
 def _ramp_db(from_db: float, to_db: float, count: int) -> np.ndarray:
     """Liuku desibeleissä, ei amplitudissa. Kuulo on logaritminen."""
-    return (10.0 ** (np.linspace(from_db, to_db, count,
-                                 dtype=np.float32) / 20.0)).astype(np.float32)
+    return (
+        10.0 ** (np.linspace(from_db, to_db, count, dtype=np.float32) / 20.0)
+    ).astype(np.float32)

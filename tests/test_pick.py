@@ -89,8 +89,10 @@ def test_missing_directory_is_not_an_error(tmp_path):
     assert pick.candidates(str(tmp_path / "ei-ole")) == []
 
 
-@pytest.mark.skipif(sys.platform != "darwin",
-                    reason="Natiivi valintaikkuna on osascript, siis vain macOS")
+@pytest.mark.skipif(
+    sys.platform != "darwin",
+    reason="Natiivi valintaikkuna on osascript, siis vain macOS",
+)
 def test_browser_gets_the_picker_from_the_server(tmp_path, monkeypatch):
     """Selaimessa ei ole tiedostovalitsinta joka antaisi polun.
 

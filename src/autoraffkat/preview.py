@@ -30,12 +30,14 @@ def build(grid: Grid, decision: Decision, columns: int = 1400) -> dict:
         # muuten lyhyet repliikit katoaisivat tiivistyksessä.
         cumulative = np.concatenate(([0], np.cumsum(lane.on, dtype=np.int64)))
         hits = cumulative[bounds[1:]] - cumulative[bounds[:-1]]
-        speakers.append({
-            "name": lane.name,
-            "index": index,
-            "has_close": bool(lane.close_key),
-            "active": (hits > 0).astype(np.uint8).tolist(),
-        })
+        speakers.append(
+            {
+                "name": lane.name,
+                "index": index,
+                "has_close": bool(lane.close_key),
+                "active": (hits > 0).astype(np.uint8).tolist(),
+            }
+        )
 
     chosen = decision.chosen[mids] if n else np.zeros(0, dtype=np.int32)
     return {

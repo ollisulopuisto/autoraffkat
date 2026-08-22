@@ -5,14 +5,17 @@ import pytest
 from autoraffkat import timeline as t
 
 
-@pytest.mark.parametrize("text,expected", [
-    ("1001/30000s", Fraction(1001, 30000)),
-    ("5s", Fraction(5)),
-    ("0s", Fraction(0)),
-    ("-1001/30000s", Fraction(-1001, 30000)),
-    ("", Fraction(0)),
-    (None, Fraction(0)),
-])
+@pytest.mark.parametrize(
+    "text,expected",
+    [
+        ("1001/30000s", Fraction(1001, 30000)),
+        ("5s", Fraction(5)),
+        ("0s", Fraction(0)),
+        ("-1001/30000s", Fraction(-1001, 30000)),
+        ("", Fraction(0)),
+        (None, Fraction(0)),
+    ],
+)
 def test_parse_time(text, expected):
     assert t.parse_time(text) == expected
 

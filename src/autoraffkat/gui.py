@@ -62,7 +62,9 @@ class DesktopServer:
         self.server.should_exit = True
 
 
-def get_window_config(title: str = "autoraffkat", url: str = "http://127.0.0.1:8731") -> dict:
+def get_window_config(
+    title: str = "autoraffkat", url: str = "http://127.0.0.1:8731"
+) -> dict:
     """Palauttaa webview-ikkunan oletusasetukset."""
     return {
         "title": title,
@@ -85,6 +87,7 @@ class DesktopApi:
         if not self.window:
             return None
         import webview
+
         file_types = ("FCPXML (*.fcpxml;*.fcpxmld;*.xml)", "All files (*.*)")
         result = self.window.create_file_dialog(
             webview.OPEN_DIALOG,
@@ -143,9 +146,12 @@ def launch_gui(
     if sys.platform == "darwin" and icon_str:
         try:
             import AppKit
+
             ns_img = AppKit.NSImage.alloc().initByReferencingFile_(icon_str)
             if ns_img and ns_img.isValid():
-                AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_img)
+                AppKit.NSApplication.sharedApplication().setApplicationIconImage_(
+                    ns_img
+                )
         except Exception:
             pass
 

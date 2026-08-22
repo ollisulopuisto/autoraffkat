@@ -13,10 +13,16 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from .model import (HOP, LONGTAKE_STAY, OVERLAP_HOLD, OVERLAP_LOUDER,
-                    OVERLAP_WIDE, Globals, Segment)
+from .model import (
+    HOP,
+    LONGTAKE_STAY,
+    OVERLAP_HOLD,
+    OVERLAP_WIDE,
+    Globals,
+    Segment,
+)
 
-WIDE = -2       # want-taulukon erikoisarvot
+WIDE = -2  # want-taulukon erikoisarvot
 HOLD = -1
 
 WIDE_LABEL = "Laaja"
@@ -31,8 +37,10 @@ def _runs(values: np.ndarray) -> list[tuple[int, int, int]]:
         return []
     change = np.flatnonzero(values[1:] != values[:-1]) + 1
     bounds = np.concatenate(([0], change, [values.size]))
-    return [(int(bounds[i]), int(bounds[i + 1]), int(values[bounds[i]]))
-            for i in range(bounds.size - 1)]
+    return [
+        (int(bounds[i]), int(bounds[i + 1]), int(values[bounds[i]]))
+        for i in range(bounds.size - 1)
+    ]
 
 
 def _close_gaps(mask: np.ndarray, k: int) -> np.ndarray:
@@ -57,8 +65,9 @@ def _open_runs(mask: np.ndarray, k: int) -> np.ndarray:
     return out
 
 
-def open_windows(on: np.ndarray, lookahead: float, hold: float,
-                 min_open: float) -> np.ndarray:
+def open_windows(
+    on: np.ndarray, lookahead: float, hold: float, min_open: float
+) -> np.ndarray:
     """Mistä mikki on auki, kun ``on`` on kynnyksen ylitys.
 
     Kynnyksen ylitys sellaisenaan on kelvoton portin ohjaukseksi: se välkkyy
@@ -85,7 +94,7 @@ def open_windows(on: np.ndarray, lookahead: float, hold: float,
     out = np.zeros_like(mask)
     for start, end, value in _runs(mask.astype(np.int8)):
         if value:
-            out[max(0, start - before):min(mask.size, end + after)] = True
+            out[max(0, start - before) : min(mask.size, end + after)] = True
     return out
 
 
@@ -101,7 +110,7 @@ def trim_end(mask: np.ndarray, seconds: float) -> np.ndarray:
     out = np.zeros_like(mask)
     for start, end, value in _runs(mask.astype(np.int8)):
         if value and end - start > cut:
-            out[start:end - cut] = True
+            out[start : end - cut] = True
     return out
 
 
@@ -123,18 +132,18 @@ class SpeakerLanes:
     """Yhden puhujan aineisto ruudukolla."""
 
     name: str
-    level: np.ndarray          # dB, vahvistuskorjaus jo mukana
-    on: np.ndarray             # bool, kynnyksen ylitys
-    close_key: str | None      # lähikuvan media key, None jos ei lähikuvaa
-    available: np.ndarray | None = None   # missä lähikuva on olemassa
+    level: np.ndarray  # dB, vahvistuskorjaus jo mukana
+    on: np.ndarray  # bool, kynnyksen ylitys
+    close_key: str | None  # lähikuvan media key, None jos ei lähikuvaa
+    available: np.ndarray | None = None  # missä lähikuva on olemassa
 
 
 @dataclass
 class Grid:
     """Päätöskerroksen syöte: kaikki ruudukolle kohdistettuna."""
 
-    n: int                     # ruudukon pituus (HOP-askelta)
-    program_start: float       # aikajanan sekunneissa
+    n: int  # ruudukon pituus (HOP-askelta)
+    program_start: float  # aikajanan sekunneissa
     speakers: list[SpeakerLanes] = field(default_factory=list)
     wide_key: str = ""
 
@@ -148,8 +157,8 @@ class Decision:
     """Päätöksen tulos: leikkauslista ja esikatselun tarvitsemat taulukot."""
 
     segments: list[Segment]
-    active: np.ndarray         # (puhujia, n) bool — esikatselupalkkia varten
-    chosen: np.ndarray         # (n,) int — puhujan indeksi tai WIDE
+    active: np.ndarray  # (puhujia, n) bool — esikatselupalkkia varten
+    chosen: np.ndarray  # (n,) int — puhujan indeksi tai WIDE
 
 
 # ------------------------------------------------------------------ päätös
@@ -205,8 +214,27 @@ def _want_array(grid: Grid, g: Globals) -> tuple[np.ndarray, np.ndarray]:
     return want, active
 
 
-def _cut_points(want: np.ndarray, g: Globals) -> list[tuple[float, int]]:
-    """Kestorajoitukset: vahvistusaika, ennakko, lyhin kuvan kesto."""
+def _compute_tempo(active: np.ndarray, n: int) -> np.ndarray:
+    """Laskee keskustelun paikallisen tempon (1/f -vaihtelu liukuvalla ikkunalla)."""
+    if active.size == 0 or n == 0:
+        return np.ones(n, dtype=np.float32)
+    changes = np.sum(
+        np.abs(np.diff(active.astype(np.int8), axis=1, prepend=0)), axis=0
+    ).astype(np.float32)
+    window = _hops(45.0)  # 45 sekunnin liukuva ikkuna
+    if n < window:
+        window = max(1, n)
+    kernel = np.ones(window, dtype=np.float32) / window
+    rate = np.convolve(changes, kernel, mode="same")
+    mean_rate = float(np.mean(rate)) + 1e-4
+    tempo = np.clip(rate / mean_rate, 0.7, 1.4)
+    return tempo
+
+
+def _cut_points(
+    want: np.ndarray, g: Globals, tempo: np.ndarray | None = None
+) -> list[tuple[float, int]]:
+    """Kestorajoitukset: vahvistusaika, ennakko (J-cut), 1/f-tempo-ohjattu kesto."""
     confirm = _hops(g.confirm)
     current = WIDE
     cuts: list[tuple[float, int]] = [(0.0, WIDE)]
@@ -217,62 +245,136 @@ def _cut_points(want: np.ndarray, g: Globals) -> list[tuple[float, int]]:
             continue
         if (end - start) < confirm:
             continue
-        at = max(start * HOP - g.lead, last_cut + g.min_shot, 0.0)
+
+        # 1/f tempo skaalaa paikallista vähimmäiskestoa luonnollisen vaihtelun saavuttamiseksi
+        if tempo is not None and start < tempo.size:
+            local_min = max(0.4, g.min_shot / float(np.sqrt(tempo[start])))
+        else:
+            local_min = g.min_shot
+
+        at = max(start * HOP - g.lead, last_cut + local_min, 0.0)
         if at >= end * HOP:
-            continue          # ennakko ja minimikesto söivät koko jakson
+            continue  # ennakko ja minimikesto söivät koko jakson
         cuts.append((at, target))
         current = target
         last_cut = at
     return cuts
 
 
-def _force_wide(segments: list[Segment], g: Globals, wide_label: str,
-                wide_key: str) -> list[Segment]:
-    """Katkaisee pitkän puheenvuoron laajaan.
+def _find_breath_point(
+    grid: Grid | None, speaker_angle: str, target_time: float, window: float = 1.5
+) -> float:
+    """Etsii luontevan tauko- tai hengähdyskohdan leikkaukselle."""
+    if grid is None:
+        return target_time
+    sp = next((s for s in grid.speakers if s.close_key == speaker_angle), None)
+    if sp is None or sp.on.size == 0:
+        return target_time
+
+    t_rel = target_time - grid.program_start
+    t_start = max(0.0, t_rel - window)
+    t_end = min(grid.duration, t_rel + window)
+    i0 = int(round(t_start / HOP))
+    i1 = int(round(t_end / HOP))
+    if i1 <= i0:
+        return target_time
+
+    sub_on = sp.on[i0:i1]
+    # 1. Ensisijaisesti etsitään taukoa (on == False)
+    if not np.all(sub_on):
+        runs = _runs(sub_on.astype(np.int8))
+        pause_runs = [(r_start, r_end) for r_start, r_end, val in runs if not val]
+        if pause_runs:
+            best = max(pause_runs, key=lambda p: p[1] - p[0])
+            mid_idx = i0 + (best[0] + best[1]) // 2
+            return grid.program_start + mid_idx * HOP
+
+    # 2. Jos puhe on tasaista eikä äänessä ole selkeää notkahdusta (>3 dB), pysytään tavoiteajassa
+    sub_level = sp.level[i0:i1]
+    if sub_level.size > 0:
+        min_val = float(np.min(sub_level))
+        max_val = float(np.max(sub_level))
+        if max_val - min_val >= 3.0:
+            min_idx = i0 + int(np.argmin(sub_level))
+            return grid.program_start + min_idx * HOP
+
+    return target_time
+
+
+def _force_wide(
+    segments: list[Segment],
+    g: Globals,
+    wide_label: str,
+    wide_key: str,
+    grid: Grid | None = None,
+) -> list[Segment]:
+    """Katkaisee pitkän puheenvuoron laajaan tai reaktiokuvaan.
 
     Yksi lähikuva ei kanna loputtomiin: kun sama puhuja pitää lattiaa
-    ``wide_every`` sekuntia, kuva vaihtuu laajaan. Sen jälkeen on kaksi tapaa
-    jatkaa, ja ne ovat eri asia leikkauksellisesti:
-
-    * ``return`` — laaja kestää ``wide_hold`` ja palataan samaan puhujaan.
-      Monologi hengittää, mutta rytmi pysyy puhujassa.
-    * ``stay`` — laajaan jäädään, kunnes seuraava puhuja saa kuvan. Vähemmän
-      leikkauksia, ja pitkä yksinpuhelu näyttää tilanteelta eikä kasvokuvalta.
-
-    Laaja ei koskaan jää alle vähimmäiskeston, vaikka ``wide_hold`` olisi
-    pienempi: muuten säädin tuottaisi välähdyksiä.
+    ``wide_every`` sekuntia, kuva vaihtuu laajaan tai reaktioon.
     """
     if g.wide_every <= 0 or not wide_key:
         return segments
     stay = g.long_take_rule == LONGTAKE_STAY
+    reaction = g.long_take_rule == "reaction"
     hold = max(g.wide_hold, g.min_shot)
+
+    def alt_target(speaker_angle: str) -> tuple[str, str]:
+        if reaction and grid is not None:
+            other = next(
+                (
+                    s
+                    for s in grid.speakers
+                    if s.close_key and s.close_key != speaker_angle
+                ),
+                None,
+            )
+            if other and other.close_key:
+                return other.close_key, other.name
+        return wide_key, wide_label
 
     out: list[Segment] = []
     for seg in segments:
         if seg.angle == wide_key or seg.duration <= g.wide_every:
             out.append(seg)
             continue
+        insert_key, insert_label = alt_target(seg.angle)
         if stay:
-            cut = seg.start + g.wide_every
+            target_cut = seg.start + g.wide_every
+            cut = _find_breath_point(
+                grid, seg.angle, target_cut, window=min(1.5, g.wide_every * 0.2)
+            )
+            if cut < seg.start + g.min_shot or seg.end - cut < g.min_shot:
+                cut = target_cut
             if seg.end - cut < g.min_shot:
                 # Loppu on liian lyhyt omaksi kuvakseen; puhuja jatkaa.
                 out.append(seg)
                 continue
             out.append(Segment(seg.angle, seg.label, seg.start, cut))
-            out.append(Segment(wide_key, wide_label, cut, seg.end))
+            out.append(Segment(insert_key, insert_label, cut, seg.end))
             continue
         cursor = seg.start
-        to_wide = False
+        to_alt = False
         while cursor < seg.end:
-            stop = min(cursor + (hold if to_wide else g.wide_every), seg.end)
+            step_len = hold if to_alt else g.wide_every
+            target_stop = min(cursor + step_len, seg.end)
+            if not to_alt and target_stop < seg.end and grid is not None:
+                stop = _find_breath_point(
+                    grid, seg.angle, target_stop, window=min(1.5, g.wide_every * 0.2)
+                )
+                if stop < cursor + g.min_shot or seg.end - stop < g.min_shot:
+                    stop = target_stop
+            else:
+                stop = target_stop
+
             if seg.end - stop < g.min_shot:
                 stop = seg.end
-            if to_wide:
-                out.append(Segment(wide_key, wide_label, cursor, stop))
+            if to_alt:
+                out.append(Segment(insert_key, insert_label, cursor, stop))
             else:
                 out.append(Segment(seg.angle, seg.label, cursor, stop))
             cursor = stop
-            to_wide = not to_wide
+            to_alt = not to_alt
     return _merge(out)
 
 
@@ -292,7 +394,8 @@ def _merge(segments: list[Segment]) -> list[Segment]:
 def decide(grid: Grid, g: Globals) -> Decision:
     """Leikkauslista. Tämän on pyörittävä millisekunneissa."""
     want, active = _want_array(grid, g)
-    cuts = _cut_points(want, g)
+    tempo = _compute_tempo(active, grid.n)
+    cuts = _cut_points(want, g, tempo=tempo)
     total = grid.duration
 
     segments: list[Segment] = []
@@ -307,18 +410,20 @@ def decide(grid: Grid, g: Globals) -> Decision:
             key, label = (sp.close_key or grid.wide_key), sp.name
             if not sp.close_key:
                 label = WIDE_LABEL
-        segments.append(Segment(key, label, grid.program_start + at,
-                                grid.program_start + end))
+        segments.append(
+            Segment(key, label, grid.program_start + at, grid.program_start + end)
+        )
     segments = _merge(segments)
-    segments = _force_wide(segments, g, WIDE_LABEL, grid.wide_key)
+    segments = _force_wide(segments, g, WIDE_LABEL, grid.wide_key, grid=grid)
 
     # Esikatselua varten: mikä kuva milläkin hetkellä.
     chosen = np.full(grid.n, WIDE, dtype=np.int32)
-    key_to_index = {sp.close_key: i for i, sp in enumerate(grid.speakers)
-                    if sp.close_key}
+    key_to_index = {
+        sp.close_key: i for i, sp in enumerate(grid.speakers) if sp.close_key
+    }
     for seg in segments:
         lo = int(round((seg.start - grid.program_start) / HOP))
         hi = int(round((seg.end - grid.program_start) / HOP))
-        chosen[max(0, lo):max(0, hi)] = key_to_index.get(seg.angle, WIDE)
+        chosen[max(0, lo) : max(0, hi)] = key_to_index.get(seg.angle, WIDE)
 
     return Decision(segments=segments, active=active, chosen=chosen)

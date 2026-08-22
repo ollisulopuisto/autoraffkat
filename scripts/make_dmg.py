@@ -30,7 +30,9 @@ def _run(cmd: list[str]) -> None:
     ja hiljaa ohitettu virhe näkyisi vasta rikkinäisenä .dmg:nä."""
     done = subprocess.run(cmd, capture_output=True, text=True)
     if done.returncode != 0:
-        raise RuntimeError(f"{' '.join(cmd)}\n{done.stderr.strip() or done.stdout.strip()}")
+        raise RuntimeError(
+            f"{' '.join(cmd)}\n{done.stderr.strip() or done.stdout.strip()}"
+        )
 
 
 def make_dmg(app_path: Path | None = None, output: Path | None = None) -> int:
@@ -68,14 +70,24 @@ def make_dmg(app_path: Path | None = None, output: Path | None = None) -> int:
         if target.exists():
             target.unlink()
         print(f"Pakataan {target.name}…")
-        _run(["hdiutil", "create",
-              "-srcfolder", str(staging),
-              "-volname", VOLUME_NAME,
-              "-fs", "HFS+",
-              "-format", "UDZO",       # pakattu, vain luku — sama kuin ennen
-              "-imagekey", "zlib-level=9",
-              "-quiet",
-              str(target)])
+        _run(
+            [
+                "hdiutil",
+                "create",
+                "-srcfolder",
+                str(staging),
+                "-volname",
+                VOLUME_NAME,
+                "-fs",
+                "HFS+",
+                "-format",
+                "UDZO",  # pakattu, vain luku — sama kuin ennen
+                "-imagekey",
+                "zlib-level=9",
+                "-quiet",
+                str(target),
+            ]
+        )
 
     size = target.stat().st_size / 1e6
     print(f"\nValmis! Levykuva:\n  {target}  ({size:.0f} MB)")
@@ -84,11 +96,21 @@ def make_dmg(app_path: Path | None = None, output: Path | None = None) -> int:
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Pakkaa dist/autoraffkat.app jaettavaksi levykuvaksi.")
-    parser.add_argument("--app", type=Path, default=None,
-                        help="sovelluspaketti (oletus dist/autoraffkat.app)")
-    parser.add_argument("-o", "--output", type=Path, default=None,
-                        help="kohdetiedosto (oletus dist/autoraffkat.dmg)")
+        description="Pakkaa dist/autoraffkat.app jaettavaksi levykuvaksi."
+    )
+    parser.add_argument(
+        "--app",
+        type=Path,
+        default=None,
+        help="sovelluspaketti (oletus dist/autoraffkat.app)",
+    )
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=Path,
+        default=None,
+        help="kohdetiedosto (oletus dist/autoraffkat.dmg)",
+    )
     args = parser.parse_args()
     if shutil.which("hdiutil") is None:
         print("hdiutil puuttuu.", file=sys.stderr)

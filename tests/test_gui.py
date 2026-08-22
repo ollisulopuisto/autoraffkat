@@ -57,6 +57,7 @@ def test_window_config():
 def test_launch_gui_passes_icon(monkeypatch, tmp_path):
     """launch_gui välittää sovelluksen kuvakkeen pywebview'lle."""
     import webview
+
     fake_icon = tmp_path / "custom_icon.icns"
     fake_icon.touch()
 
@@ -69,7 +70,9 @@ def test_launch_gui_passes_icon(monkeypatch, tmp_path):
     monkeypatch.setattr(gui.paths, "get_app_icon_path", lambda: fake_icon)
     monkeypatch.setattr(webview, "create_window", lambda *a, **kw: mock_win)
     monkeypatch.setattr(webview, "start", fake_start)
-    monkeypatch.setattr(gui.DesktopServer, "wait_until_ready", lambda self, timeout=5.0: True)
+    monkeypatch.setattr(
+        gui.DesktopServer, "wait_until_ready", lambda self, timeout=5.0: True
+    )
     monkeypatch.setattr(gui.DesktopServer, "stop", lambda self: None)
 
     gui.launch_gui()

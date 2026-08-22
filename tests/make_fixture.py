@@ -37,30 +37,71 @@ def _bursts(path: str, spans, freq: int, level: float) -> None:
         labels.append(f"[s{i}]")
     parts.append("".join(labels) + f"amix=inputs={len(labels)}:normalize=0[out]")
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error", "-filter_complex", ";".join(parts),
-         "-map", "[out]", "-ac", "1", "-ar", "48000", "-t", str(DURATION), path],
-        check=True)
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-filter_complex",
+            ";".join(parts),
+            "-map",
+            "[out]",
+            "-ac",
+            "1",
+            "-ar",
+            "48000",
+            "-t",
+            str(DURATION),
+            path,
+        ],
+        check=True,
+    )
 
 
 def _video(path: str, color: str) -> None:
     subprocess.run(
-        ["ffmpeg", "-y", "-v", "error",
-         "-f", "lavfi", "-i", f"color=c={color}:s=1920x1080:r={FPS}",
-         "-t", str(DURATION), "-c:v", "libx264", "-pix_fmt", "yuv420p", path],
-        check=True)
+        [
+            "ffmpeg",
+            "-y",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            f"color=c={color}:s=1920x1080:r={FPS}",
+            "-t",
+            str(DURATION),
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            path,
+        ],
+        check=True,
+    )
 
 
 def _asset(rid: str, path: str, has_video: bool, has_audio: bool) -> str:
-    attrs = [f'id="{rid}"', f"name={quoteattr(os.path.basename(path))}",
-             'start="0s"', f'duration="{int(DURATION * FPS)}/25s"']
+    attrs = [
+        f'id="{rid}"',
+        f"name={quoteattr(os.path.basename(path))}",
+        'start="0s"',
+        f'duration="{int(DURATION * FPS)}/25s"',
+    ]
     if has_audio:
-        attrs += ['hasAudio="1"', 'audioSources="1"', 'audioChannels="1"',
-                  'audioRate="48000"']
+        attrs += [
+            'hasAudio="1"',
+            'audioSources="1"',
+            'audioChannels="1"',
+            'audioRate="48000"',
+        ]
     if has_video:
         attrs += ['hasVideo="1"', 'videoSources="1"', 'format="r1"']
-    return (f"    <asset {' '.join(attrs)}>\n"
-            f'      <media-rep kind="original-media" src={quoteattr(file_url(path))}/>\n'
-            f"    </asset>")
+    return (
+        f"    <asset {' '.join(attrs)}>\n"
+        f'      <media-rep kind="original-media" src={quoteattr(file_url(path))}/>\n'
+        f"    </asset>"
+    )
 
 
 def write_sync_clip_xml(path: str, media: dict) -> None:
@@ -169,6 +210,7 @@ SPLIT = DURATION / 2
 def make_parts(target_dir: str, media: dict) -> dict:
     """Kopioi jokaisen median kahdeksi osaksi. Palauttaa polut."""
     import shutil
+
     parts: dict[str, tuple[str, str]] = {}
     for role, names in PART_FILES.items():
         made = []
@@ -191,14 +233,19 @@ def _angle(name: str, angle_id: str, ref: str, gap: float = 0.0) -> list[str]:
     lines = [f'        <mc-angle name={quoteattr(name)} angleID="{angle_id}">']
     if gap:
         g = int(gap * FPS)
-        lines.append(f'          <gap name="Gap" offset="0s" start="3600s" '
-                     f'duration="{g}/25s"/>')
-        lines.append(f'          <asset-clip ref="{ref}" offset="{g}/25s" '
-                     f'name={quoteattr(name)} start="{g}/25s" '
-                     f'duration="{frames - g}/25s"/>')
+        lines.append(
+            f'          <gap name="Gap" offset="0s" start="3600s" duration="{g}/25s"/>'
+        )
+        lines.append(
+            f'          <asset-clip ref="{ref}" offset="{g}/25s" '
+            f'name={quoteattr(name)} start="{g}/25s" '
+            f'duration="{frames - g}/25s"/>'
+        )
     else:
-        lines.append(f'          <asset-clip ref="{ref}" offset="0s" '
-                     f'name={quoteattr(name)} start="0s" duration="{frames}/25s"/>')
+        lines.append(
+            f'          <asset-clip ref="{ref}" offset="0s" '
+            f'name={quoteattr(name)} start="0s" duration="{frames}/25s"/>'
+        )
     lines.append("        </mc-angle>")
     return lines
 
@@ -222,20 +269,31 @@ def write_multicam_xml(path: str, parts: dict) -> None:
         for role, name_a, name_b in ANGLE_NAMES:
             rid += 1
             file_path = parts[role][index]
-            resources.append(_asset(f"r{rid}", file_path,
-                                    file_path.endswith(".mp4"),
-                                    file_path.endswith(".wav")))
+            resources.append(
+                _asset(
+                    f"r{rid}",
+                    file_path,
+                    file_path.endswith(".mp4"),
+                    file_path.endswith(".wav"),
+                )
+            )
             # Osassa B yhdellä kulmalla on aukko alussa, jotta kulman sisäinen
             # aikapohja tulee testattua eikä vain triviaali nollatapaus.
             gap = 1.0 if (letter == "B" and role == "wide") else 0.0
-            angles += _angle(name_a if letter == "A" else name_b,
-                             f"{letter}{index}{role}", f"r{rid}", gap)
+            angles += _angle(
+                name_a if letter == "A" else name_b,
+                f"{letter}{index}{role}",
+                f"r{rid}",
+                gap,
+            )
         resources.append(
             f'    <media id="m{letter}" name={quoteattr(letter + "-osa")}>\n'
             f'      <multicam format="r1" tcStart="0s" tcFormat="NDF">\n'
-            + "\n".join(angles) + "\n"
+            + "\n".join(angles)
+            + "\n"
             "      </multicam>\n"
-            "    </media>")
+            "    </media>"
+        )
 
     def mc_sources(letter: str) -> str:
         out = []
@@ -245,9 +303,11 @@ def write_multicam_xml(path: str, parts: dict) -> None:
             enable = "video" if role == "wide" else "audio"
             if role in ("close_a", "close_b"):
                 continue
-            out.append(f'              <mc-source angleID="{aid}" srcEnable="{enable}">\n'
-                       f'                <audio-role-source role="dialogue.dialogue-1"/>\n'
-                       "              </mc-source>")
+            out.append(
+                f'              <mc-source angleID="{aid}" srcEnable="{enable}">\n'
+                f'                <audio-role-source role="dialogue.dialogue-1"/>\n'
+                "              </mc-source>"
+            )
         return "\n".join(out)
 
     body = [
@@ -303,8 +363,12 @@ def build(target_dir: str) -> dict:
     write_sync_clip_xml(sync_xml, media)
     write_project_xml(project_xml, media)
     write_multicam_xml(multicam_xml, make_parts(target_dir, media))
-    return {"media": media, "sync": sync_xml, "project": project_xml,
-            "multicam": multicam_xml}
+    return {
+        "media": media,
+        "sync": sync_xml,
+        "project": project_xml,
+        "multicam": multicam_xml,
+    }
 
 
 if __name__ == "__main__":

@@ -36,7 +36,9 @@ def cache_path(path: str, seconds: float) -> Path:
     """Välimuistipolku: tiedosto, koko, muokkausaika ja kohta."""
     stat = os.stat(path)
     stem = Path(path).stem
-    return cache_dir() / f"{stem}-{stat.st_size}-{int(stat.st_mtime)}-{int(seconds)}.jpg"
+    return (
+        cache_dir() / f"{stem}-{stat.st_size}-{int(stat.st_mtime)}-{int(seconds)}.jpg"
+    )
 
 
 def thumbnail(path: str, duration: float) -> str | None:
@@ -57,10 +59,27 @@ def thumbnail(path: str, duration: float) -> str | None:
         done = subprocess.run(
             # -ss ennen -i:tä hakee avainkuvaan asti purkamatta, joten tunnin
             # tiedostosta ruudun saa sekunnissa eikä minuutissa.
-            [ffmpeg_bin, "-y", "-v", "error", "-ss", f"{at:.3f}", "-i", path,
-             "-frames:v", "1", "-vf", f"scale={WIDTH}:-2", "-q:v", "5",
-             str(tmp)],
-            capture_output=True, text=True, timeout=TIMEOUT)
+            [
+                ffmpeg_bin,
+                "-y",
+                "-v",
+                "error",
+                "-ss",
+                f"{at:.3f}",
+                "-i",
+                path,
+                "-frames:v",
+                "1",
+                "-vf",
+                f"scale={WIDTH}:-2",
+                "-q:v",
+                "5",
+                str(tmp),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+        )
     except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
         return None
     if done.returncode != 0 or not tmp.exists() or tmp.stat().st_size == 0:

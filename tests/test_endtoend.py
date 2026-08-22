@@ -11,8 +11,7 @@ from fastapi.testclient import TestClient
 from autoraffkat.analysis import analyze, build_grid, resolve_roles
 from autoraffkat.decide import decide
 from autoraffkat.fcpxml.read import read_fcpxml
-from autoraffkat.model import (ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, Globals,
-                               TrackConfig)
+from autoraffkat.model import ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, Globals, TrackConfig
 from autoraffkat.server.app import AppState, create_app
 from conftest import needs_ffmpeg
 from make_fixture import SPEECH_A, SPEECH_B
@@ -55,17 +54,20 @@ def test_speech_selects_the_right_camera(fixture_dir, source):
     assert not analysis.errors
     tracks = _tracks()
     grid, start, end = build_grid(analysis, tracks, resolve_roles(timeline, tracks))
-    decision = decide(grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3,
-                                    min_overlap=0.4))
+    decision = decide(
+        grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3, min_overlap=0.4)
+    )
     to_timeline = source_to_timeline(timeline)
 
     # Yksinpuhelun keskellä pitää olla puhujan lähikuva.
-    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Host"),
-                                   (SPEECH_B, SPEECH_A, "Guest")):
+    for spans, other, expected in (
+        (SPEECH_A, SPEECH_B, "Host"),
+        (SPEECH_B, SPEECH_A, "Guest"),
+    ):
         for lo, hi in spans:
             mid = (lo + hi) / 2
             if any(o0 < mid < o1 for o0, o1 in other):
-                continue                          # päällekkäispuhe, oma sääntönsä
+                continue  # päällekkäispuhe, oma sääntönsä
             at = to_timeline(mid)
             if not (float(start) + 1 < at < float(end) - 1):
                 continue
@@ -79,8 +81,12 @@ def test_overlap_goes_wide(fixture_dir):
     analysis = analyze(timeline)
     tracks = _tracks()
     grid, _, _ = build_grid(analysis, tracks, resolve_roles(timeline, tracks))
-    decision = decide(grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3,
-                                    min_overlap=0.3, overlap_rule="wide"))
+    decision = decide(
+        grid,
+        Globals(
+            min_shot=1.5, lead=0.15, confirm=0.3, min_overlap=0.3, overlap_rule="wide"
+        ),
+    )
     at = source_to_timeline(timeline)(13.8)
     assert angle_at(decision.segments, at) == "Laaja"
 
@@ -88,7 +94,7 @@ def test_overlap_goes_wide(fixture_dir):
 @needs_ffmpeg
 def test_envelope_cache_makes_the_second_pass_free(fixture_dir):
     timeline = read_fcpxml(str(fixture_dir / "sync.fcpxml"))
-    analyze(timeline)                                     # lämmitys levylle
+    analyze(timeline)  # lämmitys levylle
     started = time.perf_counter()
     analyze(timeline)
     assert (time.perf_counter() - started) < 0.4
@@ -112,8 +118,9 @@ def test_server_round_trip(scratch_xml):
 
     payload = {
         "tracks": {k: v.to_json() for k, v in _tracks().items()},
-        "globals": Globals(min_shot=1.5, lead=0.15, confirm=0.3,
-                           min_overlap=0.4, project_name="Testi").to_json(),
+        "globals": Globals(
+            min_shot=1.5, lead=0.15, confirm=0.3, min_overlap=0.4, project_name="Testi"
+        ).to_json(),
     }
     result = client.post("/api/settings", json=payload).json()
     assert result["ok"], result.get("problems")
@@ -148,8 +155,7 @@ def test_no_wide_is_reported(scratch_xml):
     state = AppState(xml_path=str(scratch_xml()))
     state.load()
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _tracks().items()},
-               "globals": {}}
+    payload = {"tracks": {k: v.to_json() for k, v in _tracks().items()}, "globals": {}}
     payload["tracks"]["WIDE.mp4"]["role"] = "unused"
     result = client.post("/api/settings", json=payload).json()
     assert not result["ok"]
@@ -180,12 +186,15 @@ def test_multicam_speech_selects_the_right_camera(fixture_dir):
     grid, start, end = build_grid(analysis, tracks, resolve_roles(timeline, tracks))
     # Ohjelma kattaa molemmat osat, ei vain jälkimmäistä.
     assert float(start) == 0.0 and float(end) > 30.0
-    decision = decide(grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3,
-                                    min_overlap=0.4))
+    decision = decide(
+        grid, Globals(min_shot=1.5, lead=0.15, confirm=0.3, min_overlap=0.4)
+    )
     to_timeline = source_to_timeline(timeline, "host a Track1.wav")
 
-    for spans, other, expected in ((SPEECH_A, SPEECH_B, "Host"),
-                                   (SPEECH_B, SPEECH_A, "Guest")):
+    for spans, other, expected in (
+        (SPEECH_A, SPEECH_B, "Host"),
+        (SPEECH_B, SPEECH_A, "Guest"),
+    ):
         for lo, hi in spans:
             mid = (lo + hi) / 2
             if any(o0 < mid < o1 for o0, o1 in other):
@@ -217,8 +226,13 @@ def test_multicam_server_round_trip(scratch_xml):
 
     payload = {
         "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-        "globals": Globals(min_shot=1.5, lead=0.15, confirm=0.3,
-                           min_overlap=0.4, project_name="Monikamera").to_json(),
+        "globals": Globals(
+            min_shot=1.5,
+            lead=0.15,
+            confirm=0.3,
+            min_overlap=0.4,
+            project_name="Monikamera",
+        ).to_json(),
     }
     result = client.post("/api/settings", json=payload).json()
     assert result["ok"], result.get("problems")
@@ -253,8 +267,7 @@ def test_all_wide_is_a_problem_not_a_result(scratch_xml):
     tracks = {k: v.to_json() for k, v in _multicam_tracks().items()}
     tracks["CLOSE_A"]["role"] = "unused"
     tracks["CLOSE_B"]["role"] = "unused"
-    result = client.post("/api/settings",
-                         json={"tracks": tracks, "globals": {}}).json()
+    result = client.post("/api/settings", json={"tracks": tracks, "globals": {}}).json()
     assert not result["ok"]
     assert any("lähikuvaa" in p or "close-up" in p.lower() for p in result["problems"])
 
@@ -266,10 +279,13 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
 
     previous = tmp_path / "jakso53.fcpxmld"
     previous.mkdir()
-    project.save(str(previous / "Info.fcpxml"),
-                 project.ProjectSettings(
-                     tracks={k: v for k, v in _multicam_tracks().items()},
-                     globals=Globals(min_shot=4.0)))
+    project.save(
+        str(previous / "Info.fcpxml"),
+        project.ProjectSettings(
+            tracks={k: v for k, v in _multicam_tracks().items()},
+            globals=Globals(min_shot=4.0),
+        ),
+    )
 
     current = tmp_path / "jakso54.fcpxmld"
     current.mkdir()
@@ -292,10 +308,15 @@ def test_audio_settings_are_inherited_too(fixture_dir, tmp_path):
 
     previous = tmp_path / "jakso53.fcpxmld"
     previous.mkdir()
-    project.save(str(previous / "Info.fcpxml"), project.ProjectSettings(
-        tracks={k: v for k, v in _multicam_tracks().items()},
-        audio=AudioSettings(enabled=True, duck=True, duck_db=-20.0,
-                            target_lufs=-17.0)))
+    project.save(
+        str(previous / "Info.fcpxml"),
+        project.ProjectSettings(
+            tracks={k: v for k, v in _multicam_tracks().items()},
+            audio=AudioSettings(
+                enabled=True, duck=True, duck_db=-20.0, target_lufs=-17.0
+            ),
+        ),
+    )
 
     current = tmp_path / "jakso54.fcpxmld"
     current.mkdir()
@@ -314,15 +335,20 @@ def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
 
     other = tmp_path / "jakso53.fcpxmld"
     other.mkdir()
-    project.save(str(other / "Info.fcpxml"), project.ProjectSettings(
-        tracks={"WIDE": TrackConfig(role=ROLE_CLOSE, speaker="Väärin")}))
+    project.save(
+        str(other / "Info.fcpxml"),
+        project.ProjectSettings(
+            tracks={"WIDE": TrackConfig(role=ROLE_CLOSE, speaker="Väärin")}
+        ),
+    )
 
     current = tmp_path / "jakso54.fcpxmld"
     current.mkdir()
     xml = current / "Info.fcpxml"
     shutil.copy(fixture_dir / "multicam.fcpxml", xml)
-    project.save(str(xml), project.ProjectSettings(
-        tracks={"WIDE": TrackConfig(role=ROLE_WIDE)}))
+    project.save(
+        str(xml), project.ProjectSettings(tracks={"WIDE": TrackConfig(role=ROLE_WIDE)})
+    )
 
     state = AppState(xml_path=str(xml))
     state.load()
@@ -333,14 +359,21 @@ def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
 def test_audio_settings_survive_a_round_trip(scratch_xml):
     """Ääniasetukset tallentuvat XML:n viereen kuten muutkin."""
     from autoraffkat import project
+
     source = scratch_xml("multicam.fcpxml")
     state = AppState(xml_path=str(source))
     state.load()
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-               "globals": {},
-               "audio": {"enabled": True, "target_lufs": -18.0,
-                         "room_track": "WIDE", "room_db": -20.0}}
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": {},
+        "audio": {
+            "enabled": True,
+            "target_lufs": -18.0,
+            "room_track": "WIDE",
+            "room_db": -20.0,
+        },
+    }
     client.post("/api/settings", json=payload)
     saved = project.load(str(source)).audio
     assert saved.enabled and saved.target_lufs == -18.0
@@ -352,15 +385,21 @@ def test_unknown_room_track_is_refused(scratch_xml):
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
     client = TestClient(create_app(state))
-    client.post("/api/settings", json={
-        "tracks": {}, "globals": {},
-        "audio": {"enabled": True, "room_track": "EI OLE"}})
+    client.post(
+        "/api/settings",
+        json={
+            "tracks": {},
+            "globals": {},
+            "audio": {"enabled": True, "room_track": "EI OLE"},
+        },
+    )
     assert state.settings.audio.room_track == ""
 
 
 def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
     """Puuttuvaan [mix]-tiedostoon ei viitata, vaikka se olisi kirjattu."""
     from autoraffkat.audio import mix as mixer
+
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
     for _ in range(200):
@@ -368,16 +407,21 @@ def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
             break
         time.sleep(0.05)
     state.mix_result = mixer.MixResult(
-        replacements={"host a Track1.wav": "/ei/ole [mix].wav"})
+        replacements={"host a Track1.wav": "/ei/ole [mix].wav"}
+    )
     state.settings.audio.enabled = True
 
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-               "globals": {}, "audio": {"enabled": True}}
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": {},
+        "audio": {"enabled": True},
+    }
     result = client.post("/api/export", json=payload).json()
     assert result["ok"] and result["mixed"] == 0
-    assert "%5Bmix%5D" not in ET.tostring(ET.parse(result["path"]).getroot(),
-                                          encoding="unicode")
+    assert "%5Bmix%5D" not in ET.tostring(
+        ET.parse(result["path"]).getroot(), encoding="unicode"
+    )
 
 
 def test_second_export_writes_a_new_file(scratch_xml):
@@ -394,8 +438,10 @@ def test_second_export_writes_a_new_file(scratch_xml):
         time.sleep(0.05)
 
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-               "globals": {}}
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": {},
+    }
     first = client.post("/api/export", json=payload).json()
     second = client.post("/api/export", json=payload).json()
     assert first["ok"] and second["ok"]
@@ -423,8 +469,11 @@ def test_export_warns_when_audio_is_still_processing(scratch_xml):
     state.mix_progress["running"] = True
 
     client = TestClient(create_app(state))
-    payload = {"tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-               "globals": {}, "audio": {"enabled": True}}
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": {},
+        "audio": {"enabled": True},
+    }
     result = client.post("/api/export", json=payload).json()
     assert result["ok"] and result["mixed"] == 0
     assert any("kesken" in w or "running" in w.lower() for w in result["warnings"])
@@ -439,9 +488,14 @@ def test_export_is_quiet_when_audio_is_off(scratch_xml):
             break
         time.sleep(0.05)
     client = TestClient(create_app(state))
-    result = client.post("/api/export", json={
-        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
-        "globals": {}, "audio": {"enabled": False}}).json()
+    result = client.post(
+        "/api/export",
+        json={
+            "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+            "globals": {},
+            "audio": {"enabled": False},
+        },
+    ).json()
     assert result["ok"] and result["warnings"] == []
 
 
@@ -451,6 +505,7 @@ def test_defaults_are_available_for_resetting(scratch_xml):
     Ilman paluuta yhdestä huonosta arvosta ei pääsisi takaisin.
     """
     from autoraffkat.model import AudioSettings, Globals
+
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
     client = TestClient(create_app(state))
@@ -465,9 +520,14 @@ def test_declick_sensitivity_round_trips(scratch_xml):
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
     client = TestClient(create_app(state))
-    client.post("/api/settings", json={
-        "tracks": {}, "globals": {},
-        "audio": {"enabled": True, "declick": True, "declick_sensitivity": 0.8}})
+    client.post(
+        "/api/settings",
+        json={
+            "tracks": {},
+            "globals": {},
+            "audio": {"enabled": True, "declick": True, "declick_sensitivity": 0.8},
+        },
+    )
     assert state.settings.audio.declick_sensitivity == 0.8
 
 
@@ -503,13 +563,15 @@ def test_server_messages_follow_the_language(scratch_xml):
     client.post("/api/language", json={"language": "en"})
     result = client.post("/api/settings", json={"tracks": {}, "globals": {}}).json()
     assert not result["ok"]
-    assert any("No speaker has a close-up" in p for p in result["problems"]), \
-        result["problems"]
+    assert any("No speaker has a close-up" in p for p in result["problems"]), result[
+        "problems"
+    ]
 
     client.post("/api/language", json={"language": "fi"})
     result = client.post("/api/settings", json={"tracks": {}, "globals": {}}).json()
-    assert any("Yhdelläkään puhujalla" in p for p in result["problems"]), \
-        result["problems"]
+    assert any("Yhdelläkään puhujalla" in p for p in result["problems"]), result[
+        "problems"
+    ]
 
 
 def test_language_is_remembered_and_inherited(fixture_dir, tmp_path):
@@ -519,7 +581,9 @@ def test_language_is_remembered_and_inherited(fixture_dir, tmp_path):
 
     previous = tmp_path / "jakso53.fcpxmld"
     previous.mkdir()
-    settings = project.ProjectSettings(tracks={k: v for k, v in _multicam_tracks().items()})
+    settings = project.ProjectSettings(
+        tracks={k: v for k, v in _multicam_tracks().items()}
+    )
     settings.language = "en"
     project.save(str(previous / "Info.fcpxml"), settings)
 
@@ -535,7 +599,9 @@ def test_unknown_language_falls_back(scratch_xml):
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     state.load()
     client = TestClient(create_app(state))
-    assert client.post("/api/language", json={"language": "kl"}).json()["language"] == "fi"
+    assert (
+        client.post("/api/language", json={"language": "kl"}).json()["language"] == "fi"
+    )
 
 
 @needs_ffmpeg

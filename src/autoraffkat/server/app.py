@@ -9,6 +9,7 @@ ffmpegiä.
 from __future__ import annotations
 
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -58,14 +59,22 @@ class AppState:
     timeline: Timeline | None = None
     analysis: Analysis | None = None
     settings: project.ProjectSettings = field(default_factory=project.ProjectSettings)
-    progress: dict = field(default_factory=lambda: {"done": 0, "total": 0,
-                                                    "current": "", "ready": False})
+    progress: dict = field(
+        default_factory=lambda: {"done": 0, "total": 0, "current": "", "ready": False}
+    )
     load_error: str = ""
     language: str = field(default_factory=i18n.detect)
-    inherited_from: str = ""        # mistä roolit perittiin, "" jos ei mistään
+    inherited_from: str = ""  # mistä roolit perittiin, "" jos ei mistään
     mix_result: mix.MixResult = field(default_factory=mix.MixResult)
-    mix_progress: dict = field(default_factory=lambda: {
-        "done": 0, "total": 0, "current": "", "eta": 0, "running": False})
+    mix_progress: dict = field(
+        default_factory=lambda: {
+            "done": 0,
+            "total": 0,
+            "current": "",
+            "eta": 0,
+            "running": False,
+        }
+    )
     lock: threading.Lock = field(default_factory=threading.Lock)
 
     # ---------------------------------------------------------- lataus
@@ -149,7 +158,9 @@ class AppState:
                 first = track.name.split()[0] if track.name.split() else ""
                 if first.isalpha():
                     cfg.speaker = first.capitalize()
-            elif track.has_video and any(w in lowered for w in ("wide", "laaja", "master")):
+            elif track.has_video and any(
+                w in lowered for w in ("wide", "laaja", "master")
+            ):
                 cfg.role = "wide"
 
     def _analyze(self) -> None:
@@ -165,7 +176,7 @@ class AppState:
             result = analyze(self.timeline, progress=report)
             with self.lock:
                 self.analysis = result
-        except Exception as exc:                      # taustasäie ei saa kaatua hiljaa
+        except Exception as exc:  # taustasäie ei saa kaatua hiljaa
             self.load_error = t("audio.envelope_failed", error=exc)
             traceback.print_exc()
         finally:
@@ -189,8 +200,15 @@ class AppState:
                 cfg.gain_db = float(values["gain_db"])
         raw = payload.get("globals") or {}
         g = self.settings.globals
-        for name in ("min_shot", "lead", "confirm", "dominance_db",
-                     "min_overlap", "wide_every", "wide_hold"):
+        for name in (
+            "min_shot",
+            "lead",
+            "confirm",
+            "dominance_db",
+            "min_overlap",
+            "wide_every",
+            "wide_hold",
+        ):
             if name in raw:
                 setattr(g, name, max(0.0, float(raw[name])))
         if raw.get("overlap_rule") in OVERLAP_RULES:
@@ -210,13 +228,27 @@ class AppState:
             a.declick = bool(raw["declick"])
         if "duck" in raw:
             a.duck = bool(raw["duck"])
-        for name in ("duck_db", "duck_lookahead", "duck_hold", "duck_min_open",
-                     "duck_fade", "duck_release", "duck_min_closed",
-                     "duck_dominance_db", "declick_sensitivity"):
+        for name in (
+            "duck_db",
+            "duck_lookahead",
+            "duck_hold",
+            "duck_min_open",
+            "duck_fade",
+            "duck_release",
+            "duck_min_closed",
+            "duck_dominance_db",
+            "declick_sensitivity",
+        ):
             if name in raw:
                 a.__dict__[name] = float(raw[name])
-        for name in ("high_pass_hz", "target_lufs", "peak_threshold_db",
-                     "leveler_threshold_db", "gain_db", "room_db"):
+        for name in (
+            "high_pass_hz",
+            "target_lufs",
+            "peak_threshold_db",
+            "leveler_threshold_db",
+            "gain_db",
+            "room_db",
+        ):
             if name in raw:
                 a.__dict__[name] = float(raw[name])
         if "plugin_path" in raw:
@@ -233,8 +265,9 @@ class AppState:
         """Käsittelee äänet taustalla. Kestää minuutteja, ei kuulu silmukkaan."""
         assert self.timeline is not None
         roles = resolve_roles(self.timeline, self.settings.tracks)
-        self.mix_progress.update({"done": 0, "total": 0, "current": "",
-                                  "eta": 0, "running": True})
+        self.mix_progress.update(
+            {"done": 0, "total": 0, "current": "", "eta": 0, "running": True}
+        )
 
         # Vaimennus tarvitsee saman puheentunnistuksen kuin kuvan leikkaus.
         # Ruudukko rakennetaan tässä eikä säätösilmukassa, koska käsittely on
@@ -243,26 +276,32 @@ class AppState:
         grid, program_start = None, 0.0
         if self.settings.audio.duck and self.analysis is not None:
             try:
-                grid, start, _ = build_grid(self.analysis, self.settings.tracks,
-                                            roles)
+                grid, start, _ = build_grid(self.analysis, self.settings.tracks, roles)
                 program_start = float(start)
             except AnalysisError as exc:
                 self.mix_progress["running"] = False
                 self.mix_result = mix.MixResult(
-                    errors={"duck": t("audio.duck_failed", error=exc)})
+                    errors={"duck": t("audio.duck_failed", error=exc)}
+                )
                 return
 
         def report(done: int, total: int, current: str, eta: float = 0.0) -> None:
-            self.mix_progress.update({"done": done, "total": total,
-                                      "current": current, "eta": round(eta)})
+            self.mix_progress.update(
+                {"done": done, "total": total, "current": current, "eta": round(eta)}
+            )
 
         try:
-            result = mix.process(self.timeline, roles, self.settings.audio,
-                                 grid=grid, program_start=program_start,
-                                 progress=report)
+            result = mix.process(
+                self.timeline,
+                roles,
+                self.settings.audio,
+                grid=grid,
+                program_start=program_start,
+                progress=report,
+            )
             with self.lock:
                 self.mix_result = result
-        except Exception as exc:                  # taustasäie ei saa kaatua hiljaa
+        except Exception as exc:  # taustasäie ei saa kaatua hiljaa
             self.mix_result = mix.MixResult(errors={"mix": str(exc)})
             traceback.print_exc()
         finally:
@@ -286,13 +325,17 @@ class AppState:
             cfg = self.settings.tracks.get(track.key)
             if not cfg or cfg.role != ROLE_MIC:
                 continue
-            problems += [self.analysis.errors[k] for k in track.media_keys
-                         if k in self.analysis.errors]
+            problems += [
+                self.analysis.errors[k]
+                for k in track.media_keys
+                if k in self.analysis.errors
+            ]
         if problems:
             return {"ok": False, "problems": problems, "ms": 0.0}
         try:
             grid, program_start, program_end = build_grid(
-                self.analysis, self.settings.tracks, roles)
+                self.analysis, self.settings.tracks, roles
+            )
         except AnalysisError as exc:
             return {"ok": False, "problems": [str(exc)], "ms": 0.0}
 
@@ -304,11 +347,21 @@ class AppState:
         return {
             "ok": True,
             "problems": [],
-            "program": {"start": float(program_start), "end": float(program_end),
-                        "duration": float(program_end - program_start)},
-            "segments": [{"start": s.start, "end": s.end, "duration": s.duration,
-                          "label": s.label, "angle": s.angle}
-                         for s in decision.segments],
+            "program": {
+                "start": float(program_start),
+                "end": float(program_end),
+                "duration": float(program_end - program_start),
+            },
+            "segments": [
+                {
+                    "start": s.start,
+                    "end": s.end,
+                    "duration": s.duration,
+                    "label": s.label,
+                    "angle": s.angle,
+                }
+                for s in decision.segments
+            ],
             "counts": counts,
             # Laajan tunnus on aineistoa, ei käyttöliittymän tekstiä: sama
             # merkkijono päätyy vientiin rooliksi. Käyttöliittymä kääntää sen
@@ -330,17 +383,19 @@ def _audio_warnings(state: AppState, roles, replacements: dict) -> list[str]:
     """
     if state.timeline is None or not state.settings.audio.enabled:
         return []
-    expected = {item.key
-                for keys in roles.mics.values() for key in keys
-                for item in state.timeline.track_media(key) if item.path}
+    expected = {
+        item.key
+        for keys in roles.mics.values()
+        for key in keys
+        for item in state.timeline.track_media(key)
+        if item.path
+    }
     missing = expected - set(replacements)
     if not missing:
         return []
     if state.mix_progress.get("running"):
-        return [t("export.audio_running", missing=len(missing),
-                  total=len(expected))]
-    return [t("export.audio_missing", missing=len(missing),
-              total=len(expected))]
+        return [t("export.audio_running", missing=len(missing), total=len(expected))]
+    return [t("export.audio_missing", missing=len(missing), total=len(expected))]
 
 
 def _track_json(state: AppState, track) -> dict:
@@ -353,7 +408,9 @@ def _track_json(state: AppState, track) -> dict:
     items = state.timeline.track_media(track.key)
     span = state.timeline.track_span(track.key) or (0, 0)
     first = items[0] if items else None
-    errors = [state.analysis.errors.get(m.key, "") for m in items] if state.analysis else []
+    errors = (
+        [state.analysis.errors.get(m.key, "") for m in items] if state.analysis else []
+    )
     facts = probe.info(first.path) if first and first.path else {}
     return {
         "key": track.key,
@@ -363,22 +420,29 @@ def _track_json(state: AppState, track) -> dict:
         # Osien yhteiskesto ja -koko: raita on yksi asia, vaikka tiedostoja
         # olisi monta.
         "total_size": sum((probe.info(m.path).get("size") or 0) for m in items),
-        "total_duration": sum((probe.info(m.path).get("duration") or 0)
-                              for m in items),
+        "total_duration": sum((probe.info(m.path).get("duration") or 0) for m in items),
         "path": first.path if first else "",
         "missing": any(m.path and not os.path.exists(m.path) for m in items),
         "has_video": track.has_video,
         "has_audio": track.has_audio,
         "width": first.width if first else 0,
         "height": first.height if first else 0,
-        "fps": (round(float(1 / first.frame_duration), 3)
-                if first and first.frame_duration else None),
+        "fps": (
+            round(float(1 / first.frame_duration), 3)
+            if first and first.frame_duration
+            else None
+        ),
         "audio_channels": first.audio_channels if first else 0,
         "timeline_start": float(span[0]),
         "timeline_end": float(span[1]),
-        "parts": [{"name": m.name, "path": m.path,
-                   "missing": bool(m.path) and not os.path.exists(m.path)}
-                  for m in items],
+        "parts": [
+            {
+                "name": m.name,
+                "path": m.path,
+                "missing": bool(m.path) and not os.path.exists(m.path),
+            }
+            for m in items
+        ],
         "angle_name": first.angle_name if first else "",
         "thumb": bool(track.has_video and first and first.path),
         "config": state.settings.config_for(track.key).to_json(),
@@ -389,8 +453,9 @@ def _track_json(state: AppState, track) -> dict:
 def _state_json(state: AppState) -> dict:
     """Koko tila käyttöliittymälle: raidat, roolit, säätimet ja edistyminen."""
     timeline = state.timeline
-    tracks = ([_track_json(state, t) for t in timeline.tracks]
-              if timeline is not None else [])
+    tracks = (
+        [_track_json(state, t) for t in timeline.tracks] if timeline is not None else []
+    )
     return {
         "xml_path": state.xml_path,
         "settings_path": project.settings_path(state.xml_path),
@@ -443,7 +508,7 @@ def create_app(state: AppState) -> FastAPI:
             try:
                 project.save(state.xml_path, state.settings)
             except OSError:
-                pass                       # kieli ei ole tallentamisen arvoinen virhe
+                pass  # kieli ei ole tallentamisen arvoinen virhe
         return {"language": state.language, "languages": list(LANGUAGES)}
 
     @app.get("/")
@@ -454,7 +519,16 @@ def create_app(state: AppState) -> FastAPI:
         tulos on rikkinäinen tavalla jota kukaan ei osaa yhdistää välimuistiin.
         """
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
-        for name in ("app.js", "i18n.js", "style.css", "favicon.ico", "favicon.png", "favicon.svg", "apple-touch-icon.png", "icon.png"):
+        for name in (
+            "app.js",
+            "i18n.js",
+            "style.css",
+            "favicon.ico",
+            "favicon.png",
+            "favicon.svg",
+            "apple-touch-icon.png",
+            "icon.png",
+        ):
             static_file = STATIC_DIR / name
             if static_file.exists():
                 stamp = int(static_file.stat().st_mtime)
@@ -493,8 +567,11 @@ def create_app(state: AppState) -> FastAPI:
             if path:
                 # Välimuistin avain sisältää muokkausajan, joten sisältö ei
                 # muutu saman URLin alla.
-                return FileResponse(path, media_type="image/jpeg",
-                                    headers={"Cache-Control": "max-age=86400"})
+                return FileResponse(
+                    path,
+                    media_type="image/jpeg",
+                    headers={"Cache-Control": "max-age=86400"},
+                )
         return Response(status_code=404)
 
     @app.get("/api/defaults")
@@ -524,7 +601,9 @@ def create_app(state: AppState) -> FastAPI:
         """Avaa toisen XML-tiedoston tai paketin."""
         path = str((payload or {}).get("path") or "").strip()
         if not path or not os.path.exists(path):
-            raise HTTPException(400, t("read.file_missing", path=path or "(polku puuttuu)"))
+            raise HTTPException(
+                400, t("read.file_missing", path=path or "(polku puuttuu)")
+            )
         # Lukko on load():n sisällä, eikä threading.Lock ole rekursiivinen:
         # sen ottaminen tässä jumitti avauksen ikuisesti. Pyyntö ei palannut,
         # ja koska load() nollaa edistymisen ennen lukkoa, käyttöliittymä jäi
@@ -564,7 +643,8 @@ def create_app(state: AppState) -> FastAPI:
                 project.save(state.xml_path, state.settings)
             except OSError as exc:
                 result.setdefault("problems", []).append(
-                    t("export.settings_failed", error=exc))
+                    t("export.settings_failed", error=exc)
+                )
         return result
 
     @app.post("/api/export")
@@ -579,9 +659,10 @@ def create_app(state: AppState) -> FastAPI:
                 state.apply(payload)
             result = state.compute()
             if not result.get("ok"):
-                return JSONResponse({"ok": False,
-                                     "problems": result.get("problems", [])},
-                                    status_code=400)
+                return JSONResponse(
+                    {"ok": False, "problems": result.get("problems", [])},
+                    status_code=400,
+                )
             _grid, program_start, program_end, decision = result["_grid"]
             assert state.timeline is not None
             roles = resolve_roles(state.timeline, state.settings.tracks)
@@ -599,28 +680,40 @@ def create_app(state: AppState) -> FastAPI:
             try:
                 # Käsitelty ääni otetaan mukaan jos se on olemassa ja
                 # ajan tasalla. Vanhentunutta ei käytetä hiljaa.
-                result = state.mix_result if state.settings.audio.enabled \
+                result = (
+                    state.mix_result
+                    if state.settings.audio.enabled
                     else mix.MixResult()
-                replacements = {k: v for k, v in result.replacements.items()
-                                if os.path.exists(v)}
+                )
+                replacements = {
+                    k: v for k, v in result.replacements.items() if os.path.exists(v)
+                }
                 room = [(k, v) for k, v in result.room if os.path.exists(v)]
                 warnings = _audio_warnings(state, roles, replacements)
                 if state.timeline.multicams:
                     # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman
                     # voi vaihtaa Final Cutissa jälkikäteen.
                     xml = build_multicam_fcpxml(
-                        state.timeline, decision.segments, mic_tracks,
-                        program_start, program_end,
+                        state.timeline,
+                        decision.segments,
+                        mic_tracks,
+                        program_start,
+                        program_end,
                         state.settings.globals.project_name,
-                        replacements=replacements, room=room,
+                        replacements=replacements,
+                        room=room,
                     )
                 else:
                     xml = build_fcpxml(
                         {m.key: m for m in state.timeline.media},
-                        decision.segments, mic_tracks,
-                        state.timeline.frame_duration, program_start, program_end,
+                        decision.segments,
+                        mic_tracks,
+                        state.timeline.frame_duration,
+                        program_start,
+                        program_end,
                         state.settings.globals.project_name,
-                        replacements=replacements, room=room,
+                        replacements=replacements,
+                        room=room,
                     )
                 write_fcpxml(out_path, xml)
             except (WriteError, OSError) as exc:
@@ -628,10 +721,15 @@ def create_app(state: AppState) -> FastAPI:
             project.save(state.xml_path, state.settings)
         # Seuraavan viennin nimi mukaan: ruudulla näkyvä polku on juuri
         # kirjoitettu, ja ilman tätä se jäisi lupaamaan väärää tiedostoa.
-        return {"ok": True, "path": out_path, "cuts": len(decision.segments),
-                "mixed": len(replacements), "room": len(room),
-                "warnings": warnings,
-                "next_path": project.next_output_path(state.xml_path)}
+        return {
+            "ok": True,
+            "path": out_path,
+            "cuts": len(decision.segments),
+            "mixed": len(replacements),
+            "room": len(room),
+            "warnings": warnings,
+            "next_path": project.next_output_path(state.xml_path),
+        }
 
     @app.post("/api/mix")
     def run_mix(payload: dict | None = None):
@@ -655,11 +753,16 @@ def create_app(state: AppState) -> FastAPI:
 
     @app.post("/api/reveal")
     def reveal(payload: dict):
-        """Näytä tiedosto Finderissa — pikku mukavuus vientipainikkeen viereen."""
-        path = str(payload.get("path", ""))
+        """Näytä tiedosto Finderissa/tiedostonhallinnassa."""
+        path = str(payload.get("path", "")).strip()
         if not path or not os.path.exists(path):
             raise HTTPException(404, t("export.file_missing"))
-        os.system(f"open -R {path!r}")
+        if sys.platform == "darwin":
+            subprocess.run(["open", "-R", path], check=False)
+        elif sys.platform == "win32":
+            subprocess.run(["explorer.exe", f"/select,{path}"], check=False)
+        elif sys.platform.startswith("linux"):
+            subprocess.run(["xdg-open", os.path.dirname(path) or "."], check=False)
         return {"ok": True}
 
     app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

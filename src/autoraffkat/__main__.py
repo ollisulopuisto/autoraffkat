@@ -24,22 +24,37 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(
         prog="autoraffkat",
-        description="Automaattinen monikameraleikkaus: FCPXML sisään, FCPXML ulos.")
-    parser.add_argument("xml", nargs="?",
-                        help="Final Cutista viety FCPXML tai .fcpxmld-paketti. "
-                             "Ilman tätä etsitään työhakemistosta.")
-    parser.add_argument("--pick", action="store_true",
-                        help="avaa Finderin valintaikkuna")
-    parser.add_argument("--gui", action="store_true", default=None,
-                        help="avaa natiivi työpöytäikkuna")
-    parser.add_argument("--no-gui", "--headless", dest="gui", action="store_false",
-                        help="suorita taustapalvelimena ilman ikkunaa")
-    parser.add_argument("--debug", action="store_true",
-                        help="ota kehitystyökalut käyttöön")
+        description="Automaattinen monikameraleikkaus: FCPXML sisään, FCPXML ulos.",
+    )
+    parser.add_argument(
+        "xml",
+        nargs="?",
+        help="Final Cutista viety FCPXML tai .fcpxmld-paketti. "
+        "Ilman tätä etsitään työhakemistosta.",
+    )
+    parser.add_argument(
+        "--pick", action="store_true", help="avaa Finderin valintaikkuna"
+    )
+    parser.add_argument(
+        "--gui", action="store_true", default=None, help="avaa natiivi työpöytäikkuna"
+    )
+    parser.add_argument(
+        "--no-gui",
+        "--headless",
+        dest="gui",
+        action="store_false",
+        help="suorita taustapalvelimena ilman ikkunaa",
+    )
+    parser.add_argument(
+        "--debug", action="store_true", help="ota kehitystyökalut käyttöön"
+    )
     parser.add_argument("--port", type=int, default=8731)
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--no-browser", action="store_true",
-                        help="älä avaa selainta (vain headless-tilassa)")
+    parser.add_argument(
+        "--no-browser",
+        action="store_true",
+        help="älä avaa selainta (vain headless-tilassa)",
+    )
     args = parser.parse_args(argv)
 
     # Oletustila: jos ajetaan pakattuna sovelluksena (.app / .exe) tai annettu --gui
@@ -64,13 +79,17 @@ def main(argv: list[str] | None = None) -> int:
         if not args.xml:
             print(f"Lähde: {pick.label(xml_path)}")
     elif not use_gui:
-        print("Ei lähdettä. Vie Final Cutista FCPXML tähän hakemistoon, "
-              "anna polku argumenttina tai valitse ikkunasta: "
-              "autoraffkat --pick", file=sys.stderr)
+        print(
+            "Ei lähdettä. Vie Final Cutista FCPXML tähän hakemistoon, "
+            "anna polku argumenttina tai valitse ikkunasta: "
+            "autoraffkat --pick",
+            file=sys.stderr,
+        )
         return 1
 
     if use_gui:
         from autoraffkat.gui import launch_gui
+
         launch_gui(xml_path=xml_path, host=args.host, port=args.port, debug=args.debug)
         return 0
 
@@ -87,6 +106,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"autoraffkat: {url}")
 
     import uvicorn
+
     uvicorn.run(app, host=args.host, port=args.port, log_level="warning")
     return 0
 

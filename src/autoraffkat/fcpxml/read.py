@@ -36,8 +36,15 @@ from ..timeline import ZERO, parse_time
 # Elementit jotka viittaavat suoraan assettiin.
 LEAF_TAGS = {"asset-clip", "video", "audio"}
 # Elementit joiden sisään mennään.
-CONTAINER_TAGS = {"clip", "sync-clip", "spine", "ref-clip", "mc-clip", "gap",
-                  "mc-angle"}
+CONTAINER_TAGS = {
+    "clip",
+    "sync-clip",
+    "spine",
+    "ref-clip",
+    "mc-clip",
+    "gap",
+    "mc-angle",
+}
 
 DEFAULT_FRAME_DURATION = Fraction(1, 25)
 
@@ -104,7 +111,7 @@ class Timeline:
 
     media: list[MediaItem]
     frame_duration: Fraction
-    kind: str                       # "project", "sync-clip" tai "multicam"
+    kind: str  # "project", "sync-clip" tai "multicam"
     name: str
     source_path: str = ""
     tracks: list[Track] = field(default_factory=list)
@@ -135,8 +142,10 @@ class Timeline:
         items = self.track_media(key)
         if not items:
             return None
-        return (min(m.timeline_start for m in items),
-                max(m.timeline_end for m in items))
+        return (
+            min(m.timeline_start for m in items),
+            max(m.timeline_end for m in items),
+        )
 
     def multicam_at(self, seconds: Fraction) -> MulticamRef | None:
         for mc in self.multicams:
@@ -238,8 +247,10 @@ def _collect_resources(root) -> tuple[dict[str, _Asset], dict[str, dict], dict]:
                 src=src,
                 start=parse_time(res.get("start"), ZERO),
                 duration=parse_time(res.get("duration"), ZERO),
-                has_video=res.get("hasVideo") == "1" or _int_attr(res, "videoSources", 0) > 0,
-                has_audio=res.get("hasAudio") == "1" or _int_attr(res, "audioSources", 0) > 0,
+                has_video=res.get("hasVideo") == "1"
+                or _int_attr(res, "videoSources", 0) > 0,
+                has_audio=res.get("hasAudio") == "1"
+                or _int_attr(res, "audioSources", 0) > 0,
                 audio_rate=_audio_rate(res.get("audioRate")),
                 audio_channels=_int_attr(res, "audioChannels", 2),
                 audio_sources=_int_attr(res, "audioSources", 1),
@@ -279,8 +290,8 @@ class _Ctx:
     hits: list[_Hit] = field(default_factory=list)
     seen: set[int] = field(default_factory=set)
     multicams: list[MulticamRef] = field(default_factory=list)
-    angle_names: dict[str, str] = field(default_factory=dict)   # angleID -> nimi
-    angle_owner: dict[str, str] = field(default_factory=dict)   # angleID -> media id
+    angle_names: dict[str, str] = field(default_factory=dict)  # angleID -> nimi
+    angle_owner: dict[str, str] = field(default_factory=dict)  # angleID -> media id
 
 
 def _intersect(outer: Bounds, inner: Bounds) -> Bounds:
@@ -292,8 +303,15 @@ def _intersect(outer: Bounds, inner: Bounds) -> Bounds:
     return (max(outer[0], inner[0]), min(outer[1], inner[1]))
 
 
-def _walk(elem, abs_offset: Fraction, local_start: Fraction, ctx: _Ctx,
-          depth: int = 0, bounds: Bounds = None, angle_id: str = "") -> None:
+def _walk(
+    elem,
+    abs_offset: Fraction,
+    local_start: Fraction,
+    ctx: _Ctx,
+    depth: int = 0,
+    bounds: Bounds = None,
+    angle_id: str = "",
+) -> None:
     """Kerää ``elem``:n lapsista media-esiintymät absoluuttisin aikajana-ajoin.
 
     ``bounds`` rajaa löydöt isännän kestoon. Sitä tarvitaan multicamissa ja
@@ -340,8 +358,7 @@ def _walk(elem, abs_offset: Fraction, local_start: Fraction, ctx: _Ctx,
             continue
 
         if tag == "mc-clip" and ref in ctx.medias:
-            _walk_multicam(child, ctx, child_abs, child_start, child_dur,
-                           depth, bounds)
+            _walk_multicam(child, ctx, child_abs, child_start, child_dur, depth, bounds)
             continue
 
         if tag == "ref-clip" and ref in ctx.medias:
@@ -355,8 +372,15 @@ def _walk(elem, abs_offset: Fraction, local_start: Fraction, ctx: _Ctx,
                 tc = parse_time(inner.get("tcStart"), ZERO)
                 if spine is not None:
                     span = _intersect(bounds, _span(child_abs, child_dur))
-                    _walk(spine, child_abs - (child_start - tc), ZERO, ctx,
-                          depth + 1, span, angle_id)
+                    _walk(
+                        spine,
+                        child_abs - (child_start - tc),
+                        ZERO,
+                        ctx,
+                        depth + 1,
+                        span,
+                        angle_id,
+                    )
             ctx.seen.discard(id(media_elem))
             _walk(child, child_abs, child_start, ctx, depth + 1, bounds, angle_id)
             continue
@@ -370,8 +394,9 @@ def _span(offset: Fraction, duration: Fraction) -> Bounds:
     return (offset, offset + duration) if duration > 0 else None
 
 
-def _clip(offset: Fraction, start: Fraction, duration: Fraction, lane: int,
-          bounds: Bounds) -> Placement | None:
+def _clip(
+    offset: Fraction, start: Fraction, duration: Fraction, lane: int, bounds: Bounds
+) -> Placement | None:
     """Esiintymä rajattuna isännän aikaväliin.
 
     Vasemmalta rajattaessa myös lähdeaika siirtyy saman verran, jotta
@@ -386,8 +411,15 @@ def _clip(offset: Fraction, start: Fraction, duration: Fraction, lane: int,
     return Placement(lo, start + (lo - offset), hi - lo, lane)
 
 
-def _walk_multicam(child, ctx: _Ctx, child_abs: Fraction, child_start: Fraction,
-                   child_dur: Fraction, depth: int, bounds: Bounds) -> None:
+def _walk_multicam(
+    child,
+    ctx: _Ctx,
+    child_abs: Fraction,
+    child_start: Fraction,
+    child_dur: Fraction,
+    depth: int,
+    bounds: Bounds,
+) -> None:
     """``<mc-clip>``: kaikki kulmat, kukin omalla angleID:llään.
 
     Kulmien sisältö on multicamin omassa aikapohjassa, jonka nollakohta on
@@ -415,15 +447,17 @@ def _walk_multicam(child, ctx: _Ctx, child_abs: Fraction, child_start: Fraction,
         _walk(angle, base, ZERO, ctx, depth + 1, span, aid)
 
     ctx.seen.discard(id(media_elem))
-    ctx.multicams.append(MulticamRef(
-        media_id=media_elem.get("id", ""),
-        name=child.get("name", "") or media_elem.get("name", ""),
-        offset=child_abs,
-        duration=child_dur,
-        start=child_start,
-        angle_ids=angle_ids,
-        angle_roles=_source_roles(child),
-    ))
+    ctx.multicams.append(
+        MulticamRef(
+            media_id=media_elem.get("id", ""),
+            name=child.get("name", "") or media_elem.get("name", ""),
+            offset=child_abs,
+            duration=child_dur,
+            start=child_start,
+            angle_ids=angle_ids,
+            angle_roles=_source_roles(child),
+        )
+    )
 
 
 def _source_roles(mc_clip) -> dict[str, str]:
@@ -466,13 +500,13 @@ def _common_name(names: list[str]) -> str:
     split = [re.split(r"\s+", n.strip()) for n in names]
     if len({len(t) for t in split}) != 1:
         return names[0]
-    kept = [tokens[0] for tokens in zip(*split)
-            if len(set(tokens)) == 1]
+    kept = [tokens[0] for tokens in zip(*split) if len(set(tokens)) == 1]
     return " ".join(kept) or names[0]
 
 
-def _group_angles(order: list[str], names: dict[str, str],
-                  owner: dict[str, str]) -> list[list[str]]:
+def _group_angles(
+    order: list[str], names: dict[str, str], owner: dict[str, str]
+) -> list[list[str]]:
     """Kulmat ryhmiksi: ensin tarkka nimi, sitten löyhä osamerkin ohitus.
 
     Kahta saman multicamin kulmaa ei koskaan yhdistetä, vaikka nimet
@@ -497,15 +531,18 @@ def _group_angles(order: list[str], names: dict[str, str],
     return groups
 
 
-def _build_tracks(media: list[MediaItem], ctx: _Ctx,
-                  angles_of: dict[str, list[str]]) -> list[Track]:
+def _build_tracks(
+    media: list[MediaItem], ctx: _Ctx, angles_of: dict[str, list[str]]
+) -> list[Track]:
     """Raidat medioista ja kulmista.
 
     Ilman multicamia jokainen media on oma raitansa, jolloin avain on
     tiedostonimi kuten ennenkin ja vanhat asetustiedostot kelpaavat.
     """
     by_key = {m.key: m for m in media}
-    order = [aid for aid in ctx.angle_names if any(aid in v for v in angles_of.values())]
+    order = [
+        aid for aid in ctx.angle_names if any(aid in v for v in angles_of.values())
+    ]
     grouped = _group_angles(order, ctx.angle_names, ctx.angle_owner)
 
     tracks: list[Track] = []
@@ -517,11 +554,16 @@ def _build_tracks(media: list[MediaItem], ctx: _Ctx,
         used_keys[key] = count + 1
         unique = key if count == 0 else f"{key}#{count + 1}"
         items = [by_key[k] for k in media_keys if k in by_key]
-        tracks.append(Track(
-            key=unique, name=name, media_keys=media_keys, angle_ids=angle_ids,
-            has_video=any(m.has_video for m in items),
-            has_audio=any(m.has_audio for m in items),
-        ))
+        tracks.append(
+            Track(
+                key=unique,
+                name=name,
+                media_keys=media_keys,
+                angle_ids=angle_ids,
+                has_video=any(m.has_video for m in items),
+                has_audio=any(m.has_audio for m in items),
+            )
+        )
 
     for group in grouped:
         keys = [k for k in by_key if any(a in angles_of.get(k, ()) for a in group)]
@@ -541,8 +583,11 @@ def _build_tracks(media: list[MediaItem], ctx: _Ctx,
 
     # Järjestys: kuvat ensin, sitten äänet — sama kuin ennen medialistassa.
     order_index = {m.key: i for i, m in enumerate(media)}
-    tracks.sort(key=lambda t: min((order_index[k] for k in t.media_keys),
-                                  default=len(order_index)))
+    tracks.sort(
+        key=lambda t: min(
+            (order_index[k] for k in t.media_keys), default=len(order_index)
+        )
+    )
     return tracks
 
 
@@ -568,7 +613,9 @@ def _stable_keys(items: list[MediaItem]) -> None:
     """Antaa medioille tunnisteet, jotka säilyvät XML:n uudelleenviennissä."""
     used: dict[str, int] = {}
     for item in items:
-        base = os.path.basename(item.path) if item.path else (item.name or item.asset_id)
+        base = (
+            os.path.basename(item.path) if item.path else (item.name or item.asset_id)
+        )
         count = used.get(base, 0)
         used[base] = count + 1
         item.key = base if count == 0 else f"{base}#{count + 1}"
@@ -596,7 +643,9 @@ def read_fcpxml(path: str) -> Timeline:
         frame_duration = seq_format.get("frame_duration")
     else:
         _walk(container, ZERO, parse_time(container.get("start"), ZERO), ctx)
-        frame_duration = formats.get(container.get("format", ""), {}).get("frame_duration")
+        frame_duration = formats.get(container.get("format", ""), {}).get(
+            "frame_duration"
+        )
 
     if not ctx.hits:
         raise ReadError(t("read.no_media"))
@@ -632,9 +681,10 @@ def read_fcpxml(path: str) -> Timeline:
             items[hit.ref] = item
             order.append(hit.ref)
         # <video>/<audio> samasta assetista samaan kohtaan ovat sama esiintymä.
-        if not any(p.offset == hit.placement.offset
-                   and p.duration == hit.placement.duration
-                   for p in item.placements):
+        if not any(
+            p.offset == hit.placement.offset and p.duration == hit.placement.duration
+            for p in item.placements
+        ):
             item.placements.append(hit.placement)
         if hit.angle_id and hit.angle_id not in item.angle_ids:
             item.angle_ids.append(hit.angle_id)
@@ -654,14 +704,21 @@ def read_fcpxml(path: str) -> Timeline:
     _stable_keys(media)
     for item in media:
         angles_of[item.key] = item.angle_ids
-        item.angle_name = ctx.angle_names.get(
-            item.angle_ids[0], "") if item.angle_ids else ""
+        item.angle_name = (
+            ctx.angle_names.get(item.angle_ids[0], "") if item.angle_ids else ""
+        )
 
     ctx.multicams.sort(key=lambda mc: mc.offset)
     tracks = _build_tracks(media, ctx, angles_of)
     if ctx.multicams:
         kind = "multicam"
 
-    return Timeline(media=media, frame_duration=frame_duration, kind=kind,
-                    name=name, source_path=os.path.abspath(path),
-                    tracks=tracks, multicams=ctx.multicams)
+    return Timeline(
+        media=media,
+        frame_duration=frame_duration,
+        kind=kind,
+        name=name,
+        source_path=os.path.abspath(path),
+        tracks=tracks,
+        multicams=ctx.multicams,
+    )

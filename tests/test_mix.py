@@ -5,7 +5,6 @@ tuoreuden tunnistus ja näytemäärän tarkistus.
 """
 
 import os
-from pathlib import Path
 
 import pytest
 
@@ -52,9 +51,11 @@ def test_readable_formats_pass_through(tmp_path):
 def test_disabled_does_nothing(fixture_dir):
     from autoraffkat.analysis import resolve_roles
     from autoraffkat.fcpxml.read import read_fcpxml
+
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    result = mix.process(timeline, resolve_roles(timeline, {}),
-                         AudioSettings(enabled=False))
+    result = mix.process(
+        timeline, resolve_roles(timeline, {}), AudioSettings(enabled=False)
+    )
     assert result.replacements == {} and result.room == [] and result.ok
 
 
@@ -70,9 +71,11 @@ def test_missing_plugin_is_reported_not_raised(fixture_dir):
 
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     tracks = {"host Track1": TrackConfig(role=ROLE_MIC, speaker="Host")}
-    result = mix.process(timeline, resolve_roles(timeline, tracks),
-                         AudioSettings(enabled=True,
-                                       plugin_path="/ei/ole/mitaan.vst3"))
+    result = mix.process(
+        timeline,
+        resolve_roles(timeline, tracks),
+        AudioSettings(enabled=True, plugin_path="/ei/ole/mitaan.vst3"),
+    )
     assert not result.ok
     assert "liitännäistä ei löydy" in " ".join(result.errors.values()).lower()
     assert result.processed == 0
@@ -97,7 +100,8 @@ def test_same_plugin_in_both_formats_is_listed_once(tmp_path, monkeypatch):
 
     vst = tmp_path / "vst3"
     au = tmp_path / "components"
-    vst.mkdir(); au.mkdir()
+    vst.mkdir()
+    au.mkdir()
     (vst / "dxRevive.vst3").mkdir()
     (au / "dxRevive.component").mkdir()
     monkeypatch.setattr(chain, "PLUGIN_DIRS", (str(vst), str(au)))
@@ -110,6 +114,7 @@ def test_same_plugin_in_both_formats_is_listed_once(tmp_path, monkeypatch):
 def test_frame_count_matches_the_asset(fixture_dir):
     """Näytemäärä on se luku, jolla synkka tarkistetaan."""
     from make_fixture import DURATION
+
     path = fixture_dir / "MIC_A.wav"
     if not path.exists():
         pytest.skip("fixturen mediaa ei ole")
@@ -131,15 +136,26 @@ def _grid(on_a, on_b, level_a, level_b, n=500):
             mask[start:end] = True
             db[start:end] = level
         return SpeakerLanes(name, db, mask, f"C{name}")
-    return Grid(n=n, program_start=0.0, wide_key="W",
-                speakers=[lane("A", on_a, level_a), lane("B", on_b, level_b)])
+
+    return Grid(
+        n=n,
+        program_start=0.0,
+        wide_key="W",
+        speakers=[lane("A", on_a, level_a), lane("B", on_b, level_b)],
+    )
 
 
 def _quiet_knobs(**kw):
     """Ajat pois päältä, jotta testi mittaa sääntöä eikä liukuja."""
-    base = dict(duck=True, duck_dominance_db=6.0, duck_lookahead=0.0,
-                duck_hold=0.0, duck_min_open=0.0, duck_min_closed=0.0,
-                duck_release=0.0)
+    base = dict(
+        duck=True,
+        duck_dominance_db=6.0,
+        duck_lookahead=0.0,
+        duck_hold=0.0,
+        duck_min_open=0.0,
+        duck_min_closed=0.0,
+        duck_release=0.0,
+    )
     base.update(kw)
     return AudioSettings(**base)
 
@@ -207,7 +223,7 @@ def test_closed_ranges_map_timeline_to_file_time(fixture_dir):
     item = timeline.media_by_key()["host a Track1.wav"]
     # Osa A kattaa aikajanan 0–18 s ja tiedoston 0–18 s.
     closed = np.zeros(int(36 / HOP), dtype=bool)
-    closed[int(4 / HOP):int(6 / HOP)] = True       # kiinni 4–6 s
+    closed[int(4 / HOP) : int(6 / HOP)] = True  # kiinni 4–6 s
     ranges = mix.closed_ranges(item, closed, 0.0, 48000)
     assert len(ranges) == 1
     start, end = ranges[0]
@@ -222,8 +238,8 @@ def test_closed_ranges_stay_inside_the_clip(fixture_dir):
     from autoraffkat.model import HOP
 
     timeline = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
-    item = timeline.media_by_key()["host a Track1.wav"]     # aikajanalla 0–18 s
-    closed = np.ones(int(36 / HOP), dtype=bool)            # kaikki kiinni
+    item = timeline.media_by_key()["host a Track1.wav"]  # aikajanalla 0–18 s
+    closed = np.ones(int(36 / HOP), dtype=bool)  # kaikki kiinni
     ranges = mix.closed_ranges(item, closed, 0.0, 48000)
     assert len(ranges) == 1
     assert ranges[0][1] <= 18 * 48000 + 48

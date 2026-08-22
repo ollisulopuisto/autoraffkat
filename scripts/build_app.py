@@ -18,7 +18,9 @@ def ensure_icons() -> None:
     if sys.platform != "darwin":
         return
     assets_dir = ROOT_DIR / "assets"
-    if (assets_dir / "autoraffkat.icns").exists() or (assets_dir / "icon.icns").exists():
+    if (assets_dir / "autoraffkat.icns").exists() or (
+        assets_dir / "icon.icns"
+    ).exists():
         return
     if shutil.which("iconutil") is None or not (assets_dir / "icon_1024.png").exists():
         return
@@ -40,7 +42,16 @@ def ensure_icons() -> None:
     for target_name, src in mapping.items():
         if src.exists():
             shutil.copy2(src, iconset / target_name)
-    res = subprocess.run(["iconutil", "-c", "icns", str(iconset), "-o", str(assets_dir / "autoraffkat.icns")])
+    res = subprocess.run(
+        [
+            "iconutil",
+            "-c",
+            "icns",
+            str(iconset),
+            "-o",
+            str(assets_dir / "autoraffkat.icns"),
+        ]
+    )
     if res.returncode == 0:
         shutil.copy2(assets_dir / "autoraffkat.icns", assets_dir / "icon.icns")
     shutil.rmtree(iconset, ignore_errors=True)
@@ -56,6 +67,7 @@ def build(clean: bool = False, fetch_bins: bool = True, dmg: bool = False) -> in
     if fetch_bins and not has_ffmpeg:
         print("Haetaan staattiset ffmpeg- ja ffprobe-binäärit...")
         from fetch_binaries import fetch_binaries
+
         fetch_binaries()
 
     spec_file = ROOT_DIR / "autoraffkat.spec"
@@ -81,6 +93,7 @@ def build(clean: bool = False, fetch_bins: bool = True, dmg: bool = False) -> in
             print(f"\nValmis! macOS-sovelluspaketti löytyy polusta:\n  {app_bundle}")
         if dmg:
             from make_dmg import make_dmg
+
             return make_dmg(app_path=app_bundle)
     elif sys.platform.startswith("win"):
         exe_file = dist_dir / "autoraffkat" / "autoraffkat.exe"
@@ -91,10 +104,25 @@ def build(clean: bool = False, fetch_bins: bool = True, dmg: bool = False) -> in
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Käännä autoraffkat itsenäiseksi työpöytäsovellukseksi.")
-    parser.add_argument("--clean", action="store_true", help="Puhdista väliaikaiset build-hakemistot ennen käännöstä")
-    parser.add_argument("--no-fetch", action="store_false", dest="fetch", help="Älä lataa ffmpeg-binäärejä automaattisesti")
-    parser.add_argument("--dmg", action="store_true", help="Pakkaa valmis paketti myös levykuvaksi (vain macOS)")
+    parser = argparse.ArgumentParser(
+        description="Käännä autoraffkat itsenäiseksi työpöytäsovellukseksi."
+    )
+    parser.add_argument(
+        "--clean",
+        action="store_true",
+        help="Puhdista väliaikaiset build-hakemistot ennen käännöstä",
+    )
+    parser.add_argument(
+        "--no-fetch",
+        action="store_false",
+        dest="fetch",
+        help="Älä lataa ffmpeg-binäärejä automaattisesti",
+    )
+    parser.add_argument(
+        "--dmg",
+        action="store_true",
+        help="Pakkaa valmis paketti myös levykuvaksi (vain macOS)",
+    )
     args = parser.parse_args()
 
     sys.exit(build(clean=args.clean, fetch_bins=args.fetch, dmg=args.dmg))

@@ -10,9 +10,13 @@ def test_round_trip(tmp_path):
     xml = tmp_path / "jakso.fcpxml"
     xml.write_text("<fcpxml/>")
     settings = project.ProjectSettings(
-        tracks={"MIC_A.wav": TrackConfig(role="mic", speaker="Host",
-                                         sensitivity_db=9.5, gain_db=-3.0)},
-        globals=Globals(min_shot=4.0, overlap_rule="louder"))
+        tracks={
+            "MIC_A.wav": TrackConfig(
+                role="mic", speaker="Host", sensitivity_db=9.5, gain_db=-3.0
+            )
+        },
+        globals=Globals(min_shot=4.0, overlap_rule="louder"),
+    )
     project.save(str(xml), settings)
     again = project.load(str(xml))
     assert again.tracks["MIC_A.wav"].speaker == "Host"
@@ -51,7 +55,8 @@ def test_unknown_keys_are_ignored(tmp_path):
     xml.write_text("<fcpxml/>")
     (tmp_path / "jakso.autoraffkat.json").write_text(
         '{"version": 99, "globals": {"min_shot": 3, "tuntematon": 1}, '
-        '"tracks": {"a": {"role": "mic", "outo": true}}}')
+        '"tracks": {"a": {"role": "mic", "outo": true}}}'
+    )
     settings = project.load(str(xml))
     assert settings.globals.min_shot == 3
     assert settings.tracks["a"].role == "mic"
@@ -61,7 +66,8 @@ def _write_settings(path, tracks, min_shot=2.5):
     """Asetustiedosto suoraan levylle, ilman lähde-XML:ää."""
     settings = ProjectSettings(
         tracks={k: TrackConfig(**v) for k, v in tracks.items()},
-        globals=Globals(min_shot=min_shot))
+        globals=Globals(min_shot=min_shot),
+    )
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(settings.to_json(), fh)
     return path
@@ -74,8 +80,9 @@ def test_previous_is_found_beside_and_above(tmp_path):
     xml = bundle / "Info.fcpxml"
     older = tmp_path / "jakso53.fcpxmld"
     older.mkdir()
-    previous = _write_settings(older / "Info.autoraffkat.json",
-                               {"CAM 1": {"role": "close", "speaker": "Host"}})
+    previous = _write_settings(
+        older / "Info.autoraffkat.json", {"CAM 1": {"role": "close", "speaker": "Host"}}
+    )
     assert project.find_previous(str(xml)) == str(previous)
 
 
@@ -123,8 +130,9 @@ def test_settings_left_inside_a_bundle_are_still_read(tmp_path):
     bundle = tmp_path / "episode 12.fcpxmld"
     bundle.mkdir()
     xml = str(bundle / "Info.fcpxml")
-    _write_settings(bundle / "Info.autoraffkat.json",
-                    {"CAM 1": {"role": "wide"}}, min_shot=7.0)
+    _write_settings(
+        bundle / "Info.autoraffkat.json", {"CAM 1": {"role": "wide"}}, min_shot=7.0
+    )
     loaded = project.load(xml)
     assert loaded.tracks["CAM 1"].role == "wide"
     assert loaded.globals.min_shot == 7.0

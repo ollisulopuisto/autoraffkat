@@ -41,8 +41,18 @@ from .chain import ChainError
 
 # Formaatit jotka luetaan suoraan. Muut puretaan ffmpegillä: kameran ääni on
 # mp4:n sisällä, eikä pedalboardin lukija avaa sitä.
-READABLE = {".wav", ".wave", ".aif", ".aiff", ".aifc", ".flac", ".w64", ".caf",
-            ".ogg", ".mp3"}
+READABLE = {
+    ".wav",
+    ".wave",
+    ".aif",
+    ".aiff",
+    ".aifc",
+    ".flac",
+    ".w64",
+    ".caf",
+    ".ogg",
+    ".mp3",
+}
 
 MIX_SUFFIX = " [mix]"
 ROOM_SUFFIX = " [room]"
@@ -80,12 +90,29 @@ def frame_count(path: str) -> int | None:
     try:
         ffprobe_bin = get_binary_path("ffprobe")
         done = subprocess.run(
-            [ffprobe_bin, "-v", "error", "-select_streams", "a:0",
-             "-show_entries", "stream=duration_ts,nb_samples,sample_rate,duration",
-             "-of", "json", path],
-            capture_output=True, text=True, timeout=60)
+            [
+                ffprobe_bin,
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=duration_ts,nb_samples,sample_rate,duration",
+                "-of",
+                "json",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=60,
+        )
         streams = json.loads(done.stdout or "{}").get("streams") or []
-    except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError, FileNotFoundError):
+    except (
+        OSError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+        FileNotFoundError,
+    ):
         return None
     if not streams:
         return None
@@ -120,22 +147,41 @@ def ensure_readable(path: str) -> str:
     if os.path.splitext(path)[1].lower() in READABLE:
         return path
     stat = os.stat(path)
-    target = extract_dir() / f"{Path(path).stem}-{stat.st_size}-{int(stat.st_mtime)}.wav"
+    target = (
+        extract_dir() / f"{Path(path).stem}-{stat.st_size}-{int(stat.st_mtime)}.wav"
+    )
     if target.exists():
         return str(target)
     tmp = target.with_suffix(".tmp.wav")
     try:
         ffmpeg_bin = get_binary_path("ffmpeg")
         done = subprocess.run(
-            [ffmpeg_bin, "-y", "-v", "error", "-i", path, "-vn", "-map", "a:0",
-             "-c:a", "pcm_f32le", str(tmp)],
-            capture_output=True, text=True, timeout=TIMEOUT)
+            [
+                ffmpeg_bin,
+                "-y",
+                "-v",
+                "error",
+                "-i",
+                path,
+                "-vn",
+                "-map",
+                "a:0",
+                "-c:a",
+                "pcm_f32le",
+                str(tmp),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=TIMEOUT,
+        )
     except (OSError, subprocess.TimeoutExpired, FileNotFoundError) as exc:
         raise MixError(t("audio.extract_failed", name=exc)) from exc
     if done.returncode != 0 or not tmp.exists():
         tail = (done.stderr or "").strip().splitlines()
-        raise MixError(t("audio.extract_failed", name=os.path.basename(path))
-                       + (f" — {tail[-1]}" if tail else ""))
+        raise MixError(
+            t("audio.extract_failed", name=os.path.basename(path))
+            + (f" — {tail[-1]}" if tail else "")
+        )
     tmp.replace(target)
     return str(target)
 
@@ -161,7 +207,9 @@ class MixResult:
         return not self.errors
 
 
-def closed_ranges(item, closed, program_start: float, rate: int) -> list[tuple[int, int]]:
+def closed_ranges(
+    item, closed, program_start: float, rate: int
+) -> list[tuple[int, int]]:
     """Missä tiedoston kohdissa mikki on kiinni, näyteväleinä.
 
     Ruudukko on aikajanan aikaa, tiedosto omaansa. Muunnos tehdään
@@ -182,8 +230,9 @@ def closed_ranges(item, closed, program_start: float, rate: int) -> list[tuple[i
                 continue
             # tiedostoaika = klipin start - assetin start + (aikajana - offset)
             base = float(placement.start - item.asset_start - placement.offset)
-            out.append((int(round((base + first) * rate)),
-                        int(round((base + last) * rate))))
+            out.append(
+                (int(round((base + first) * rate)), int(round((base + last) * rate)))
+            )
     return out
 
 
@@ -194,31 +243,50 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
         for track_key in keys:
             for item in timeline.track_media(track_key):
                 if item.path:
-                    jobs.append({"key": item.key, "name": item.name,
-                                 "speaker": speaker, "item": item,
-                                 "source": item.path,
-                                 "target": sibling(item.path, MIX_SUFFIX),
-                                 "target_lufs": settings.target_lufs,
-                                 "gain_db": settings.gain_db, "speech": True})
+                    jobs.append(
+                        {
+                            "key": item.key,
+                            "name": item.name,
+                            "speaker": speaker,
+                            "item": item,
+                            "source": item.path,
+                            "target": sibling(item.path, MIX_SUFFIX),
+                            "target_lufs": settings.target_lufs,
+                            "gain_db": settings.gain_db,
+                            "speech": True,
+                        }
+                    )
     if settings.room_track:
         for item in timeline.track_media(settings.room_track):
             if item.path and item.has_audio:
                 # Tilaääni normalisoidaan samaan tavoitteeseen mutta asetetun
                 # verran hiljemmalle, jotta taso on ennustettava eikä riipu
                 # siitä miten kuuma kameran mikki sattui olemaan.
-                jobs.append({"key": item.key, "name": item.name,
-                             "source": item.path,
-                             "target": sibling(item.path, ROOM_SUFFIX),
-                             "target_lufs": settings.target_lufs + settings.room_db,
-                             "gain_db": 0.0, "speech": False,
-                             # Tunnelmaraita ei tarvitse stereokuvaa eikä 24
-                             # bittiä: monona ja 16 bitissä se on kuudesosa.
-                             "mono": True, "bit_depth": 16})
+                jobs.append(
+                    {
+                        "key": item.key,
+                        "name": item.name,
+                        "source": item.path,
+                        "target": sibling(item.path, ROOM_SUFFIX),
+                        "target_lufs": settings.target_lufs + settings.room_db,
+                        "gain_db": 0.0,
+                        "speech": False,
+                        # Tunnelmaraita ei tarvitse stereokuvaa eikä 24
+                        # bittiä: monona ja 16 bitissä se on kuudesosa.
+                        "mono": True,
+                        "bit_depth": 16,
+                    }
+                )
     return jobs
 
 
-def _run_one(job: dict, settings: AudioSettings, plugin,
-             masks: dict | None = None, program_start: float = 0.0) -> float:
+def _run_one(
+    job: dict,
+    settings: AudioSettings,
+    plugin,
+    masks: dict | None = None,
+    program_start: float = 0.0,
+) -> float:
     """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston."""
     from pedalboard.io import AudioFile
 
@@ -227,40 +295,60 @@ def _run_one(job: dict, settings: AudioSettings, plugin,
         audio = handle.read(handle.frames)
         rate = handle.samplerate
     if audio.shape[1] == 0:
-        raise MixError(t("audio.empty_file",
-                         name=os.path.basename(job["source"])))
+        raise MixError(t("audio.empty_file", name=os.path.basename(job["source"])))
     if job.get("mono") and audio.shape[0] > 1:
         audio = audio.mean(axis=0, keepdims=True)
 
-    audio, info = chain.process(audio, rate, settings, job.get("gain_db", 0.0),
-                                job.get("speech", True), job.get("target_lufs"),
-                                plugin)
+    audio, info = chain.process(
+        audio,
+        rate,
+        settings,
+        job.get("gain_db", 0.0),
+        job.get("speech", True),
+        job.get("target_lufs"),
+        plugin,
+    )
 
     # Vaimennus viimeisenä: sitä ennen mitattu taso koskee puhetta, ei
     # puheen ja hiljaisuuden keskiarvoa.
     mask = (masks or {}).get(job.get("speaker"))
     if mask is not None and settings.duck and settings.duck_db < 0:
         audio = chain.apply_duck(
-            audio, rate,
+            audio,
+            rate,
             closed_ranges(job["item"], mask, program_start, rate),
-            settings.duck_db, settings.duck_fade, settings.duck_release)
+            settings.duck_db,
+            settings.duck_fade,
+            settings.duck_release,
+        )
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
-        raise MixError(t("audio.plugin_shifted", samples=info.lag,
-                         ms=info.lag / rate * 1000,
-                         name=os.path.basename(job["source"])))
+        raise MixError(
+            t(
+                "audio.plugin_shifted",
+                samples=info.lag,
+                ms=info.lag / rate * 1000,
+                name=os.path.basename(job["source"]),
+            )
+        )
 
     tmp = job["target"] + ".tmp.wav"
-    with AudioFile(tmp, "w", rate, audio.shape[0],
-                   bit_depth=job.get("bit_depth", 24)) as out:
+    with AudioFile(
+        tmp, "w", rate, audio.shape[0], bit_depth=job.get("bit_depth", 24)
+    ) as out:
         out.write(np.ascontiguousarray(audio))
     written = frame_count(tmp)
     if written is not None and written != info.frames:
         os.remove(tmp)
-        raise MixError(t("audio.written_length", before=info.frames,
-                         after=written,
-                         name=os.path.basename(job["source"])))
+        raise MixError(
+            t(
+                "audio.written_length",
+                before=info.frames,
+                after=written,
+                name=os.path.basename(job["source"]),
+            )
+        )
     os.replace(tmp, job["target"])
     return info.gain_db
 
@@ -296,17 +384,23 @@ def duck_masks(grid, settings: AudioSettings) -> dict:
     keep = active & (levels >= loudest - settings.duck_dominance_db)
 
     # Auki: ennakko mukana, jotta sanan alku ei katoa.
-    opened = [open_windows(keep[i], settings.duck_lookahead, settings.duck_hold,
-                           settings.duck_min_open)
-              for i in range(len(grid.speakers))]
+    opened = [
+        open_windows(
+            keep[i], settings.duck_lookahead, settings.duck_hold, settings.duck_min_open
+        )
+        for i in range(len(grid.speakers))
+    ]
     # Peittävä puhe. Ilman ennakkoa, koska tämä ajoittaa laskun: lasku ei saa
     # alkaa ennen kuin peittävä ääni on tullut. Lopusta leikataan pito ja
     # paluun mitta pois, jotta myös nousu ehtii tapahtua peittävän äänen alla
     # eikä sen jälkeisessä hiljaisuudessa.
-    masking = [trim_end(open_windows(keep[i], 0.0, settings.duck_hold,
-                                     settings.duck_min_open),
-                        settings.duck_hold + settings.duck_release)
-               for i in range(len(grid.speakers))]
+    masking = [
+        trim_end(
+            open_windows(keep[i], 0.0, settings.duck_hold, settings.duck_min_open),
+            settings.duck_hold + settings.duck_release,
+        )
+        for i in range(len(grid.speakers))
+    ]
 
     out = {}
     for i, lane in enumerate(grid.speakers):
@@ -319,8 +413,14 @@ def duck_masks(grid, settings: AudioSettings) -> dict:
     return out
 
 
-def process(timeline, roles, settings: AudioSettings, grid=None,
-            program_start: float = 0.0, progress=None) -> MixResult:
+def process(
+    timeline,
+    roles,
+    settings: AudioSettings,
+    grid=None,
+    program_start: float = 0.0,
+    progress=None,
+) -> MixResult:
     """Käsittelee mikit ja tilaäänen. Hidas — ei kuulu säätösilmukkaan.
 
     Liitännäinen ladataan kerran ja sen tila nollataan tiedostojen välissä:
@@ -337,8 +437,7 @@ def process(timeline, roles, settings: AudioSettings, grid=None,
     todo = []
     for job in jobs:
         if not os.path.exists(job["source"]):
-            result.errors[job["key"]] = t("audio.source_missing",
-                                          path=job["source"])
+            result.errors[job["key"]] = t("audio.source_missing", path=job["source"])
         elif is_current(job["source"], job["target"]):
             result.skipped += 1
             _record(result, job)
@@ -357,11 +456,11 @@ def process(timeline, roles, settings: AudioSettings, grid=None,
     started = time.perf_counter()
     for index, job in enumerate(todo):
         if progress is not None:
-            progress(index, len(todo), job["name"],
-                     _eta(started, index, len(todo)))
+            progress(index, len(todo), job["name"], _eta(started, index, len(todo)))
         try:
-            result.gains[job["key"]] = _run_one(job, settings, plugin,
-                                                masks, program_start)
+            result.gains[job["key"]] = _run_one(
+                job, settings, plugin, masks, program_start
+            )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)
             continue

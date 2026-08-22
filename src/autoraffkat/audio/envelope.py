@@ -12,9 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import os
-import shutil
 import subprocess
-import sys
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +20,7 @@ import numpy as np
 from ..model import HOP
 from .binaries import get_binary_path, require_ffmpeg as _check_binaries
 
-SAMPLE_RATE = 8000          # riittää puheen energialle, neljäsosa purkuajasta
+SAMPLE_RATE = 8000  # riittää puheen energialle, neljäsosa purkuajasta
 CACHE_VERSION = 2
 FLOOR_DB = -120.0
 
@@ -62,9 +60,22 @@ def probe_audio(path: str) -> bool:
     try:
         ffprobe_bin = get_binary_path("ffprobe")
         out = subprocess.run(
-            [ffprobe_bin, "-v", "error", "-select_streams", "a:0",
-             "-show_entries", "stream=index", "-of", "csv=p=0", path],
-            capture_output=True, text=True, timeout=30)
+            [
+                ffprobe_bin,
+                "-v",
+                "error",
+                "-select_streams",
+                "a:0",
+                "-show_entries",
+                "stream=index",
+                "-of",
+                "csv=p=0",
+                path,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
     except (OSError, subprocess.TimeoutExpired, FileNotFoundError):
         return False
     return out.returncode == 0 and bool(out.stdout.strip())
@@ -73,13 +84,27 @@ def probe_audio(path: str) -> bool:
 def _decode_rms(path: str, progress=None) -> np.ndarray:
     """Purkaa äänen virtana ja palauttaa RMS-desibelit HOP-välein."""
     win = max(1, int(round(SAMPLE_RATE * HOP)))
-    chunk_frames = 4096                      # 4096 * 20 ms ≈ 82 s kerrallaan
+    chunk_frames = 4096  # 4096 * 20 ms ≈ 82 s kerrallaan
     chunk_bytes = win * chunk_frames * 4
 
     ffmpeg_bin = get_binary_path("ffmpeg")
-    cmd = [ffmpeg_bin, "-v", "error", "-nostdin", "-i", path,
-           "-map", "0:a:0", "-ac", "1", "-ar", str(SAMPLE_RATE),
-           "-f", "f32le", "-"]
+    cmd = [
+        ffmpeg_bin,
+        "-v",
+        "error",
+        "-nostdin",
+        "-i",
+        path,
+        "-map",
+        "0:a:0",
+        "-ac",
+        "1",
+        "-ar",
+        str(SAMPLE_RATE),
+        "-f",
+        "f32le",
+        "-",
+    ]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     blocks: list[np.ndarray] = []

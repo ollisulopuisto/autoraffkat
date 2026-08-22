@@ -21,10 +21,42 @@ OVERLAP_HOLD = "hold"
 OVERLAP_LOUDER = "louder"
 OVERLAP_RULES = (OVERLAP_WIDE, OVERLAP_HOLD, OVERLAP_LOUDER)
 
+# Rytmiprofiilit ja makroasetukset.
+RHYTHM_BROADCAST = "broadcast"
+RHYTHM_MELLOW = "mellow"
+RHYTHM_HECTIC = "hectic"
+RHYTHM_CUSTOM = "custom"
+RHYTHM_PRESETS = (RHYTHM_BROADCAST, RHYTHM_MELLOW, RHYTHM_HECTIC, RHYTHM_CUSTOM)
+
+RHYTHM_PRESET_VALUES: dict[str, dict[str, float]] = {
+    RHYTHM_BROADCAST: {
+        "min_shot": 2.5,
+        "lead": 0.30,
+        "hang": 0.60,
+        "wide_every": 14.0,
+        "wide_hold": 3.5,
+    },
+    RHYTHM_MELLOW: {
+        "min_shot": 4.5,
+        "lead": 0.15,
+        "hang": 1.00,
+        "wide_every": 22.0,
+        "wide_hold": 4.5,
+    },
+    RHYTHM_HECTIC: {
+        "min_shot": 1.4,
+        "lead": 0.40,
+        "hang": 0.25,
+        "wide_every": 8.0,
+        "wide_hold": 2.0,
+    },
+}
+
 # Mitä tehdään, kun yksi puhuja pitää puheenvuoroa liian kauan.
-LONGTAKE_RETURN = "return"     # laaja välissä, takaisin samaan puhujaan
-LONGTAKE_STAY = "stay"         # laajaan ja siihen jäädään puhujan vaihtoon asti
-LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY)
+LONGTAKE_RETURN = "return"  # laaja välissä, takaisin samaan puhujaan
+LONGTAKE_STAY = "stay"  # laajaan ja siihen jäädään puhujan vaihtoon asti
+LONGTAKE_REACTION = "reaction"  # toisen puhujan reaktiokuva välissä, sitten takaisin
+LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY, LONGTAKE_REACTION)
 
 # Viedyn projektin oletusnimi. Se näkyy Final Cutin selaimessa, eli on yhtä
 # lailla käyttäjälle näkyvää tekstiä kuin viennin tiedostonimi. Asetuksissa
@@ -66,10 +98,10 @@ class MediaItem:
     indeksoidaan tiedostoajalla, aikajana asset-ajalla, ja ero on tämä.
     """
 
-    key: str                       # vakaa tunniste asetusten talletusta varten
+    key: str  # vakaa tunniste asetusten talletusta varten
     name: str
-    path: str                      # dekoodattu tiedostopolku, "" jos puuttuu
-    src: str                       # alkuperäinen media-rep src (file://...)
+    path: str  # dekoodattu tiedostopolku, "" jos puuttuu
+    src: str  # alkuperäinen media-rep src (file://...)
     asset_start: Fraction = ZERO
     asset_duration: Fraction = ZERO
     has_video: bool = False
@@ -81,11 +113,11 @@ class MediaItem:
     audio_channels: int = 2
     audio_sources: int = 1
     video_sources: int = 1
-    asset_id: str = ""             # lähde-XML:n resurssi-id
+    asset_id: str = ""  # lähde-XML:n resurssi-id
     format_id: str = ""
     placements: list[Placement] = field(default_factory=list)
-    angle_ids: list[str] = field(default_factory=list)   # multicamin angleID:t
-    angle_name: str = ""           # kulman nimi, "" jos ei multicam
+    angle_ids: list[str] = field(default_factory=list)  # multicamin angleID:t
+    angle_name: str = ""  # kulman nimi, "" jos ei multicam
 
     @property
     def timeline_start(self) -> Fraction:
@@ -114,17 +146,20 @@ class TrackConfig:
     """Käyttäjän antama rooli yhdelle medialle."""
 
     role: str = ROLE_UNUSED
-    speaker: str = ""              # lähikuvan ja mikin yhdistävä nimi
-    sensitivity_db: float = 12.0   # dB pohjakohinan yli
-    gain_db: float = 0.0           # vahvistuksen korjaus
+    speaker: str = ""  # lähikuvan ja mikin yhdistävä nimi
+    sensitivity_db: float = 12.0  # dB pohjakohinan yli
+    gain_db: float = 0.0  # vahvistuksen korjaus
 
     def to_json(self) -> dict:
         return asdict(self)
 
     @classmethod
     def from_json(cls, data: dict) -> "TrackConfig":
-        known = {f: data[f] for f in ("role", "speaker", "sensitivity_db", "gain_db")
-                 if f in data}
+        known = {
+            f: data[f]
+            for f in ("role", "speaker", "sensitivity_db", "gain_db")
+            if f in data
+        }
         return cls(**known)
 
 
@@ -132,15 +167,21 @@ class TrackConfig:
 class Globals:
     """Koko leikkausta koskevat säätimet."""
 
-    min_shot: float = 2.5          # lyhin kuvan kesto, s
-    lead: float = 0.15             # ennakko: leikataan näin paljon ennen puheen alkua, s
-    confirm: float = 0.40          # vahvistusaika: puheen on jatkuttava näin kauan, s
+    rhythm: str = RHYTHM_BROADCAST
+    min_shot: float = 2.5  # lyhin kuvan kesto, s
+    lead: float = 0.30  # ennakko / J-cut: leikataan näin paljon ennen puheen alkua, s
+    hang: float = (
+        0.60  # häntä / L-cut: pidetään kuva näin kauan puheen loppumisen jälkeen, s
+    )
+    confirm: float = 0.40  # vahvistusaika: puheen on jatkuttava näin kauan, s
     overlap_rule: str = OVERLAP_WIDE
-    dominance_db: float = 5.0      # vaadittu ero päällekkäispuheessa
-    min_overlap: float = 0.50      # lyhin päällekkäispuhe joka laukaisee säännön, s
+    dominance_db: float = 5.0  # vaadittu ero päällekkäispuheessa
+    min_overlap: float = 0.50  # lyhin päällekkäispuhe joka laukaisee säännön, s
     # Pitkä puheenvuoro: yhtä lähikuvaa ei jakseta katsoa loputtomiin.
-    wide_every: float = 15.0       # katkaise laajaan näin pitkän pätkän jälkeen, 0 = ei koskaan
-    wide_hold: float = 4.0         # laajan kesto ennen paluuta, s (vain «return»)
+    wide_every: float = (
+        14.0  # katkaise laajaan näin pitkän pätkän jälkeen, 0 = ei koskaan
+    )
+    wide_hold: float = 3.5  # laajan kesto ennen paluuta, s (vain «return»)
     long_take_rule: str = LONGTAKE_RETURN
     project_name: str = DEFAULT_PROJECT_NAME
 
@@ -171,9 +212,9 @@ class AudioSettings:
     # summa osuu lähelle samaa lukemaa ja lopullinen taso asetetaan vasta
     # Final Cutissa.
     target_lufs: float = -20.0
-    peak_threshold_db: float = -12.0    # nopea, 30 ms
+    peak_threshold_db: float = -12.0  # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
-    declick: bool = False        # maiskaukset ja huulinaksut pois
+    declick: bool = False  # maiskaukset ja huulinaksut pois
     # Naksujen herkkyys. Tämä riippuu puhujasta enemmän kuin mikään muu
     # ketjun arvo: toiset maiskuttavat, toiset eivät lainkaan.
     declick_sensitivity: float = 0.5
@@ -192,9 +233,9 @@ class AudioSettings:
     # vähemmän vahinkoa jos tunnistus joskus erehtyy. Säädettävissä siltä
     # varalta että mikit ovat lähempänä toisiaan tai huone on eläväisempi.
     duck_db: float = -9.0
-    duck_lookahead: float = 0.15    # avaa näin paljon ennen puheen alkua, s
-    duck_hold: float = 0.40         # pidä auki näin kauan puheen jälkeen, s
-    duck_min_open: float = 0.20     # tätä lyhyempi jakso ei avaa porttia, s
+    duck_lookahead: float = 0.15  # avaa näin paljon ennen puheen alkua, s
+    duck_hold: float = 0.40  # pidä auki näin kauan puheen jälkeen, s
+    duck_min_open: float = 0.20  # tätä lyhyempi jakso ei avaa porttia, s
     # Kuinka lähellä kovinta mikin on oltava pysyäkseen auki. Tämä on se
     # säädin joka erottaa puhujat: pelkkä kynnys ei riitä, koska molemmat
     # mikit kuulevat molemmat puhujat.
@@ -202,12 +243,12 @@ class AudioSettings:
     # Vaimennus piilotetaan toisen mikin avautumisen taakse: lasku alkaa vasta
     # kun toinen ääni on jo tullut, jolloin sitä ei kuule. Paluu on hitaampi,
     # koska se osuu hiljaisuuteen eikä siinä ole mitään mikä peittäisi sen.
-    duck_fade: float = 0.25         # lasku, s — hidas, koska se on peitossa
-    duck_release: float = 0.40      # paluu, s
-    duck_min_closed: float = 0.60   # tätä lyhyempää vaimennusta ei tehdä, s
-    gain_db: float = 0.0                # yhteinen trimmi kaikille mikeille
-    room_track: str = ""                # tilaäänen raita-avain, "" = ei tilaääntä
-    room_db: float = -18.0              # tilaääni näin paljon puhetta hiljempaa
+    duck_fade: float = 0.25  # lasku, s — hidas, koska se on peitossa
+    duck_release: float = 0.40  # paluu, s
+    duck_min_closed: float = 0.60  # tätä lyhyempää vaimennusta ei tehdä, s
+    gain_db: float = 0.0  # yhteinen trimmi kaikille mikeille
+    room_track: str = ""  # tilaäänen raita-avain, "" = ei tilaääntä
+    room_db: float = -18.0  # tilaääni näin paljon puhetta hiljempaa
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -222,8 +263,8 @@ class AudioSettings:
 class Segment:
     """Yksi kuva valmiissa leikkauksessa, aikajanan sekunneissa."""
 
-    angle: str                     # median key, tai "" jos kuvaa ei löydy
-    label: str                     # puhujan nimi tai "laaja" — esikatselua varten
+    angle: str  # median key, tai "" jos kuvaa ei löydy
+    label: str  # puhujan nimi tai "laaja" — esikatselua varten
     start: float
     end: float
 

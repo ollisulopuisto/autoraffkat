@@ -23,10 +23,25 @@ const TRACK_KNOBS = () => [
     unit: T('unit.db') },
 ];
 
+const RHYTHM_PRESETS = () => [
+  ['broadcast', T('rhythm.broadcast'), T('rhythm.broadcastHint')],
+  ['mellow', T('rhythm.mellow'), T('rhythm.mellowHint')],
+  ['hectic', T('rhythm.hectic'), T('rhythm.hecticHint')],
+  ['custom', T('rhythm.custom'), T('rhythm.customHint')],
+];
+
+const PRESET_VALUES = {
+  broadcast: { min_shot: 2.5, lead: 0.30, hang: 0.60, wide_every: 14.0, wide_hold: 3.5 },
+  mellow: { min_shot: 4.5, lead: 0.15, hang: 1.00, wide_every: 22.0, wide_hold: 4.5 },
+  hectic: { min_shot: 1.4, lead: 0.40, hang: 0.25, wide_every: 8.0, wide_hold: 2.0 },
+};
+
 const GLOBAL_KNOBS = () => [
   { key: 'min_shot', label: T('knob.minShot'), min: 0.3, max: 12, step: 0.1,
     unit: T('unit.seconds') },
   { key: 'lead', label: T('knob.lead'), min: 0, max: 1.5, step: 0.01,
+    unit: T('unit.seconds') },
+  { key: 'hang', label: T('knob.hang'), min: 0, max: 2.0, step: 0.02,
     unit: T('unit.seconds') },
   { key: 'confirm', label: T('knob.confirm'), min: 0, max: 2, step: 0.02,
     unit: T('unit.seconds') },
@@ -42,6 +57,7 @@ const LONGTAKE_KNOBS = () => [
 const LONGTAKE_RULES = () => [
   ['return', T('longtake.return'), T('longtake.returnHint')],
   ['stay', T('longtake.stay'), T('longtake.stayHint')],
+  ['reaction', T('longtake.reaction'), T('longtake.reactionHint')],
 ];
 
 const OVERLAP_KNOBS = () => [
@@ -635,11 +651,44 @@ function renderTracks() {
 }
 
 function renderGlobals() {
+  const rhythmRules = $('rhythm-rules');
+  if (rhythmRules) {
+    rhythmRules.textContent = '';
+    RHYTHM_PRESETS().forEach(([value, title, hint]) => {
+      const label = document.createElement('label');
+      const radio = document.createElement('input');
+      radio.type = 'radio'; radio.name = 'rhythm'; radio.value = value;
+      radio.checked = (state.globals.rhythm || 'broadcast') === value;
+      radio.addEventListener('change', () => {
+        state.globals.rhythm = value;
+        if (PRESET_VALUES[value]) {
+          Object.assign(state.globals, PRESET_VALUES[value]);
+        }
+        renderGlobals();
+        schedule(0);
+      });
+      const text = document.createElement('span');
+      text.innerHTML = `${title} <span class="hint">${hint}</span>`;
+      label.append(radio, text);
+      rhythmRules.append(label);
+    });
+  }
+
   const host = $('global-list');
   host.textContent = '';
   GLOBAL_KNOBS().forEach((spec) => {
     host.append(knob(spec, state.globals[spec.key], (v) => {
       state.globals[spec.key] = v;
+      if (state.globals.rhythm && PRESET_VALUES[state.globals.rhythm]) {
+        if (PRESET_VALUES[state.globals.rhythm][spec.key] !== undefined &&
+            Math.abs(PRESET_VALUES[state.globals.rhythm][spec.key] - v) > 1e-4) {
+          state.globals.rhythm = 'custom';
+          if (rhythmRules) {
+            const customRadio = rhythmRules.querySelector('input[value="custom"]');
+            if (customRadio) customRadio.checked = true;
+          }
+        }
+      }
       schedule();
     }));
   });
