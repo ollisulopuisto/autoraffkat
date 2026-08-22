@@ -117,31 +117,40 @@ The order:
 1. **Confirm time.** Speech runs shorter than the confirm time are dropped
    (`_open_runs`). Pauses shorter than the confirm time are filled
    (`_close_gaps`) so word gaps don't fragment a run.
-2. **One person talking** → their close-up.
-3. **Several talking.** If the overlap is shorter than `min_overlap` it is
+2. **1/f Dynamic Tempo Modulation.** `_compute_tempo` computes turn-taking rate
+   across a rolling 45s window, scaling effective minimum dwell times $\tau$
+   during fast banter vs slow passages.
+3. **One person talking** → their close-up.
+4. **Several talking.** If the overlap is shorter than `min_overlap` it is
    backchannelling rather than overlapping speech: pick the louder one and
    don't trigger the rule. Otherwise apply the chosen rule.
-4. **A speaker with no close-up** → wide. **A close-up that isn't on the
+5. **A speaker with no close-up** → wide. **A close-up that isn't on the
    timeline here** → hold current.
-5. **Duration constraints** in the run loop: lead moves the cut earlier,
-   shortest shot stops it landing too close to the previous one. If the two
-   together push the cut past the run, no cut is made.
-6. **Long turn** as post-processing (`_force_wide`).
+6. **Duration constraints & Split Edits (J-cut / L-cut)** in the run loop:
+   `lead` (J-cut) moves the camera cut before speech onset to capture breaths and
+   reactions; `hang` (L-cut) holds the outgoing speaker across pauses.
+   Effective shortest shot stops cuts landing too close to the previous one.
+   If the two together push the cut past the run, no cut is made.
+7. **Long turn & Breath-Snapped Punctuation** (`_force_wide` + `_find_breath_point`).
 
-### Long turn
+### Long turn and Reaction Shots
 
-Steps 1–5 produce the right shot but not a rhythm: a monologue gives one
+Steps 1–6 produce the right shot but not a rhythm: a monologue gives one
 close-up for as long as the speech lasts, and to a viewer that is a minute of
 the same face. Once the same speaker has held the floor for `wide_every`
-seconds, the picture cuts to the wide.
+seconds, the picture cuts at the nearest natural breath or pause.
 
-There are two ways to continue, because they are editorially different things
-and neither is always right. **Return to speaker** lets the wide last
-`wide_hold` and returns to the same shot; the rhythm stays with the speaker,
-which suits a conversation where monologue is the exception. **Stay wide**
-holds the wide until the next turn; a long monologue reads as a situation
-rather than a face, and there are markedly fewer cuts. The choice is taste, so
-it is a control rather than a constant.
+There are three ways to continue, because they are editorially different things
+and neither is always right:
+* **Return to speaker** lets the wide last `wide_hold` and returns to the same
+  shot; the rhythm stays with the speaker, which suits a conversation where
+  monologue is the exception.
+* **Stay wide** holds the wide until the next turn; a long monologue reads as a
+  situation rather than a face, and there are markedly fewer cuts.
+* **Reaction shot** cuts to a silent co-host's close-up for `wide_hold`, then returns
+  to the active speaker. (Falls back to wide if no second close-up exists).
+
+The choice is taste, so it is a control rather than a constant.
 
 This runs on the finished cut list, not on the `want` array. It is a rhythm
 rule rather than an observation about who is talking, and it must not get

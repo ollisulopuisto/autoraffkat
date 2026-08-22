@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.22.49] - 2026-08-22
+
+### Documentation
+- Updated `README.md` and `README.fi.md` with headless remote execution guide, cross-platform plugin directories, rhythm presets, L/J cuts, and reaction shots.
+- Updated `DESIGN.md` and `DESIGN.fi.md` architecture notes for 1/f tempo waves and breath-snapped long-take punctuation.
+
 ## [v26.08.22.48] - 2026-08-22
 
 ### Added

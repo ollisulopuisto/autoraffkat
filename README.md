@@ -143,24 +143,51 @@ The track key is derived from the common part of the filenames
 and `angleID`s change from one export to the next while the files do not.
 Saved roles therefore survive a re-export.
 
+### Remote Host Execution
+
+You can run autoraffkat entirely on a faster remote host (e.g. a dedicated Mac or workstation) to offload envelope calculation and heavy VST audio processing:
+
+```
+uv run autoraffkat --host 0.0.0.0 --port 8731 --no-gui --no-browser "episode 12.fcpxmld"
+```
+
+Open `http://<remote-ip>:8731/` in your local browser. Media files referenced by the XML must be accessible on the remote host (e.g. on a mounted 10GbE network share or synced folder).
+
+### Plug-in Locations
+
+External VST3 and AU plug-ins are discovered automatically from standard locations:
+* **macOS:** `/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`, `/Library/Audio/Plug-Ins/Components`, `~/Library/Audio/Plug-Ins/Components`
+* **Linux:** `/usr/lib/vst3`, `/usr/local/lib/vst3`, `~/.vst3`, `~/.local/lib/vst3`
+* **Windows:** `%CommonProgramFiles%\VST3`, `%LOCALAPPDATA%\Programs\Common\VST3`
+
 ## Controls
+
+**Rhythm & Profile**: Choose a macro pacing profile or tune individually:
+* **Broadcast & Podcast** (default): 2.5s minimum shot, 300ms J-cut lead, 600ms L-cut hang, 14s monologue break. Balanced, natural rhythm.
+* **Mellow**: 4.5s minimum shot, 150ms lead, 1000ms hang, 22s monologue break. Leisurely documentary pacing.
+* **Hectic**: 1.4s minimum shot, 400ms lead, 250ms hang, 8s monologue break. Snappy, fast-paced debate and comedy.
+* **Custom**: Individually adjusted parameters.
 
 **Per track** (microphones): sensitivity, i.e. how many decibels above the
 noise floor counts as speech, and a gain trim. Sensitivity is a threshold
 *relative to the floor*, so gain does not move it; gain only affects how
 microphones compare against each other during overlapping speech.
 
-**Global**: shortest shot, lead (cut this far before speech starts), confirm
-time (speech must continue this long before it counts).
+**Global & Split Edits**:
+* **Shortest shot**: minimum duration a camera stays on screen.
+* **Lead (J-cut)**: cuts to the incoming speaker before their voice crosses the threshold, capturing pre-speech inhales and reactions.
+* **Hang (L-cut)**: holds the outgoing speaker on screen after speech ceases, giving conversational pauses space to breathe.
+* **Confirm time**: speech must continue this long before triggering a cut.
+* **1/f Dynamic Tempo Modulation**: the decision engine tracks conversation density over rolling 45s windows, naturally compressing dwell times during fast banter and expanding them during slower storytelling.
 
 **Long turn**: one close-up doesn't carry forever. Once the same speaker has
-held the floor for the set time (default 15 s), the picture cuts to the wide.
-Two ways to continue:
+held the floor for the set time (default 14 s), the picture cuts at the nearest natural breath or pause. Three ways to continue:
 
 * **Return to speaker** — the wide lasts "wide duration", then back to the
   same shot. A monologue breathes, the rhythm stays with the speaker.
 * **Stay wide** — the wide continues until somebody else speaks. Fewer cuts,
   and a long monologue reads as a situation rather than a face.
+* **Reaction shot** — cuts to a silent co-host's close-up for "wide duration", then returns to the active speaker. (Falls back to wide if no second close-up exists).
 
 Zero disables the rule. The wide never falls below the shortest shot, even if
 "wide duration" is set lower.

@@ -147,24 +147,51 @@ Raidan avain johdetaan tiedostonimien yhteisestä osasta
 ja `angleID`:t vaihtuvat viennistä toiseen mutta tiedostot eivät. Näin
 tallennetut roolit kelpaavat vielä uuden viennin jälkeenkin.
 
+### Etäpalvelinkäyttö
+
+autoraffkatia voi ajaa etäkoneella (esim. nopeammalla Macilla tai työasemalla), jolloin raskas äänenkäsittely ja verhokäyrien purku tapahtuvat etänä:
+
+```
+uv run autoraffkat --host 0.0.0.0 --port 8731 --no-gui --no-browser "jakso 12.fcpxmld"
+```
+
+Avaa selaimessa `http://<etä-ip>:8731/`. XML:n viittaamien mediatiedostojen tulee olla etäkoneen luettavissa (esim. 10GbE-verkkolevyllä tai synkronoidussa hakemistossa).
+
+### Liitännäisten hakupolut
+
+Ulkoiset VST3- ja AU-liitännäiset etsitään automaattisesti käyttöjärjestelmän vakiopaikoista:
+* **macOS:** `/Library/Audio/Plug-Ins/VST3`, `~/Library/Audio/Plug-Ins/VST3`, `/Library/Audio/Plug-Ins/Components`, `~/Library/Audio/Plug-Ins/Components`
+* **Linux:** `/usr/lib/vst3`, `/usr/local/lib/vst3`, `~/.vst3`, `~/.local/lib/vst3`
+* **Windows:** `%CommonProgramFiles%\VST3`, `%LOCALAPPDATA%\Programs\Common\VST3`
+
 ## Säätimet
+
+**Rytmi ja profiili**: Valitse valmis leikkaustyyli tai säädä käsin:
+* **Tv ja podcast** (oletus): 2,5 s minimikuva, 300 ms J-cut-ennakko, 600 ms L-cut-häntä, 14 s monologikatkaisu. Luonteva keskustelurytmi.
+* **Rauhallinen**: 4,5 s minimikuva, 150 ms ennakko, 1000 ms häntä, 22 s monologikatkaisu. Viipyilevä dokumentaarinen rytmi.
+* **Korkeatempoinen**: 1,4 s minimikuva, 400 ms ennakko, 250 ms häntä, 8 s monologikatkaisu. Nopea viihde- ja väittelyrytmi.
+* **Mukautettu**: Käsin säädetyt parametrit.
 
 **Raitakohtaiset** (mikeille): herkkyys eli montako desibeliä pohjakohinan yli
 puheeksi lasketaan, ja vahvistuksen korjaus. Herkkyys on kynnys pohjan
 suhteen, joten se ei siirry vahvistuksen mukana; vahvistus vaikuttaa vain
 mikkien keskinäiseen vertailuun päällekkäispuheessa.
 
-**Globaalit**: lyhin kuvan kesto, ennakko (leikataan näin paljon ennen puheen
-alkua), vahvistusaika (puheen on jatkuttava näin kauan ennen kuin se lasketaan).
+**Globaalit ja leikkausrytmi**:
+* **Lyhin kuvan kesto**: kuinka kauan kamera pysyy ruudussa vähintään.
+* **Ennakko (J-cut)**: leikkaa tulevaan puhujaan ennen äänen kynnyksen ylitystä, jolloin sisäänhengitys ja ilmeet tulevat mukaan.
+* **Häntä (L-cut)**: pitää edellisen puhujan ruudussa puheen päätyttyä, antaen keskustelun tauoille tilaa.
+* **Vahvistusaika**: puheen on jatkuttava näin kauan ennen leikkauspäätöstä.
+* **1/f-tempo-ohjaus**: päätöskerros seuraa puheen tiheyttä liukuvassa 45 s ikkunassa ja mukauttaa leikkausaikoja dynaamisesti (tiheä dialogi leikkaa nopeammin, rauhallinen hitaammin).
 
 **Pitkä puheenvuoro**: yksi lähikuva ei kanna loputtomiin. Kun sama puhuja on
-pitänyt lattiaa asetetun ajan (oletus 15 s), kuva vaihtuu laajaan. Kaksi tapaa
-jatkaa:
+pitänyt lattiaa asetetun ajan (oletus 14 s), kuva katkeaa luonnolliseen hengähdykseen tai taukoon. Kolme tapaa jatkaa:
 
 * **Palaa puhujaan** — laaja kestää «Laajan kesto» ja palataan samaan
 kuvaan. Monologi hengittää, rytmi pysyy puhujassa.
 * **Jää laajaan** — laaja jatkuu, kunnes joku toinen saa puheenvuoron.
 Vähemmän leikkauksia, ja pitkä yksinpuhelu näyttää tilanteelta.
+* **Reaktiokuva** — leikkaa toisen puhujan lähikuvaan «Laajan kesto» ajaksi, sitten takaisin. (Jos toista lähikuvaa ei ole, palaa laajaan).
 
 Nolla poistaa säännön käytöstä. Laaja ei koskaan jää alle lyhimmän kuvan
 keston, vaikka «Laajan kesto» olisi pienempi.

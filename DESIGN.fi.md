@@ -118,30 +118,41 @@ Järjestys:
 1. **Vahvistusaika.** Puhejaksot jotka ovat lyhyempiä kuin vahvistusaika
    pudotetaan (`_open_runs`). Alle vahvistusajan mittaiset tauot täytetään
    (`_close_gaps`), jotta sanavälit eivät pilko jaksoa.
-2. **Yksi äänessä** → hänen lähikuvansa.
-3. **Useampi äänessä.** Jos päällekkäisyys on lyhyempi kuin `min_overlap`, se
+2. **1/f-tempo-ohjaus.** `_compute_tempo` laskee vuorottelunopeuden liukuvassa
+   45 s ikkunassa ja säätää efektiivistä vähimmäiskestoa $\tau$ nopean dialogin
+   ja rauhallisen puheen välillä.
+3. **Yksi äänessä** → hänen lähikuvansa.
+4. **Useampi äänessä.** Jos päällekkäisyys on lyhyempi kuin `min_overlap`, se
    ei ole päällekkäispuhetta vaan myötäilyä: valitaan kovempi eikä laukaista
    sääntöä. Muuten sovelletaan valittua sääntöä.
-4. **Puhuja ilman lähikuvaa** → laaja. **Lähikuva jota ei ole aikajanalla
+5. **Puhuja ilman lähikuvaa** → laaja. **Lähikuva jota ei ole aikajanalla
    tässä kohtaa** → pidä nykyinen.
-5. **Kestorajoitukset** jaksosilmukassa: ennakko siirtää leikkausta taaksepäin,
-   lyhin kuvan kesto estää sitä osumasta liian lähelle edellistä. Jos molemmat
-   yhdessä työntävät leikkauksen jakson yli, leikkausta ei tehdä.
-6. **Pitkä puheenvuoro** jälkikäsittelynä (`_force_wide`).
+6. **Kestorajoitukset ja leikkausrytmi (J-cut / L-cut)** jaksosilmukassa:
+   `lead` (J-cut) siirtää leikkausta ennen puheen alkua (hengähdykset ja ilmeet),
+   `hang` (L-cut) pitää edellisen puhujan taukojen yli. Lyhin kuvan kesto estää
+   leikkausta osumasta liian lähelle edellistä. Jos molemmat yhdessä työntävät
+   leikkauksen jakson yli, leikkausta ei tehdä.
+7. **Pitkä puheenvuoro ja hengähdystaukohaku** (`_force_wide` + `_find_breath_point`).
 
-### Pitkä puheenvuoro
+### Pitkä puheenvuoro ja reaktiokuvat
 
-Kohdat 1–5 tuottavat oikean kuvan mutta eivät rytmiä: yksinpuhelu antaa yhden
+Kohdat 1–6 tuottavat oikean kuvan mutta eivät rytmiä: yksinpuhelu antaa yhden
 lähikuvan niin pitkäksi kuin puhe kestää, ja katsojalle se on minuutti samaa
 kasvokuvaa. Kun sama puhuja on pitänyt lattiaa `wide_every` sekuntia, kuva
-vaihtuu laajaan.
+katkeaa luontevaan taukoon tai hengähdykseen.
 
-Jatkoja on kaksi, koska ne ovat eri asia leikkauksellisesti eikä kumpikaan ole
-aina oikein. **Palaa puhujaan** antaa laajan kestää `wide_hold` ja palaa samaan
-kuvaan; rytmi pysyy puhujassa, ja se sopii keskustelulle jossa monologi on
-poikkeus. **Jää laajaan** pitää laajan seuraavaan puheenvuoroon asti; pitkä
-yksinpuhelu näyttää tilanteelta eikä kasvokuvalta, ja leikkauksia tulee
-selvästi vähemmän. Valinta on makua, joten se on säädin eikä vakio.
+Jatkoja on kolme, koska ne ovat eri asia leikkauksellisesti eikä mikään ole
+aina oikein:
+* **Palaa puhujaan** antaa laajan kestää `wide_hold` ja palaa samaan
+  kuvaan; rytmi pysyy puhujassa, ja se sopii keskustelulle jossa monologi on
+  poikkeus.
+* **Jää laajaan** pitää laajan seuraavaan puheenvuoroon asti; pitkä
+  yksinpuhelu näyttää tilanteelta eikä kasvokuvalta, ja leikkauksia tulee
+  selvästi vähemmän.
+* **Reaktiokuva** leikkaa toisen puhujan lähikuvaan `wide_hold`-ajaksi, sitten
+  takaisin. (Palaa laajaan, jos toista lähikuvaa ei ole).
+
+Valinta on makua, joten se on säädin eikä vakio.
 
 Tämä ajetaan vasta valmiille leikkauslistalle eikä `want`-taulukkoon. Se on
 rytmisääntö eikä havainto siitä kuka puhuu, eikä se saa sekaantua kynnyksiin:
