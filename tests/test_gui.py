@@ -1,11 +1,7 @@
 """GUI-ikkunan ja taustapalvelimen elinkaaritestit."""
 
 import socket
-import threading
-import time
-from unittest.mock import MagicMock, patch
-
-import pytest
+from unittest.mock import MagicMock
 
 from autoraffkat import gui
 from autoraffkat.server.app import AppState, create_app
@@ -56,3 +52,26 @@ def test_window_config():
     assert config["width"] >= 960
     assert config["height"] >= 600
     assert config["min_size"] == (960, 600)
+
+
+def test_launch_gui_passes_icon(monkeypatch, tmp_path):
+    """launch_gui välittää sovelluksen kuvakkeen pywebview'lle."""
+    import webview
+    fake_icon = tmp_path / "custom_icon.icns"
+    fake_icon.touch()
+
+    started_kwargs = {}
+
+    def fake_start(*args, **kwargs):
+        started_kwargs.update(kwargs)
+
+    mock_win = MagicMock()
+    monkeypatch.setattr(gui.paths, "get_app_icon_path", lambda: fake_icon)
+    monkeypatch.setattr(webview, "create_window", lambda *a, **kw: mock_win)
+    monkeypatch.setattr(webview, "start", fake_start)
+    monkeypatch.setattr(gui.DesktopServer, "wait_until_ready", lambda self, timeout=5.0: True)
+    monkeypatch.setattr(gui.DesktopServer, "stop", lambda self: None)
+
+    gui.launch_gui()
+
+    assert started_kwargs.get("icon") == str(fake_icon)

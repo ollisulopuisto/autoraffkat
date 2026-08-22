@@ -1,9 +1,6 @@
 """Polkumääritysten testit kehitysympäristössä ja PyInstaller-paketissa."""
 
 import sys
-from pathlib import Path
-
-import pytest
 
 from autoraffkat import paths
 
@@ -46,3 +43,37 @@ def test_get_app_dir_dev_vs_frozen(monkeypatch, tmp_path):
 
     frozen_app_dir = paths.get_app_dir()
     assert frozen_app_dir == fake_exec.parent
+
+
+def test_get_app_icon_path_mac(monkeypatch):
+    """macOS-alustalla palautetaan .icns tai .png-kuvakepolku."""
+    monkeypatch.setattr(sys, "platform", "darwin")
+    icon = paths.get_app_icon_path()
+    assert icon is not None
+    assert icon.exists()
+    assert icon.suffix in (".icns", ".png")
+
+
+def test_get_app_icon_path_windows(monkeypatch):
+    """Windows-alustalla palautetaan .ico-kuvakepolku."""
+    monkeypatch.setattr(sys, "platform", "win32")
+    icon = paths.get_app_icon_path()
+    assert icon is not None
+    assert icon.exists()
+    assert icon.suffix == ".ico"
+
+
+def test_get_app_icon_path_frozen(monkeypatch, tmp_path):
+    """Pakattuna haetaan kuvake _MEIPASS-hakemistosta."""
+    fake_meipass = tmp_path / "meipass_icon_test"
+    fake_assets = fake_meipass / "assets"
+    fake_assets.mkdir(parents=True)
+    (fake_assets / "autoraffkat.icns").touch()
+    (fake_assets / "autoraffkat.ico").touch()
+
+    monkeypatch.setattr(sys, "_MEIPASS", str(fake_meipass), raising=False)
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    monkeypatch.setattr(sys, "platform", "darwin")
+
+    icon = paths.get_app_icon_path()
+    assert icon == fake_assets / "autoraffkat.icns"

@@ -6,11 +6,11 @@ import socket
 import sys
 import threading
 import time
-from pathlib import Path
 from typing import Any
 
 import uvicorn
 
+from . import paths
 from .server.app import AppState, create_app
 
 
@@ -137,9 +137,21 @@ def launch_gui(
 
     window.events.closed += on_closed
 
+    icon_path = paths.get_app_icon_path()
+    icon_str = str(icon_path) if icon_path else None
+
+    if sys.platform == "darwin" and icon_str:
+        try:
+            import AppKit
+            ns_img = AppKit.NSImage.alloc().initByReferencingFile_(icon_str)
+            if ns_img and ns_img.isValid():
+                AppKit.NSApplication.sharedApplication().setApplicationIconImage_(ns_img)
+        except Exception:
+            pass
+
     try:
         # webview.start estää kunnes ikkuna suljetaan
-        webview.start(debug=debug)
+        webview.start(debug=debug, icon=icon_str)
     finally:
         server.stop()
         server.thread.join(timeout=2.0)

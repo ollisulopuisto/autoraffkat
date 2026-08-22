@@ -145,7 +145,22 @@ def test_every_visible_string_is_translated_in_both_languages():
 
 def test_static_icon_files_exist():
     """Varmistaa että käyttöliittymän tarvitsemat kuvakkeet ovat olemassa."""
-    for name in ("favicon.ico", "favicon.png", "apple-touch-icon.png"):
+    for name in ("favicon.ico", "favicon.png", "favicon.svg", "apple-touch-icon.png", "icon.png"):
         icon_file = STATIC / name
         assert icon_file.is_file(), f"{name} puuttuu staattisista tiedostoista"
         assert icon_file.stat().st_size > 0, f"{name} on tyhjä tiedosto"
+
+
+def test_root_icon_endpoints_return_ok(scratch_xml):
+    """Selainten suoraan kyselemät juuripolut /favicon.ico ja /apple-touch-icon.png toimivat."""
+    from fastapi.testclient import TestClient
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    client = TestClient(create_app(state))
+
+    res_ico = client.get("/favicon.ico")
+    assert res_ico.status_code == 200
+    assert len(res_ico.content) > 0
+
+    res_apple = client.get("/apple-touch-icon.png")
+    assert res_apple.status_code == 200
+    assert len(res_apple.content) > 0

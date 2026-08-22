@@ -15,6 +15,11 @@ datas = [
     (str(SRC_DIR / "autoraffkat" / "server" / "static"), "autoraffkat/server/static"),
     (str(SRC_DIR / "autoraffkat" / "server" / "static"), "server/static"),
 ]
+assets_dir = BASE_DIR / "assets"
+if assets_dir.exists():
+    datas.append((str(assets_dir), "assets"))
+    datas.append((str(assets_dir), "autoraffkat/assets"))
+
 datas += collect_data_files("pedalboard")
 
 binaries = []
@@ -131,6 +136,7 @@ coll = COLLECT(
 )
 
 if sys.platform == "darwin":
+    bundle_icon_file = os.path.basename(darwin_icon) if darwin_icon else "autoraffkat.icns"
     app = BUNDLE(
         coll,
         name="autoraffkat.app",
@@ -139,8 +145,9 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "autoraffkat",
             "CFBundleDisplayName": "autoraffkat",
-            "CFBundleVersion": "2026.8.21",
-            "CFBundleShortVersionString": "2026.8.21",
+            "CFBundleVersion": "2026.8.22.1",
+            "CFBundleShortVersionString": "2026.8.22.1",
+            "CFBundleIconFile": bundle_icon_file,
             "NSHighResolutionCapable": "True",
             "NSRequiresAquaSystemAppearance": "False",
             "CFBundleDocumentTypes": [

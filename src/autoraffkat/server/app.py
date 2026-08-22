@@ -461,6 +461,23 @@ def create_app(state: AppState) -> FastAPI:
                 html = html.replace(f"/static/{name}", f"/static/{name}?v={stamp}")
         return Response(html, media_type="text/html")
 
+    @app.get("/favicon.ico", include_in_schema=False)
+    def favicon():
+        """Selainten vakiokuvake juuripolusta."""
+        fav = STATIC_DIR / "favicon.ico"
+        if fav.is_file():
+            return FileResponse(fav, media_type="image/x-icon")
+        return Response(status_code=404)
+
+    @app.get("/apple-touch-icon.png", include_in_schema=False)
+    @app.get("/apple-touch-icon-precomposed.png", include_in_schema=False)
+    def apple_touch_icon():
+        """Kuvake iOS/macOS-selainpikakuvakkeille."""
+        icon = STATIC_DIR / "apple-touch-icon.png"
+        if icon.is_file():
+            return FileResponse(icon, media_type="image/png")
+        return Response(status_code=404)
+
     @app.get("/api/thumb")
     def thumb(track: str):
         """Ruutu raidan kuvasta. Puretaan vasta pyydettäessä.
