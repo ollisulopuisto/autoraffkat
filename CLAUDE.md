@@ -109,6 +109,13 @@ in `chain.STAGES_*` are measured, not guessed. Processing also logs each file
 and stage to the terminal — when it is slow or fails, the question is always
 which file and which stage.
 
+When an asset's `src` is redirected, the `uid` must be removed too. Final Cut
+identifies media by `uid`, not by path: an asset that keeps the old `uid`
+claims to be the old media, and since the raw twin is a copy carrying that
+same `uid` *and* a bookmark, Final Cut collapses the pair and keeps the raw.
+The export then sounds right and measures −43 LUFS. The twin keeps its `uid`,
+because it really is the original media.
+
 When an asset's `src` is redirected, the `<bookmark>` must be removed. It is a
 macOS file reference that beats `src`, and leaving it would mean Final Cut
 opens the unprocessed file without saying anything.
@@ -176,6 +183,20 @@ again at export. Without it, exporting without pressing the button referenced
 raw audio while the file name still said `audio`, and that difference is not
 noticed until someone listens, by which time the cut has been edited in Final
 Cut. Never make the export depend on which buttons were pressed this session.
+
+The ceiling is a look-ahead limiter, never a static attenuation. A static cut
+scales the whole file by what its single loudest sample demands, and after
+normalisation the peaks are +8 to +11 dBFS — measured, that turned −14.00 LUFS
+into −25.74. It also makes the balance between speakers depend on whose
+loudest transient was loudest, which is to say random. The level is
+re-measured after limiting so speakers land on the same number.
+
+Compression is parallel, and the peak attack is longer than a pitch period.
+Two milliseconds modulates the waveform of a 110 Hz voice instead of its
+level, which is harmonic distortion: measured −30.9 dB THD at 2 ms against
+−36.1 dB at 40 ms. De-essing comes before the compressors, because the
+restoration plug-in adds several dB above 3 kHz and one sibilant otherwise
+drives the gain of a whole sentence.
 
 The channel strip is in `audio/chain.py`, on pedalboard. Two places where the
 library doesn't do what its name promises, both measured:

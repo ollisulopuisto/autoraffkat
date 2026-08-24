@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.60] - 2026-08-24
+
+### Fixed
+- **Final Cut Played the Raw Audio Because `uid` Beats `src`**: the exported video measured −43 LUFS, which is raw-microphone level. Cross-correlated against the sources it was raw: +0.958 to the untouched file, +0.883 to the processed one. Final Cut identifies media by `uid`, not by path. Redirecting an asset's `src` left its `uid` untouched, so the processed file claimed to be the same media as the original — and the raw twin, being a copy, carried that same `uid` *and* a `<bookmark>`. Final Cut collapsed the pair and kept the raw. Every "processed" angle had been playing untouched audio, and nothing said so. A redirected asset now drops its `uid` as well as its `<bookmark>`; the twin keeps both, because it really is the original media.
+
+### Changed
+- **The Channel Strip Was Throwing Away 9–12 dB**: `peak_guard` attenuated the whole file by whatever its single loudest sample demanded. After normalisation the peaks sat at +8 to +11 dBFS, so the static cut was enormous: −14.00 LUFS became −25.74 (Nyman) and −22.94 (Wancke). That one line put every file 9–12 dB under target, made the speakers' balance depend on whose loudest transient was loudest, and reduced the program trim to noise. The ceiling is now a look-ahead limiter that touches only the peaks, and the level is re-measured after it so speakers land together. Measured on the same excerpts: **−14.95 and −16.02 LUFS with peaks at exactly −1.00 dBFS**.
+- **Less Distortion at the Same Loudness**: the peak compressor attacked in 2 ms, which is inside the pitch period of a 110 Hz voice — that is waveform modulation, not level control. Measured on a 110 Hz sine at −6 dBFS: 2 ms gives −30.9 dB THD, 40 ms gives −36.1 dB. The attack is now 15 ms, longer than any speech pitch period. The two compressors run in **parallel** with the dry signal rather than in series, so quiet passages come up while transients survive untouched, and a de-esser sits ahead of them because the restoration plug-in adds +4 to +5.7 dB across 3–20 kHz and a single sibilant was pulling whole sentences down.
+
 ## [v26.08.24.59] - 2026-08-24
 
 ### Fixed

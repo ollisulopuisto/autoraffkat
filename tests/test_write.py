@@ -399,6 +399,50 @@ def test_the_angle_carries_the_role_its_mc_source_names(fixture_dir):
         )
 
 
+def test_a_redirected_asset_stops_claiming_to_be_the_old_media(fixture_dir):
+    """``uid`` voittaa ``src``:n, aivan kuten ``bookmark``.
+
+    Final Cut tunnistaa median tunnuksesta eikä polusta. Jos käsitelty
+    tiedosto kantaa alkuperäisen tunnusta, se väittää olevansa sama media —
+    ja koska raaka kaksonen kantaa samaa tunnusta ja lisäksi bookmarkin,
+    Final Cut yhdistää ne ja valitsee raa'an.
+
+    Vienti kuulosti silloin oikealta mutta mittasi -43 LUFS: jokainen
+    «käsitelty» kulma soitti raakaa ääntä, eikä mikään kertonut siitä.
+    """
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    replacements = {
+        k: f"/mix/{k[:-4]} [mix].wav" for k in tl.media_by_key() if k.endswith(".wav")
+    }
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 36.0)],
+        [("host Track1", "Host")],
+        Fraction(0),
+        Fraction(36),
+        "Tunnukset",
+        replacements=replacements,
+    )
+    root = ET.fromstring(xml)
+    processed, raw = [], []
+    for asset in root.iter("asset"):
+        rep = asset.find("media-rep")
+        if rep is None or not rep.get("src", "").endswith(".wav"):
+            continue
+        (processed if "%5Bmix%5D" in rep.get("src") else raw).append(asset)
+    assert processed and raw
+
+    for asset in processed:
+        assert "uid" not in asset.attrib, (
+            f"käsitelty {asset.get('name')!r} väittää yhä olevansa vanha media"
+        )
+        assert asset.find("media-rep").find("bookmark") is None
+
+    # Kaksonen saa pitää tunnuksensa: se osoittaa oikeasti alkuperäiseen.
+    used = {a.get("uid") for a in raw if a.get("uid")}
+    assert not (used & {a.get("uid") for a in processed if a.get("uid")})
+
+
 def test_the_role_is_on_the_channel_source_not_only_the_attribute(
     fixture_dir, validate_fcpxml
 ):

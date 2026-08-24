@@ -638,9 +638,24 @@ def _mc_sources(
 def _redirect_asset(asset, path: str) -> None:
     """Ohjaa assetin toiseen tiedostoon.
 
-    ``<bookmark>`` on **poistettava**. Se on macOS:n tiedostoviite, joka
-    osoittaa alkuperäiseen tiedostoon ja voittaa ``src``:n: ilman poistoa
-    Final Cut käyttäisi käsittelemätöntä ääntä eikä kertoisi siitä mitään.
+    Kaksi asiaa on poistettava, ja molemmat voittavat ``src``:n hiljaa.
+
+    ``<bookmark>`` on macOS:n tiedostoviite, joka osoittaa alkuperäiseen
+    tiedostoon riippumatta siitä mitä ``src`` sanoo.
+
+    ``uid`` on median **tunnus**. Final Cut tunnistaa median siitä eikä
+    polusta: jos kirjastossa on jo media samalla tunnuksella, se käyttää
+    sitä eikä katso ``src``:ää lainkaan. Redirect jättää tunnuksen ennalleen,
+    jolloin käsitelty tiedosto väittää olevansa sama media kuin
+    käsittelemätön — ja koska kaksonen kantaa samaa tunnusta ja lisäksi
+    bookmarkin, Final Cut yhdistää ne yhdeksi ja valitsee raa'an.
+
+    Näin kävi: vienti kuulosti oikealta ja mittasi -43 LUFS, koska jokainen
+    «käsitelty» kulma soitti raakaa ääntä. Ristikorrelaatio valmiiseen
+    videoon oli raakaan +0,958 ja käsiteltyyn +0,883.
+
+    Tunnus poistetaan, jolloin Final Cut laskee sen uudesta tiedostosta.
+    Kaksosen tunnus jää — se osoittaa oikeasti alkuperäiseen mediaan.
     """
     rep = asset.find("media-rep")
     if rep is None:
@@ -648,6 +663,8 @@ def _redirect_asset(asset, path: str) -> None:
     rep.set("src", file_url(path))
     for bookmark in rep.findall("bookmark"):
         rep.remove(bookmark)
+    if "uid" in asset.attrib:
+        del asset.attrib["uid"]
 
 
 def _room_asset(source, res_id: str, path: str):

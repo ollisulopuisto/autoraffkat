@@ -40,17 +40,48 @@ from ..i18n import t
 # Ylipäästön jyrkkyys ja kompressorien ajat. automixer ilmaisi kompressorin
 # RMS-ikkunana; pedalboard puhuu hyökkäys- ja palautusajoista, joten nopea ja
 # hidas vaihe on kirjoitettu tähän auki.
-PEAK_ATTACK_MS = 2.0
-PEAK_RELEASE_MS = 60.0
-PEAK_RATIO = 2.5
+# Hyökkäysaika on hitaampi kuin miltä «huippukompressori» kuulostaa. Kahden
+# millisekunnin hyökkäys säätää vahvistusta perusjakson **sisällä**: 110 Hz:n
+# miesäänellä jakso on 9 ms, joten kompressori muokkaa aaltomuotoa eikä tasoa,
+# ja se on määritelmällisesti harmonista säröä. Mitattuna sinillä 110 Hz /
+# -6 dBFS: 2 ms -> THD -30,9 dB, 10 ms -> -32,9 dB, 40 ms -> -36,1 dB.
+# Viisitoista millisekuntia on jaksoa pidempi kaikilla puheäänillä.
+PEAK_ATTACK_MS = 15.0
+PEAK_RELEASE_MS = 80.0
+PEAK_RATIO = 3.0
 LEVEL_ATTACK_MS = 30.0
 LEVEL_RELEASE_MS = 300.0
-LEVEL_RATIO = 1.5
-# Huippukatto. Tämä on staattinen vaimennus eikä rajoitin: pedalboardin
-# Limiter tekee makeup-vahvistuksen, joka nosti mitattuna -20 LUFS:n
-# -15,8:aan ja huiput nollaan. Tässä ei haluta lisää tasoa vaan varmuus
-# siitä ettei summa säröydy.
+LEVEL_RATIO = 2.0
+
+# Rinnakkaiskompressio: kuiva ja tiivistetty summataan. Äänekkyys nousee
+# hiljaisten kohtien mukana, mutta transientit säilyvät kuivassa haarassa
+# koskemattomina — se on se ero, jonka korva kuulee «puristettuna». Osuus on
+# tiivistetyn paino; nolla olisi pelkkä kuiva.
+PARALLEL_MIX = 0.6
+
+# Sihinänpoisto. Restaurointiliitännäinen lisää ylätaajuuksia — dxRevivellä
+# mitattuna +4…+5,7 dB välillä 3–20 kHz — ja se osuu suoraan s-äänteisiin,
+# jotka sitten ohjaavat kompressoreita koko puheen yli. Kynnys on absoluuttinen
+# ja tulee vasta normalisoinnin jälkeen, jolloin taso on tiedossa.
+DEESS_HZ = 4500.0
+DEESS_THRESHOLD_DB = -30.0
+DEESS_RATIO = 3.0
+DEESS_SMOOTH_MS = 3.0
+# Huippukatto.
+#
+# Tämä oli pitkään staattinen koko raidan vaimennus, ja se oli ketjun suurin
+# virhe. Kompressorit ovat lempeitä, joten normalisoinnin jälkeen huiput
+# olivat +8…+11 dBFS; staattinen vaimennus veti silloin **koko tiedoston**
+# alas sen verran. Mitattuna: -14,00 LUFS -> -25,74 (nyman) ja -22,94
+# (wancke). Kolme oiretta yhdestä rivistä: kaikki 9–12 dB tavoitteen alle,
+# puhujat eri tasoilla sen mukaan mikä oli kunkin kovin yksittäinen napsahdus,
+# ja ohjelmatrimmin 1,8 dB merkityksetön sen rinnalla.
+#
+# Nyt katto hoidetaan ennakoivalla rajoittimella, joka koskee vain huippuihin.
+# `peak_guard` jää viimeiseksi varmistukseksi, jonka ei pitäisi koskaan laueta.
 CEILING_DB = -1.0
+LIMITER_LOOKAHEAD_MS = 5.0
+LIMITER_RELEASE_MS = 120.0
 
 
 # Mistä liitännäisiä etsitään. Vakiopaikat käyttöjärjestelmän mukaan.
@@ -464,6 +495,92 @@ def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarra
     return out
 
 
+def _one_pole(x: np.ndarray, rate: int, ms: float) -> np.ndarray:
+    """Yksinapainen tasoitus. Vektorisoitu, koska tiedostot ovat pitkiä.
+
+    Näytteittäinen hyökkäys/palautus-seuraaja on sarjallinen eikä sellaista
+    voi ajaa Pythonissa sadalle miljoonalle näytteelle. ``lfilter`` tekee
+    saman C:ssä, symmetrisillä ajoilla — riittää sekä sihinänpoiston
+    verhokäyrälle että rajoittimen pehmennykselle.
+    """
+    from scipy import signal as _sig
+
+    coeff = float(np.exp(-1.0 / max(1.0, ms * rate / 1000.0)))
+    return _sig.lfilter([1.0 - coeff], [1.0, -coeff], x)
+
+
+def deess(
+    audio: np.ndarray,
+    rate: int,
+    threshold_db: float = DEESS_THRESHOLD_DB,
+    ratio: float = DEESS_RATIO,
+    freq: float = DEESS_HZ,
+) -> np.ndarray:
+    """Vaimentaa s-äänteet ennen kompressoreita.
+
+    Jako tehdään vähentämällä alipäästö kokonaisuudesta, jolloin osat
+    summautuvat takaisin täsmälleen alkuperäiseksi eikä jakoon jää
+    vaihevirhettä. Vaimennus kohdistuu vain yläkaistaan, joten puheen runko
+    ei liiku mukana.
+
+    Ennen kompressoreita siksi, että ongelma ei ole s-äänteen kovuus vaan se,
+    että s ohjaa kompressoria: ilman tätä yksi sihahdus vetää koko lauseen
+    alas. Restauroitu ääni on tässä erityisen altis, koska liitännäinen
+    lisää juuri sille alueelle useita desibelejä.
+    """
+    from scipy import signal as _sig
+
+    if audio.size == 0:
+        return audio
+    sos = _sig.butter(4, min(freq, rate / 2 * 0.95) / (rate / 2), output="sos")
+    low = _sig.sosfilt(sos, audio, axis=-1)
+    high = audio - low
+
+    level = _one_pole(np.abs(high).max(axis=0), rate, DEESS_SMOOTH_MS)
+    level_db = 20.0 * np.log10(level + 1e-9)
+    over = np.maximum(0.0, level_db - threshold_db)
+    reduction_db = -over * (1.0 - 1.0 / ratio)
+    gain = _one_pole(10.0 ** (reduction_db / 20.0), rate, DEESS_SMOOTH_MS)
+    return low + high * gain
+
+
+def limiter(
+    audio: np.ndarray,
+    rate: int,
+    ceiling_db: float = CEILING_DB,
+    lookahead_ms: float = LIMITER_LOOKAHEAD_MS,
+    release_ms: float = LIMITER_RELEASE_MS,
+) -> tuple[np.ndarray, float]:
+    """Ennakoiva rajoitin. Palauttaa ``(ääni, suurin vaimennus dB)``.
+
+    Vaadittu vahvistus lasketaan näytteittäin, siitä otetaan liukuva minimi
+    ennakkoikkunan yli ja tulos pehmennetään. Liukuva minimi on **keskitetty**,
+    joten rajoitin ehtii laskea ennen huippua eikä signaali siirry: pituus ja
+    kohdistus säilyvät, mikä on koko viennin ehto.
+
+    Tämä korvaa staattisen vaimennuksen. Ero ei ole hienosäätöä: staattinen
+    veti koko tiedoston alas kovimman yksittäisen näytteen mukaan, mitattuna
+    9–12 dB, ja teki puhujien tasapainosta sattumanvaraisen.
+    """
+    from scipy.ndimage import minimum_filter1d
+
+    if audio.size == 0:
+        return audio, 0.0
+    ceiling = 10.0 ** (ceiling_db / 20.0)
+    peak = np.abs(audio).max(axis=0)
+    needed = np.minimum(1.0, ceiling / np.maximum(peak, 1e-9))
+    if needed.min() >= 1.0:
+        return audio, 0.0
+
+    window = max(1, int(lookahead_ms * rate / 1000.0))
+    ahead = minimum_filter1d(needed, size=2 * window + 1, mode="nearest")
+    smooth = _one_pole(ahead, rate, release_ms)
+    # Pehmennys saa nostaa vahvistusta hitaasti mutta ei koskaan yli sen mitä
+    # huippu sallii, muuten katto ylittyy juuri siellä missä sitä tarvitaan.
+    gain = np.minimum(smooth, ahead)
+    return audio * gain, float(20.0 * np.log10(max(gain.min(), 1e-9)))
+
+
 def peak_guard(audio: np.ndarray, ceiling_db: float = CEILING_DB) -> tuple:
     """Vaimentaa koko raidan, jos huippu ylittää katon.
 
@@ -587,8 +704,15 @@ def process(
 
     # 5. Dynamiikka.
     if speech:
-        board = _board(
-            pedalboard.Gain(gain_db=lift) if lift else None,
+        if lift:
+            audio = _board(pedalboard.Gain(gain_db=lift))(audio, rate, reset=True)
+        # Sihinä pois ennen kompressoreita: muuten yksi s ohjaa koko lauseen.
+        audio = deess(audio, rate)
+
+        # Rinnakkaiskompressio. Tiivistetty haara nostaa hiljaiset kohdat,
+        # kuiva haara pitää transientit — sarjassa ajettuna sama tiivistys
+        # veisi molemmat.
+        compressed = _board(
             pedalboard.Compressor(
                 threshold_db=settings.peak_threshold_db,
                 ratio=PEAK_RATIO,
@@ -601,9 +725,8 @@ def process(
                 attack_ms=LEVEL_ATTACK_MS,
                 release_ms=LEVEL_RELEASE_MS,
             ),
-        )
-        if len(board):
-            audio = board(audio, rate, reset=True)
+        )(audio, rate, reset=True)
+        audio = audio * (1.0 - PARALLEL_MIX) + compressed * PARALLEL_MIX
 
         # 6. Taso mitataan uudestaan, koska kompressointi siirtää sitä.
         #
@@ -620,6 +743,21 @@ def process(
         )
         if len(tail):
             audio = tail(audio, rate, reset=True)
+
+        # Katto rajoittimella, ja sen jälkeen taso uudestaan: rajoitin syö
+        # äänekkyyttä sen verran kuin se leikkaa, ja puhujien on osuttava
+        # samaan lukemaan. Yksi kierros riittää, koska korjaus on pieni ja
+        # rajoitin ajetaan sen perään uudestaan.
+        audio, _ = limiter(audio, rate)
+        if target_lufs is not None:
+            settled = loudness(audio.mean(axis=0), rate)
+            if settled is not None and abs(target_lufs - settled) > 0.1:
+                second = float(target_lufs - settled)
+                audio = _board(pedalboard.Gain(gain_db=second))(audio, rate, reset=True)
+                audio, _ = limiter(audio, rate)
+                lift += second
+        # Viimeinen varmistus. Rajoittimen jälkeen tämän ei pitäisi laueta,
+        # ja jos laukeaa, se on rajoittimessa oleva vika eikä turvaverkon työ.
         audio, trimmed = peak_guard(audio)
         lift += trimmed
     else:
