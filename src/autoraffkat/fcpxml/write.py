@@ -722,6 +722,42 @@ def _raw_twins(resources, redirects: dict[str, str]) -> dict[str, str]:
     return angles
 
 
+def _stamp_angle_roles(resources, speakers: dict[str, str], raw_angles: dict) -> None:
+    """Antaa mikkikulmalle sen oman aliroolin.
+
+    Kulma kopioidaan lähteestä, joten sen ääni jää oletusaliroolille — Final
+    Cut kirjoittaa siihen ``dialogue.dialogue-1``, jolle se sijoittaa kaikki
+    dialogit. ``mc-source``iin kirjoitetaan kuitenkin puhujakohtainen alirooli,
+    ja jos kulma ei kanna sitä, ``audio-role-source`` osoittaa rooliin jota
+    kulmassa ei ole.
+
+    Silloin ei tapahdu virhettä vaan ei mitään: ``active="0"`` ei osu
+    mihinkään, ja raaka kaksonen soi käsitellyn päällä. Sen kuulee vasta
+    kuuntelemalla — kaksi lähes samaa signaalia summautuu kampasuodattimeksi
+    — ja siihen mennessä leikkaus on jo tehty. Roolin nimi on rakennettava
+    tässä samalla tavalla kuin ``_mc_sources``issa, muuten ne eroavat taas.
+    """
+    if not speakers:
+        return
+    wanted = {
+        angle_id: f"dialogue.{sanitize_role(speaker)}"
+        for angle_id, speaker in speakers.items()
+    }
+    for angle_id, twin in (raw_angles or {}).items():
+        speaker = speakers.get(angle_id)
+        if speaker:
+            wanted[twin] = f"dialogue.{sanitize_role(f'{speaker} {RAW_TAG}')}"
+
+    for multicam in resources.iter("multicam"):
+        for angle in multicam.findall("mc-angle"):
+            role = wanted.get(angle.get("angleID", ""))
+            if not role:
+                continue
+            for clip in angle.iter():
+                if clip.tag in ("asset-clip", "audio", "clip"):
+                    clip.set("audioRole", role)
+
+
 def _next_resource_id(resources) -> str:
     """Vapaa resurssi-id kopioidusta lohkosta."""
     used = {child.get("id", "") for child in resources.iter()}
@@ -735,6 +771,7 @@ def _source_resources(
     path: str,
     redirects: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
+    angle_speakers: dict[str, str] | None = None,
 ) -> tuple[str, str, str, dict[str, str], dict[str, str]]:
     """Lähde-XML:n ``<resources>``, versio, sekvenssin formaatti ja tilaääni-id:t.
 
@@ -756,6 +793,7 @@ def _source_resources(
     # Raakakulmat ennen ohjausta: kopio perii alkuperäisen ``src``:n ja
     # ``<bookmark>``in, eikä ohjattua tiedostoa tarvitse arvata takaisin.
     raw_angles = _raw_twins(resources, redirects or {})
+    _stamp_angle_roles(resources, angle_speakers or {}, raw_angles)
 
     by_id = {a.get("id", ""): a for a in resources.iter("asset")}
     for asset_id, target in (redirects or {}).items():
@@ -871,8 +909,15 @@ def build_multicam_fcpxml(
         if k in by_key
     }
     room_jobs = [(by_key[k].asset_id, path) for k, path in (room or []) if k in by_key]
+    # Kulmien alirooli on tiedettävä jo resursseja rakennettaessa: se
+    # kirjoitetaan kulman sisään, ja ``mc-source`` viittaa juuri siihen.
+    angle_speakers = {
+        angle_id: speaker
+        for key, speaker in mic_tracks
+        for angle_id in angles_of.get(key, [])
+    }
     resources, version, seq_format, room_ids, raw_angles = _source_resources(
-        timeline.source_path, redirects, room_jobs
+        timeline.source_path, redirects, room_jobs, angle_speakers
     )
 
     body: list[str] = []

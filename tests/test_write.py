@@ -349,6 +349,47 @@ def test_multicam_export_keeps_the_raw_audio_as_a_muted_angle(
     validate_fcpxml(xml, "raw-twin.fcpxml")
 
 
+def test_the_angle_carries_the_role_its_mc_source_names(fixture_dir):
+    """``mc-source`` nimeää roolin; kulman on kannettava sitä.
+
+    Kulma kopioidaan lähteestä, joten sen ääni jää Final Cutin
+    oletusaliroolille ``dialogue.dialogue-1``. Jos ``mc-source`` viittaa
+    puhujakohtaiseen aliroolin jota kulmassa ei ole, mitään ei tapahdu: XML
+    kelpaa DTD:lle, tuonti onnistuu, eikä ``active="0"`` osu mihinkään.
+    Raaka kaksonen soi käsitellyn päällä, ja sen kuulee vasta kuuntelemalla.
+
+    Näin kävi kerran oikeassa jaksossa.
+    """
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    replacements = {
+        k: f"/mix/{k[:-4]} [mix].wav" for k in tl.media_by_key() if k.endswith(".wav")
+    }
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 36.0)],
+        [("host Track1", "Host")],
+        Fraction(0),
+        Fraction(36),
+        "Roolit",
+        replacements=replacements,
+    )
+    root = ET.fromstring(xml)
+    by_angle = {a.get("angleID"): a for a in root.iter("mc-angle")}
+    named = [
+        (src.get("angleID"), src.find("audio-role-source").get("role"))
+        for src in root.iter("mc-source")
+        if src.get("srcEnable") == "audio" and src.find("audio-role-source") is not None
+    ]
+    assert named, "mikkikulmia ei löytynyt"
+    for angle_id, role in named:
+        angle = by_angle[angle_id]
+        carried = {c.get("audioRole") for c in angle.iter() if c.get("audioRole")}
+        assert carried == {role}, (
+            f"kulma {angle.get('name')!r} kantaa roolia {carried} mutta "
+            f"mc-source viittaa rooliin {role!r}"
+        )
+
+
 def test_raw_twin_only_appears_for_processed_tracks(fixture_dir):
     """Ilman käsittelyä ei ole mitään mistä varmistua: ei kaksosta."""
     _, xml = _multicam_cut(fixture_dir)

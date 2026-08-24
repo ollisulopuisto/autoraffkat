@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.57] - 2026-08-24
+
+### Fixed
+- **The Raw Twin Was Not Muted, and Played Underneath the Processed Track**: the multicam angles are copied from the source, so their audio keeps Final Cut's default subrole `dialogue.dialogue-1`. The `<mc-source>` written beside them named a per-speaker subrole instead — `dialogue.Nyman`, `dialogue.Nyman raw` — which the angle did not carry. Nothing failed: the XML validated against the DTD, the import succeeded, and `active="0"` simply had no role to apply to. So the untouched twin played summed with the processed track, two nearly identical signals combing against each other, and it was audible only by listening. The angle now carries the subrole its `mc-source` names, built by the same construction in both places so they cannot drift apart again. A test asserts the invariant and fails without the fix.
+
+**If you have already imported an earlier export**, you do not need to re-export and redo your edits: in the Audio Configuration inspector, untick the two angles whose names end in `raw`.
+
 ## [v26.08.24.56] - 2026-08-24
 
 ### Added

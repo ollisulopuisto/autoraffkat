@@ -120,6 +120,14 @@ the `<bookmark>` and is therefore in sync to the sample, and the original `src`
 never has to be reconstructed. Own subrole, so switching it on gives it its own
 fader instead of summing with the processed track.
 
+A subrole is only real if the angle carries it. The angles are copied from
+the source, so their audio keeps Final Cut's default `dialogue.dialogue-1`;
+writing a per-speaker subrole into `mc-source` alone points
+`audio-role-source` at a role that is not there. That fails silently — valid
+DTD, clean import, `active="0"` applied to nothing — and the raw twin plays
+summed with the processed track. `_stamp_angle_roles` sets the role on the
+angle, using the same construction as `_mc_sources` so the two cannot drift.
+
 The flat export has no angles, so there the twin is a connected clip with
 `enabled="0"`. Twins go on the **lowest** lanes, after the microphones and the
 room tone: turning processing on must not move the microphone the editor is
