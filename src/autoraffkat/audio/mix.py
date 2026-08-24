@@ -828,6 +828,23 @@ def process(
     total_weight = sum(job["weight"] for job in todo) or 1.0
     behind = 0.0  # jo valmiiden tiedostojen paino
 
+    try:
+        return _run_todo(
+            result, todo, jobs, settings, plugin, masks, program_start,
+            progress, trim, started, total_weight,
+        )
+    finally:
+        if hasattr(plugin, "close"):
+            plugin.close()
+
+
+def _run_todo(
+    result, todo, jobs, settings, plugin, masks, program_start,
+    progress, trim, started, total_weight,
+):
+    """Tiedostot yksi kerrallaan. Erillään, jotta liitännäisvaranto suljetaan
+    myös silloin kun jokin kaatuu kesken."""
+    behind = 0.0
     for index, job in enumerate(todo):
         _log(f"{index + 1}/{len(todo)} {job['name']}")
         # Kello nollataan tiedostoittain: vaiheen kesto on tämän tiedoston

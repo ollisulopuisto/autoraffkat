@@ -126,6 +126,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Asetuksia ei voitu tallentaa: {error}",
         "en": "Could not save the settings: {error}",
     },
+    "audio.worker_died": {
+        "fi": "Äänenkäsittely päättyi odottamatta (koodi {code}). "
+        "Katso terminaalin loki.",
+        "en": "Audio processing ended unexpectedly (code {code}). "
+        "See the terminal log.",
+    },
     "audio.duck_waiting": {
         "fi": "vaimennus odottaa verhokäyriä…",
         "en": "ducking is waiting for the envelopes…",

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.63] - 2026-08-25
+
+### Fixed
+- **Audio Processing Runs in Its Own Process**: loading a VST3 through pedalboard requires the **main thread** — anywhere else it refuses with "must be reloaded on the main thread". The server's main thread runs the event loop and cannot be occupied for minutes, so hosting the plug-in inside the server was never sound; it had simply been getting away with it. Processing now happens in a child process whose main thread is free to do the work, talking back over line-delimited JSON. Two things come free: a plug-in that crashes or hangs no longer takes the server with it, and the child computes the envelopes itself, so ducking can no longer be skipped for not having them.
+
 ## [v26.08.25.62] - 2026-08-25
 
 ### Fixed

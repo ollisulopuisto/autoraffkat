@@ -210,15 +210,57 @@ PIECE_MARGIN = 5.0
 PIECE_MIN = 120.0
 
 
-def load_pool(path: str, params: dict | None = None, count: int = 1):
-    """Liitännäinen ``count`` kappaleena, tai ``None`` jos polkua ei ole.
+class PluginPool:
+    """Liitännäisiä säikeittäin, luotuina siinä säikeessä joka niitä käyttää.
 
     Jokainen rinnakkainen pala tarvitsee oman instanssin: VST3-olio on
-    tilallinen eikä sitä voi ajaa kahdesta säikeestä yhtä aikaa.
+    tilallinen eikä sitä voi ajaa kahdesta säikeestä yhtä aikaa. Se ei
+    kuitenkaan riitä, että instansseja on monta — pedalboard vaatii, että
+    instanssia käytetään **samassa säikeessä jossa se ladattiin**, ja
+    muuten kaatuu viestiin «must be reloaded on the main thread».
+
+    Siksi lataus tapahtuu laiskasti säiekohtaisesti ja säikeet pidetään
+    hengissä koko ajon yli: lataus maksaa noin 0,2 s instanssilta, eikä sitä
+    kannata maksaa jokaisesta palasta uudestaan.
+    """
+
+    def __init__(self, path: str, params: dict | None, workers: int):
+        from concurrent.futures import ThreadPoolExecutor
+
+        self.path = path
+        self.params = params
+        self.workers = max(1, workers)
+        self._local = threading.local()
+        self._pool = ThreadPoolExecutor(
+            max_workers=self.workers, thread_name_prefix="plugin"
+        )
+
+    def plugin(self):
+        """Tämän säikeen oma instanssi, ladattuna kerran."""
+        got = getattr(self._local, "plugin", None)
+        if got is None:
+            got = load_plugin(self.path, self.params)
+            self._local.plugin = got
+        return got
+
+    def run(self, function, items) -> list:
+        """Ajaa työt säikeissä ja palauttaa tulokset järjestyksessä."""
+        return list(self._pool.map(function, items))
+
+    def close(self) -> None:
+        self._pool.shutdown(wait=True)
+
+
+def load_pool(path: str, params: dict | None = None, count: int = 1):
+    """Säiekohtainen liitännäisvaranto, tai ``None`` jos polkua ei ole.
+
+    Tarkistaa polun heti pääsäikeessä, jotta virheellinen polku kerrotaan
+    ennen kuin minuuttien ajo alkaa.
     """
     if not path:
         return None
-    return [load_plugin(path, params) for _ in range(max(1, count))]
+    load_plugin(path, params)  # varhainen virhe: polku ja säätimet kunnossa
+    return PluginPool(path, params, count)
 
 
 def apply_plugin(plugin, audio: np.ndarray, rate: int) -> np.ndarray:
@@ -235,6 +277,8 @@ def apply_plugin(plugin, audio: np.ndarray, rate: int) -> np.ndarray:
     """
     if plugin is None:
         return audio
+    if isinstance(plugin, PluginPool):
+        return _apply_pool(plugin, audio, rate)
     if not isinstance(plugin, (list, tuple)):
         return plugin.process(audio, rate, reset=True)
     pool = list(plugin)
@@ -268,6 +312,31 @@ def apply_plugin(plugin, audio: np.ndarray, rate: int) -> np.ndarray:
         thread.join()
     if failures:
         raise failures[0]
+    return out
+
+
+def _apply_pool(pool: "PluginPool", audio: np.ndarray, rate: int) -> np.ndarray:
+    """Palat rinnakkain, jokainen sen säikeen omalla instanssilla."""
+    frames = audio.shape[1]
+    pieces = min(pool.workers, max(1, int(frames / rate / PIECE_MIN)))
+    if pieces < 2:
+        return pool.plugin().process(audio, rate, reset=True)
+
+    margin = int(PIECE_MARGIN * rate)
+    edges = [int(round(i * frames / pieces)) for i in range(pieces + 1)]
+    out = np.zeros_like(audio)
+
+    def one(index: int) -> None:
+        first, last = edges[index], edges[index + 1]
+        low, high = max(0, first - margin), min(frames, last + margin)
+        done = pool.plugin().process(audio[:, low:high], rate, reset=True)
+        if done.shape[1] != high - low:
+            raise ChainError(
+                t("audio.plugin_length", before=high - low, after=done.shape[1])
+            )
+        out[:, first:last] = done[:, first - low : first - low + (last - first)]
+
+    pool.run(one, range(pieces))
     return out
 
 

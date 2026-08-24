@@ -52,6 +52,14 @@ is the entire reason a track key is derived from the filename rather than the
 angle name or `angleID`: in a series the cameras stay, the angle numbers do
 not. Change how the key is derived and inheritance stops working silently.
 
+The plug-in runs in a child process, and that is not an optimisation.
+pedalboard loads a VST3 only on the **main thread**; the server's main thread
+is the event loop and cannot be held for minutes. Hosting it in the server
+worked by luck until it stopped. `audio/worker.py` reads a job on stdin and
+reports progress as line-delimited JSON, so a plug-in that crashes takes
+nothing else with it, and the child builds its own envelopes — which is why
+ducking can no longer be skipped for lack of them.
+
 Ducking must never fail quietly. It depends on the envelopes, which are
 computed in a background thread on load, and pressing the button first left
 the grid unbuilt and the masks empty with nothing said. The setting read

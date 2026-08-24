@@ -383,59 +383,64 @@ class AppState:
             }
         )
 
-        # Vaimennus tarvitsee saman puheentunnistuksen kuin kuvan leikkaus.
-        # Ruudukko rakennetaan tässä eikä säätösilmukassa, koska käsittely on
-        # muutenkin hidas — ja jos se ei onnistu, vaimennus jää pois eikä
-        # koko käsittely kaadu.
-        grid, program_start = None, 0.0
-        duck_error = ""
-        if self.settings.audio.duck:
-            # Verhokäyrät lasketaan latauksessa taustasäikeessä. Jos nappia
-            # painetaan ennen kuin se on valmis, ruudukkoa ei ole — ja ennen
-            # tätä vaimennus jäi silloin pois **äänettömästi**: asetus sanoi
-            # -9 dB, tuloksessa ei ollut sitä lainkaan, eikä mikään kertonut.
-            # Odottaminen maksaa sekunteja, käsittely minuutteja.
-            if self.analysis is None:
-                _log_mix(t("audio.duck_waiting"))
-                deadline = time.monotonic() + ANALYSIS_WAIT_S
-                while self.analysis is None and time.monotonic() < deadline:
-                    if self.progress.get("ready") and self.analysis is None:
-                        break  # analyysi päättyi eikä tulosta tullut
-                    time.sleep(0.5)
-            if self.analysis is None:
-                duck_error = t("audio.duck_no_analysis")
-            else:
-                try:
-                    grid, start, _ = build_grid(
-                        self.analysis, self.settings.tracks, roles
-                    )
-                    program_start = float(start)
-                except AnalysisError as exc:
-                    self.mix_progress["running"] = False
-                    self.mix_result = mix.MixResult(
-                        errors={"duck": t("audio.duck_failed", error=exc)}
-                    )
-                    return
-            if duck_error:
-                _log_mix(duck_error)
-
-        def report(info: dict) -> None:
-            self.mix_progress.update(info | {"eta": round(info.get("eta", 0.0))})
-
+        # Käsittely omassa prosessissaan: liitännäinen on ladattava
+        # pääsäikeessä, ja palvelimen pääsäie ajaa tapahtumasilmukkaa. Sama
+        # ratkaisu estää liitännäistä kaatamasta palvelinta. Ks. audio/worker.py.
+        spec = {
+            "xml_path": self.timeline.source_path,
+            "settings": self.settings.to_json(),
+            "force": bool(force),
+        }
+        command = [sys.executable, "-m", "autoraffkat.audio.worker"]
         try:
-            result = mix.process(
-                self.timeline,
-                roles,
-                self.settings.audio,
-                grid=grid,
-                program_start=program_start,
-                progress=report,
-                force=force,
+            child = subprocess.Popen(
+                command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                text=True,
+                bufsize=1,
             )
-            if duck_error:
-                result.errors["duck"] = duck_error
-            with self.lock:
-                self.mix_result = result
+            assert child.stdin is not None and child.stdout is not None
+            json.dump(spec, child.stdin)
+            child.stdin.close()
+
+            payload: dict = {}
+            for line in child.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    message = json.loads(line)
+                except json.JSONDecodeError:
+                    _log_mix(line)  # lapsen oma loki menee sellaisenaan läpi
+                    continue
+                kind = message.pop("kind", "")
+                if kind == "progress":
+                    self.mix_progress.update(
+                        message | {"eta": round(message.get("eta", 0.0))}
+                    )
+                elif kind in ("done", "failed"):
+                    payload = message
+            child.wait()
+
+            if "error" in payload:
+                self.mix_result = mix.MixResult(errors={"mix": payload["error"]})
+            elif payload:
+                result = mix.MixResult(
+                    processed=payload.get("processed", 0),
+                    skipped=payload.get("skipped", 0),
+                    gains=payload.get("gains", {}),
+                    errors=payload.get("errors", {}),
+                    replacements=payload.get("replacements", {}),
+                    room=[tuple(pair) for pair in payload.get("room", [])],
+                    program_trim=payload.get("program_trim", 0.0),
+                )
+                with self.lock:
+                    self.mix_result = result
+            elif child.returncode != 0:
+                self.mix_result = mix.MixResult(
+                    errors={"mix": t("audio.worker_died", code=child.returncode)}
+                )
         except Exception as exc:  # taustasäie ei saa kaatua hiljaa
             self.mix_result = mix.MixResult(errors={"mix": str(exc)})
             traceback.print_exc()
