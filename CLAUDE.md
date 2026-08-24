@@ -120,6 +120,16 @@ the `<bookmark>` and is therefore in sync to the sample, and the original `src`
 never has to be reconstructed. Own subrole, so switching it on gives it its own
 fader instead of summing with the processed track.
 
+`srcEnable` beats `active`. Final Cut never writes `srcEnable="audio"` with
+`active="0"`: audio on is `audio` + `active="1"`, audio off is `none` (or
+`video`) + `active="0"`. The combination we wrote is a contradiction, and
+Final Cut settles it in favour of `srcEnable` — the angle plays whatever the
+role says, silently, and the raw twin sums under the processed track. The
+twin's `mc-source` is `srcEnable="none"`, which still lists the angle in
+Audio Configuration, unticked. When something imports but does not behave,
+compare against a multicam Final Cut wrote itself; our reader accepts
+combinations the application never produces.
+
 A subrole is only real if the angle carries it. The angles are copied from
 the source, so their audio keeps Final Cut's default `dialogue.dialogue-1`;
 writing a per-speaker subrole into `mc-source` alone points

@@ -614,8 +614,20 @@ def _mc_sources(
         if twin:
             raw_role = f"dialogue.{sanitize_role(f'{speaker} {RAW_TAG}')}"
             twin_id = quoteattr(twin)
+            # ``srcEnable="none"``, ei ``"audio"`` + ``active="0"``.
+            #
+            # Final Cut ei kirjoita jälkimmäistä yhdistelmää koskaan: sen
+            # omassa monikamerassa mykkä kulma on ``none`` tai ``video`` ja
+            # ``active="0"``, äänessä oleva ``audio`` ja ``active="1"``.
+            # Meidän ``audio`` + ``active="0"`` on ristiriita jonka Final Cut
+            # ratkaisee ``srcEnable``in hyväksi — kulma soi, vaikka rooli
+            # sanoo toista. Se ei näy virheenä eikä tuonnissa, vaan siinä
+            # että raaka kaksonen summautuu käsitellyn päälle.
+            #
+            # ``none`` jättää kulman silti näkyviin Audio Configurationiin,
+            # rastittamattomana: sieltä sen saa päälle kun sitä tarvitsee.
             lines += [
-                f'              <mc-source angleID={twin_id} srcEnable="audio">',
+                f'              <mc-source angleID={twin_id} srcEnable="none">',
                 "                <audio-role-source "
                 + f'role={quoteattr(raw_role)} active="0"/>',
                 "              </mc-source>",

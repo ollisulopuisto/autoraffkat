@@ -327,12 +327,21 @@ def test_multicam_export_keeps_the_raw_audio_as_a_muted_angle(
     )
     root = ET.fromstring(xml)
     clip = root.find(".//spine/mc-clip")
-    audio = clip.findall('mc-source[@srcEnable="audio"]')
-    roles = [(a.get("angleID"), a.find("audio-role-source")) for a in audio]
-    live = [(i, r) for i, r in roles if r.get("active") != "0"]
-    muted = [(i, r) for i, r in roles if r.get("active") == "0"]
+    live = [
+        (a.get("angleID"), a.find("audio-role-source"))
+        for a in clip.findall('mc-source[@srcEnable="audio"]')
+    ]
+    # Mykkä kulma on «none», ei «audio» + active="0". Final Cut ei kirjoita
+    # jälkimmäistä koskaan ja ratkaisee ristiriidan srcEnablen hyväksi, eli
+    # kulma soi vaikka rooli sanoo toista.
+    muted = [
+        (a.get("angleID"), a.find("audio-role-source"))
+        for a in clip.findall('mc-source[@srcEnable="none"]')
+    ]
     assert [r.get("role") for _, r in live] == ["dialogue.Host"]
     assert [r.get("role") for _, r in muted] == ["dialogue.Host raw"]
+    assert all(r.get("active") == "0" for _, r in muted)
+    assert all(r.get("active") != "0" for _, r in live)
     # Kaksonen on eri kulma, ei sama kahdesti.
     assert live[0][0] != muted[0][0]
 

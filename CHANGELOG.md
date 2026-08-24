@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.58] - 2026-08-24
+
+### Fixed
+- **The Raw Twin Still Played: `srcEnable` Beats `active`**: the previous release made the angle carry the subrole its `mc-source` names, which was a real mismatch — and not the one keeping the twin audible. Final Cut never writes `srcEnable="audio"` together with `active="0"`. In its own multicams an angle with audio on is `srcEnable="audio"` with `active="1"`, and an angle with audio off is `srcEnable="none"` (or `"video"`) with `active="0"`. Our combination is a contradiction, and Final Cut resolves it in favour of `srcEnable`: the angle plays, whatever the role says. The twin's source is now `srcEnable="none"`, which still lists it in Audio Configuration — unticked, ready to switch on when it is wanted.
+
 ## [v26.08.24.57] - 2026-08-24
 
 ### Fixed
