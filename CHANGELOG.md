@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.61] - 2026-08-24
+
+### Added
+- **Loudness Targets Have Names**: −14 LUFS is where YouTube normalises, −16 where Spotify and Apple Podcasts do, −23 is EBU R128. These are specifications, not preferences: export louder and the platform turns it down, quieter and it sits under everything else. The panel now names them and the default is YouTube's −14; the slider stays free, because not all delivery is one of the three.
+- **The Level Now Lands Where It Was Asked To**: the limiter eats loudness in proportion to what it clips, and correcting for that pushes the peaks back into the limiter, so a single correction pass always fell short — measured 1–2 dB under target. It now iterates up to three times and stops within 0.3 dB. On real material: asked −14, got −14.52 and −14.64 for the two speakers; asked −16, got −16.27 and −16.53. The two microphones land **0.12 dB apart**, which is the balance that matters.
+
 ## [v26.08.24.60] - 2026-08-24
 
 ### Fixed

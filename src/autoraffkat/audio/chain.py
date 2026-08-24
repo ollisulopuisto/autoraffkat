@@ -749,13 +749,21 @@ def process(
         # samaan lukemaan. Yksi kierros riittää, koska korjaus on pieni ja
         # rajoitin ajetaan sen perään uudestaan.
         audio, _ = limiter(audio, rate)
-        if target_lufs is not None:
+        # Rajoitin syö äänekkyyttä sen verran kuin se leikkaa, ja korjaus
+        # nostaa huiput takaisin rajoittimen kynsiin — yksi kierros jää siis
+        # vajaaksi. Kolme riittää: mitattuna ensimmäinen kierros jäi 1–2 dB
+        # tavoitteesta, kolmannen jälkeen ero on alle 0,3 dB. Tavoite on nyt
+        # jakelualustan lukema eikä makuasia, joten se on osuttava.
+        for _ in range(3):
+            if target_lufs is None:
+                break
             settled = loudness(audio.mean(axis=0), rate)
-            if settled is not None and abs(target_lufs - settled) > 0.1:
-                second = float(target_lufs - settled)
-                audio = _board(pedalboard.Gain(gain_db=second))(audio, rate, reset=True)
-                audio, _ = limiter(audio, rate)
-                lift += second
+            if settled is None or abs(target_lufs - settled) <= 0.3:
+                break
+            step = float(target_lufs - settled)
+            audio = _board(pedalboard.Gain(gain_db=step))(audio, rate, reset=True)
+            audio, _ = limiter(audio, rate)
+            lift += step
         # Viimeinen varmistus. Rajoittimen jälkeen tämän ei pitäisi laueta,
         # ja jos laukeaa, se on rajoittimessa oleva vika eikä turvaverkon työ.
         audio, trimmed = peak_guard(audio)

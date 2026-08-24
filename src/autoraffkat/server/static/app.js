@@ -860,6 +860,40 @@ function renderAudio() {
     }));
   }
 
+  /* Jakelualustan lukema on määrittely eikä makuasia: YouTube normalisoi
+     -14:ään, Spotify ja Apple -16:een. Valikko nimeää ne, säädin jää
+     vapaaksi, koska kaikki jakelu ei ole näitä. */
+  const targets = state.loudness_targets || {};
+  if (Object.keys(targets).length) {
+    const field = document.createElement('label');
+    field.className = 'field';
+    field.append(Object.assign(document.createElement('span'),
+      { textContent: T('audio.targetPreset') }));
+    const select = document.createElement('select');
+    Object.entries(targets).forEach(([name, value]) => {
+      const opt = document.createElement('option');
+      opt.value = String(value);
+      opt.textContent = `${T(`audio.target.${name}`)} (${value} LUFS)`;
+      if (Math.abs(value - audio.target_lufs) < 0.05) opt.selected = true;
+      select.append(opt);
+    });
+    const custom = document.createElement('option');
+    custom.value = '';
+    custom.textContent = T('audio.targetCustom');
+    if (!Object.values(targets).some((v) => Math.abs(v - audio.target_lufs) < 0.05)) {
+      custom.selected = true;
+    }
+    select.append(custom);
+    select.addEventListener('change', () => {
+      if (!select.value) return;      // «mukautettu» ei muuta mitään
+      audio.target_lufs = Number(select.value);
+      renderAudio();
+      schedule(0);
+    });
+    field.append(select);
+    host.append(field);
+  }
+
   AUDIO_KNOBS().forEach((spec) => {
     host.append(knob(spec, audio[spec.key], (v) => {
       audio[spec.key] = v;

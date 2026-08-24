@@ -36,6 +36,7 @@ from ..i18n import LANGUAGES, t
 from ..model import (
     DEFAULT_PROJECT_NAME,
     LONGTAKE_RULES,
+    LOUDNESS_TARGETS,
     OVERLAP_RULES,
     RHYTHM_PRESETS,
     ROLE_MIC,
@@ -582,6 +583,9 @@ def _state_json(state: AppState) -> dict:
         "audio": state.settings.audio.to_json(),
         # Palojen ylärajan ja automaattivalinnan on oltava käyttöliittymässä
         # sama luku kuin käsittelyssä: se riippuu koneesta, ei asetuksista.
+        # Alustojen lukemat palvelimelta, jotta käyttöliittymä ja käsittely
+        # puhuvat samoista luvuista eikä niitä ole kahdessa paikassa.
+        "loudness_targets": LOUDNESS_TARGETS,
         "cores": os.cpu_count() or 1,
         "workers_auto": chain.worker_count(),
         "mix": {

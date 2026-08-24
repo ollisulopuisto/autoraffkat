@@ -58,6 +58,17 @@ LONGTAKE_STAY = "stay"  # laajaan ja siihen jäädään puhujan vaihtoon asti
 LONGTAKE_REACTION = "reaction"  # toisen puhujan reaktiokuva välissä, sitten takaisin
 LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY, LONGTAKE_REACTION)
 
+# Jakelualustojen äänekkyyslukemat. Nämä eivät ole makuasioita vaan
+# alustojen normalisointitasoja: kovempi vienti vain vaimennetaan toistossa,
+# hiljaisempi jää muiden alle. Vapaa säädin jää silti, koska kaikki jakelu ei
+# ole näitä kahta.
+LOUDNESS_TARGETS: dict[str, float] = {
+    "youtube": -14.0,
+    "streaming": -16.0,  # Spotify, Apple Podcasts
+    "broadcast": -23.0,  # EBU R128
+}
+
+
 # Viedyn projektin oletusnimi. Se näkyy Final Cutin selaimessa, eli on yhtä
 # lailla käyttäjälle näkyvää tekstiä kuin viennin tiedostonimi. Asetuksissa
 # oleva nimi voittaa tämän ja periytyy jaksosta toiseen, joten vaihtuminen
@@ -215,7 +226,10 @@ class AudioSettings:
     # Tavoite koskee ohjelmaa eikä yhtä stemiä, ks. ``program_target``: kaksi
     # tavoitteeseen normalisoitua mikkiä summautuu sen yli, tällä aineistolla
     # mitattuna 1,7 dB. Lopullinen taso asetetaan silti Final Cutissa.
-    target_lufs: float = -20.0
+    # Oletus on YouTuben lukema, koska sinne tämä menee. Nimetyt vaihtoehdot
+    # ovat ``LOUDNESS_TARGETS``; säädin jää silti vapaaksi, koska jakelu ei
+    # ole aina jompikumpi näistä.
+    target_lufs: float = -14.0
     peak_threshold_db: float = -12.0  # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
     declick: bool = False  # maiskaukset ja huulinaksut pois
