@@ -30,7 +30,9 @@ def test_original_is_never_the_target():
         assert mix.sibling(source, suffix) != source
 
 
-def test_adopt_takes_the_processed_files_already_on_disk(fixture_dir, monkeypatch):
+def test_adopt_takes_the_processed_files_already_on_disk(
+    fixture_dir, monkeypatch, tmp_path
+):
     """Käsittely on kerran tehty työ; nappi ei saa olla sen ehto.
 
     Ilman tätä sama jakso uudestaan avattuna vietäisiin raakana, vaikka
@@ -48,6 +50,7 @@ def test_adopt_takes_the_processed_files_already_on_disk(fixture_dir, monkeypatc
     }
     roles = resolve_roles(tl, tracks)
     settings = AudioSettings(enabled=True)
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
 
     # Mitään ei ole vielä levyllä.
     assert not mix.adopt(tl, roles, settings).replacements
@@ -61,6 +64,11 @@ def test_adopt_takes_the_processed_files_already_on_disk(fixture_dir, monkeypatc
     try:
         for stub in stubs:
             stub.write_bytes(b"x")
+        # Ilman merkintää tiedoston syntyhistoriaa ei tiedetä, eikä sitä
+        # oteta: se voi olla mistä tahansa asetuksista.
+        assert not mix.adopt(tl, roles, settings).replacements
+        for job in mix._jobs(tl, roles, settings):
+            mix.write_stamp(job, settings)
         found = mix.adopt(tl, roles, settings)
         assert found.replacements
         assert found.skipped == len(found.replacements)
@@ -160,6 +168,158 @@ def test_is_current_follows_modification_time(tmp_path):
     os.utime(source, (10**9, 10**9))
     os.utime(target, (10**9 - 100, 10**9 - 100))
     assert not mix.is_current(str(source), str(target))
+
+
+def test_fingerprint_covers_every_setting():
+    """Uusi säädin ei saa jäädä pois tuoreuden tarkistuksesta.
+
+    Jos jää, sen muuttaminen ei vanhenna mitään ja käsittely palaa hiljaa
+    tekemättä mitään — juuri se vika joka sai painikkeen näyttämään
+    rikkinäiseltä.
+    """
+    fields = set(AudioSettings.__dataclass_fields__)
+    # `enabled` ja `room_track` päättävät tehdäänkö työtä, eivät miltä
+    # tulos kuulostaa: ne eivät kuulu sormenjälkeen.
+    assert fields - {"enabled", "room_track"} == set(mix.FINGERPRINT_FIELDS)
+
+
+def test_every_setting_changes_the_fingerprint(tmp_path, monkeypatch):
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
+    source = tmp_path / "a.wav"
+    source.write_bytes(b"x")
+    job = {
+        "source": str(source),
+        "target": str(tmp_path / "a [mix].wav"),
+        "target_lufs": -20.0,
+        "gain_db": 0.0,
+        "speech": True,
+        "weight": 1.0,
+    }
+    base = AudioSettings()
+    before = mix.fingerprint(job, base)
+    for name in mix.FINGERPRINT_FIELDS:
+        value = getattr(base, name)
+        if isinstance(value, bool):
+            other = not value
+        elif isinstance(value, (int, float)):
+            other = value + 1.5
+        elif isinstance(value, dict):
+            other = {"Input Gain": 3.0}
+        else:
+            other = "/tmp/toinen.vst3"
+        changed = AudioSettings(**{**base.to_json(), name: other})
+        assert mix.fingerprint(job, changed) != before, name
+
+
+def test_is_fresh_notices_a_settings_change(tmp_path, monkeypatch):
+    """Muokkausaika ei tiedä liitännäisen vaihdosta mitään.
+
+    Tämä on se vika: käsitelty tiedosto oli lähdettä tuoreempi, joten ajo
+    ohitti sen — vaikka se oli tehty toisilla asetuksilla. Painike ei
+    tulostanut mitään eikä kirjoittanut mitään, ja näytti rikkinäiseltä.
+    """
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
+    source = tmp_path / "a.wav"
+    target = tmp_path / "a [mix].wav"
+    source.write_bytes(b"x")
+    target.write_bytes(b"y")
+    job = {"source": str(source), "target": str(target), "target_lufs": -20.0}
+    settings = AudioSettings(target_lufs=-20.0)
+
+    # Merkintää ei ole: tuntematon tulos on vanhentunut.
+    assert mix.is_current(str(source), str(target))
+    assert not mix.is_fresh(job, settings)
+
+    mix.write_stamp(job, settings)
+    assert mix.is_fresh(job, settings)
+
+    louder = AudioSettings(target_lufs=-14.0)
+    assert mix.is_current(str(source), str(target))
+    assert not mix.is_fresh(job, louder)
+
+
+def _noise_file(path, seconds, rate=48000, gate=None, seed=1):
+    """Kohinaa levylle. ``gate`` on funktio joka nollaa osan näytteistä."""
+    from pedalboard.io import AudioFile
+
+    rng = np.random.default_rng(seed)
+    data = rng.normal(0, 0.05, int(seconds * rate)).astype(np.float32)
+    if gate is not None:
+        data = gate(data, rate)
+    with AudioFile(str(path), "w", rate, 1, bit_depth=24) as out:
+        out.write(data.reshape(1, -1))
+    return rate
+
+
+def _mic_job(path, seconds, name):
+    from fractions import Fraction
+
+    from autoraffkat.model import MediaItem, Placement
+
+    item = MediaItem(
+        key=name,
+        name=name,
+        path=str(path),
+        src="",
+        placements=[
+            Placement(
+                offset=Fraction(0),
+                start=Fraction(0),
+                duration=Fraction(int(seconds * 1000), 1000),
+            )
+        ],
+    )
+    return {
+        "key": name,
+        "name": name,
+        "item": item,
+        "source": str(path),
+        "target": mix.sibling(str(path), mix.MIX_SUFFIX),
+        "speech": True,
+        "gain_db": 0.0,
+        "target_lufs": -14.0,
+    }
+
+
+@needs_ffmpeg
+def test_program_trim_measures_the_sum_not_the_stem(tmp_path):
+    """Tavoitetaso koskee ohjelmaa, ei yhtä stemiä.
+
+    Kaksi tavoitteeseen normalisoitua mikkiä ei summaudu tavoitteeseen.
+    Kuinka paljon yli, riippuu päällekkäisyydestä — ei ole yhtä oikeaa
+    lukua, joten se mitataan. Ääripäät ovat tässä: sama signaali kahdesti
+    on 6 dB yli, täydellisesti vuorottelevat puhujat eivät yhtään.
+    """
+    settings = AudioSettings(target_lufs=-14.0, program_target=True)
+    seconds = 8.0
+
+    # Sama signaali kahdesti: summa on 6 dB kovempi.
+    same = []
+    for i in range(2):
+        path = tmp_path / f"same{i}.wav"
+        _noise_file(path, seconds, seed=7)
+        same.append(_mic_job(path, seconds, f"same{i}"))
+    assert mix.program_trim(same, settings) == -mix.MAX_PROGRAM_TRIM
+
+    # Täydellinen vuorottelu: kummankin osuudessa on vain toinen ääni, joten
+    # summa on samalla tasolla kuin kumpikin erikseen.
+    def first_half(data, rate):
+        data[len(data) // 2 :] = 0.0
+        return data
+
+    def second_half(data, rate):
+        data[: len(data) // 2] = 0.0
+        return data
+
+    turns = []
+    for i, gate in enumerate((first_half, second_half)):
+        path = tmp_path / f"turn{i}.wav"
+        _noise_file(path, seconds, gate=gate, seed=3 + i)
+        turns.append(_mic_job(path, seconds, f"turn{i}"))
+    assert mix.program_trim(turns, settings) == pytest.approx(0.0, abs=0.3)
+
+    # Yksi mikki on jo ohjelma.
+    assert mix.program_trim(turns[:1], settings) == 0.0
 
 
 def test_readable_formats_pass_through(tmp_path):

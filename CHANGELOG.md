@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.55] - 2026-08-24
+
+### Performance
+- **The Plug-In Now Uses More Than One Core**: dxRevive was measured at 0.98 cores and 7.25× realtime — the plug-in is 97 % of a run, and it was using one of eight cores. The file is now cut into as many pieces as there are workers and the pieces run in parallel on their own plug-in instances. Measured on a real 20-minute microphone file: **168.4 s → 68.3 s, 2.46×**. Scaling is not linear (1 → 7.5×, 2 → 9.5×, 4 → 14.8×, 6 → 20.1× realtime) because the plug-in's inference is memory-bandwidth bound; six workers is where adding more stops paying, and two cores are left for the interface. This is not the forbidden chunked feeding: each piece is its own full `reset=True` run with a five-second margin that is processed and discarded, and the result is written into an array of the original length, so the sample count cannot move. It is not free either — the pieces cannot see each other's context, so the plug-in's slow adaptation differs slightly between them: 25.7 dB below the signal in speech, −84 dBFS absolute in the quiet parts. Because that is not zero, the piece count is adjustable in the panel — a share of the machine's cores by default, capped at the core count, and 1 for a single run over the whole file.
+
+### Added
+- **The Loudness Target Is the Program's, Not One Stem's**: two microphones each normalised to −14 LUFS do not sum to −14. Measured on real material, they summed to −12.2 — the speakers overlap and the microphones hear each other, so the gap is neither the 3 dB of two identical signals nor the 0 dB of perfect alternation. `mix.program_trim` measures the sum of the raw microphones over a bounded window before processing and takes the difference off every file; on the episode it was built for, −1.79 dB, measured in five seconds. The window is anchored to the longest microphone file rather than the middle of the timeline, because in a multicam the parts are consecutive and the midpoint lands inside one of them.
+
+### Fixed
+- **"Process Audio" Did Nothing and Said Nothing**: a processed file was considered up to date whenever it was newer than its source. Nothing else was compared, so changing the plug-in, its controls, the target loudness, the ducking depth or the trim did not invalidate anything: the run skipped every file, returned before the first log line, and left the panel showing exactly the text it showed before the button was pressed. The processed audio on disk stayed as it was rendered days earlier, and the export used it. Freshness is now a fingerprint — the source's path, size and modification time, the plug-in's own modification time, the job's target level, and every setting the result depends on — kept in `~/Library/Caches/autoraffkat/mix/`. A file whose fingerprint is unknown counts as stale, so the first run after this update re-renders everything once. `adopt` uses the same test, so the export never uses a file that processing has just decided to redo.
+- **A Run With Nothing to Do Was Indistinguishable From a Broken Button**: processing now logs each skipped file and a summary line to the terminal, and the interface reports the outcome of a run — "processed *n* files" or "every file was already up to date". A no-op run finishes before the first progress poll, so without this nothing on screen changed at all.
+
 ## [v26.08.24.54] - 2026-08-24
 
 ### Performance

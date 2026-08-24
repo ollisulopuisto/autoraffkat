@@ -289,3 +289,87 @@ def test_too_many_parameters_are_cut_and_the_cut_is_reported(tmp_path, monkeypat
     specs, total = chain.parameter_specs(str(fake))
     assert len(specs) == chain.MAX_PARAMS
     assert total == chain.MAX_PARAMS + 5
+
+
+class _Echo:
+    """Liitännäinen joka merkitsee mitä sille annettiin.
+
+    Palauttaa syötteen sellaisenaan mutta kirjaa palan pituuden, jotta
+    testi näkee että pilkkominen tapahtui — ja että jokainen pala meni
+    omalle instanssilleen.
+    """
+
+    def __init__(self):
+        self.calls = []
+
+    def process(self, audio, rate, reset=True):
+        assert reset is True  # paloissa syöttäminen lyhentäisi tuloksen
+        self.calls.append(audio.shape[1])
+        return audio * 2.0
+
+
+def test_parallel_pieces_keep_the_length_and_the_content():
+    """Rinnakkaiset palat eivät saa muuttaa pituutta eivätkä sisältöä.
+
+    Pituus on se sääntö jonka varassa koko vienti on: käsitelty tiedosto
+    viitataan samoilla ajoilla kuin alkuperäinen.
+    """
+    rate = 48000
+    frames = int(rate * chain.PIECE_MIN * 4)
+    audio = np.linspace(-0.5, 0.5, frames, dtype=np.float32).reshape(1, -1)
+
+    pool = [_Echo() for _ in range(4)]
+    out = chain.apply_plugin(pool, audio, rate)
+    assert out.shape == audio.shape
+    assert np.allclose(out, audio * 2.0)
+
+    # Jokainen instanssi sai oman palansa, eikä yksikään koko tiedostoa.
+    used = [p.calls for p in pool]
+    assert all(len(c) == 1 for c in used)
+    assert all(c[0] < frames for c in used)
+    # Marginaali on mukana: pala on neljännestä pidempi.
+    assert all(c[0] > frames / 4 for c in used)
+
+
+def test_a_short_file_is_not_cut_into_pieces():
+    """Marginaalit söisivät hyödyn: lyhyt tiedosto ajetaan yhtenä."""
+    rate = 48000
+    audio = np.zeros((1, int(rate * chain.PIECE_MIN / 2)), dtype=np.float32)
+    pool = [_Echo() for _ in range(4)]
+    chain.apply_plugin(pool, audio, rate)
+    assert [len(p.calls) for p in pool] == [1, 0, 0, 0]
+
+
+def test_one_plugin_is_still_run_whole():
+    """Ilman rinnakkaisuutta tulos on tarkalleen se minkä liitännäinen antaa."""
+    rate = 48000
+    audio = np.zeros((1, int(rate * chain.PIECE_MIN * 4)), dtype=np.float32)
+    one = _Echo()
+    chain.apply_plugin(one, audio, rate)
+    assert one.calls == [audio.shape[1]]
+    assert chain.apply_plugin(None, audio, rate) is audio
+
+
+def test_worker_count_follows_the_machine_and_the_user(monkeypatch):
+    """Palojen määrä on koneen ytimiä, ei tähän kirjoitettu luku.
+
+    Kahdeksan ytimen kannettava ja kahdenkymmenen ytimen työasema ovat eri
+    koneita. Osa ytimistä jää käyttöliittymälle: käsittely on taustatyö,
+    jonka aikana konetta käytetään muuhun.
+    """
+    monkeypatch.setattr(chain.os, "cpu_count", lambda: 8)
+    assert chain.worker_count() == 6
+    monkeypatch.setattr(chain.os, "cpu_count", lambda: 24)
+    assert chain.worker_count() == 18
+
+    # Käyttäjän luku voittaa, mutta ei ytimien yli: useampi pala ei ole
+    # nopeampi, vain lyhyempi ja muistisyöpömpi.
+    assert chain.worker_count(4) == 4
+    assert chain.worker_count(99) == 24
+    # Yksi pala tarkoittaa yhtä ajoa: silloin tulos on tarkalleen se minkä
+    # liitännäinen antaa kokonaisesta tiedostosta.
+    assert chain.worker_count(1) == 1
+
+    # Yhden ytimen koneella on silti yksi työ, ei nolla.
+    monkeypatch.setattr(chain.os, "cpu_count", lambda: 1)
+    assert chain.worker_count() == 1

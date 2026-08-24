@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -128,6 +129,115 @@ def load_plugin(path: str, params: dict | None = None):
         ) from exc
     apply_parameters(plugin, params)
     return plugin
+
+
+# Liitännäinen on 97 % käsittelyn ajasta ja käyttää **yhtä** ydintä: mitattu
+# dxRevivella M2:lla 0,98 ydintä ja 7,25x reaaliaika. Koneen muut ytimet saa
+# töihin vain ajamalla useaa kohtaa yhtä aikaa.
+#
+# Skaalaus ei ole lineaarinen — liitännäisen päättely on muistikaistarajoitettu
+# ja tehokkuusytimet ovat hitaampia. Mitattu läpimeno M2:lla (4P+4E):
+# 1 → 7,5x, 2 → 9,5x, 4 → 14,8x, 6 → 20,1x reaaliaikaa. Oikealla 20 minuutin
+# tiedostolla koko ketju 168,4 s → 68,3 s, eli 2,46-kertainen.
+#
+# Osuus eikä vakioluku: kahdeksan ytimen kannettava ja kahdenkymmenen ytimen
+# työasema ovat eri koneita, eikä kummankaan lukua voi kirjoittaa tähän.
+WORKER_SHARE = 0.75
+
+
+def worker_count(wanted: int = 0) -> int:
+    """Montako liitännäisinstanssia ajetaan rinnakkain.
+
+    ``0`` on automaattinen: ``WORKER_SHARE`` koneen ytimistä. Loput jäävät
+    käyttöliittymälle ja muulle koneelle — käsittely on taustatyö, jonka
+    aikana konetta käytetään muuhun.
+
+    Muu luku on käyttäjän oma valinta, rajattuna ytimien määrään: kolmesta-
+    kymmenestä palasta kahdeksalla ytimellä ei tule nopeampaa, vain enemmän
+    muistia ja lyhyempiä paloja.
+    """
+    cores = os.cpu_count() or 2
+    if wanted > 0:
+        return max(1, min(int(wanted), cores))
+    return max(1, round(cores * WORKER_SHARE))
+
+
+# Palan reunoille jätetään marginaali, joka käsitellään ja heitetään pois:
+# liitännäinen tarvitsee kontekstia ennen kuin sen tulos vakiintuu.
+#
+# Mitattu ero kokonaisena käsiteltyyn, 60 s puhetta neljänä palana:
+# marginaali 0,5 s → -32,8 dBFS, 2 s → -34,8 dBFS, 5 s → -42,5 dBFS, kun
+# signaali itse on -15,6 dBFS. Sauma on puhdas (-50…-70 dBFS) — jäljelle
+# jäävä ero on liitännäisen oma hidas sopeutuminen, ei napsahdus.
+#
+# Oikealla 20 minuutin tiedostolla kuutena palana ero on puhelohkoissa
+# 25,7 dB signaalin alle ja hiljaisissa kohdissa -84 dBFS absoluuttisesti.
+# Se ei ole nolla, ja siksi tämä on säädettävissä:
+# ``AudioSettings.plugin_workers``, jossa 1 tarkoittaa yhtenä palana.
+PIECE_MARGIN = 5.0
+# Tätä lyhyempää ei pilkota: marginaalit söisivät hyödyn.
+PIECE_MIN = 120.0
+
+
+def load_pool(path: str, params: dict | None = None, count: int = 1):
+    """Liitännäinen ``count`` kappaleena, tai ``None`` jos polkua ei ole.
+
+    Jokainen rinnakkainen pala tarvitsee oman instanssin: VST3-olio on
+    tilallinen eikä sitä voi ajaa kahdesta säikeestä yhtä aikaa.
+    """
+    if not path:
+        return None
+    return [load_plugin(path, params) for _ in range(max(1, count))]
+
+
+def apply_plugin(plugin, audio: np.ndarray, rate: int) -> np.ndarray:
+    """Liitännäinen koko tiedostoon. ``plugin`` on yksi olio tai lista.
+
+    Listana tiedosto pilkotaan yhtä moneen palaan ja palat ajetaan
+    rinnakkain omilla instansseillaan. Jokainen pala on oma täysi
+    ``reset=True``-ajonsa marginaaleineen — ei siis sama asia kuin
+    tiedoston syöttäminen liitännäiselle paloissa, joka lyhentäisi tuloksen
+    liitännäisen viiveen verran.
+
+    Pituus säilyy rakenteeltaan: tulos kirjoitetaan valmiiksi oikean
+    kokoiseen taulukkoon, ja jokaisen palan pituus tarkistetaan erikseen.
+    """
+    if plugin is None:
+        return audio
+    if not isinstance(plugin, (list, tuple)):
+        return plugin.process(audio, rate, reset=True)
+    pool = list(plugin)
+    frames = audio.shape[1]
+    pieces = min(len(pool), max(1, int(frames / rate / PIECE_MIN)))
+    if pieces < 2:
+        return pool[0].process(audio, rate, reset=True)
+
+    margin = int(PIECE_MARGIN * rate)
+    edges = [int(round(i * frames / pieces)) for i in range(pieces + 1)]
+    out = np.zeros_like(audio)
+    failures: list[Exception] = []
+
+    def one(index: int) -> None:
+        first, last = edges[index], edges[index + 1]
+        low, high = max(0, first - margin), min(frames, last + margin)
+        try:
+            done = pool[index].process(audio[:, low:high], rate, reset=True)
+            if done.shape[1] != high - low:
+                raise ChainError(
+                    t("audio.plugin_length", before=high - low, after=done.shape[1])
+                )
+            out[:, first:last] = done[:, first - low : first - low + (last - first)]
+        except Exception as exc:  # säie ei saa kaatua hiljaa
+            failures.append(exc)
+
+    threads = [threading.Thread(target=one, args=(i,)) for i in range(pieces)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    if failures:
+        raise failures[0]
+    return out
 
 
 def apply_parameters(plugin, params: dict | None) -> list[str]:
@@ -447,10 +557,11 @@ def process(
     #
     # ``reset=True`` on pakollinen. ``reset=False`` jättää liitännäisen viiveen
     # verran häntää pois — mitattuna 4641 näytettä dxRevivella — eli tulos on
-    # oikean kuuloinen mutta liian lyhyt. Samasta syystä tiedostoa ei käsitellä
-    # paloissa.
+    # oikean kuuloinen mutta liian lyhyt. Tiedostoa ei siksi koskaan syötetä
+    # liitännäiselle paloissa; ``apply_plugin``in rinnakkaiset palat ovat eri
+    # asia, jokainen niistä on oma täysi ajonsa.
     if plugin is not None:
-        audio = plugin.process(audio, rate, reset=True)
+        audio = apply_plugin(plugin, audio, rate)
         if audio.shape[1] != frames:
             raise ChainError(
                 t("audio.plugin_length", before=frames, after=audio.shape[1])

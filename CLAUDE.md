@@ -78,6 +78,31 @@ That correlation must stay an FFT: `np.correlate(..., "full")` is O(n²) and
 took 132 s on a 20-minute file — longer than the plug-in itself. A test fails
 if the order of growth comes back.
 
+The plug-in is 97 % of the run and uses **one** core: dxRevive measures 0.98
+cores and 7.25× realtime. The only way to reach the other cores is to run
+several instances at once, so `chain.apply_plugin` accepts a pool and cuts the
+file into as many pieces. This is not the forbidden chunking above: each piece
+is its own full `reset=True` run with a five-second margin that is processed
+and thrown away, and the result is written into an array of the original
+length, so the sample count cannot move. It is not free either — the pieces do
+not see each other's context, so the plug-in's slow adaptation differs slightly
+between them. Measured on a real 20-minute file: 168.4 s → 68.3 s, and the
+difference from the whole-file result is 25.7 dB below the signal in speech and
+−84 dBFS in the quiet parts. Because it is not zero, the piece count is
+adjustable (`plugin_workers`, where 1 means one run over the whole file), and
+because it changes the result it is in `FINGERPRINT_FIELDS`. The default is a
+share of the machine's cores, not a number written into the source: an
+eight-core laptop and a twenty-core workstation are different machines.
+
+The loudness target is the **program's**, not one stem's. Two microphones each
+normalised to −14 LUFS sum above it — measured on real material, −12.2 — because
+the speakers overlap and the microphones hear each other. `mix.program_trim`
+measures the sum of the raw microphones over a bounded window and takes the
+difference off every file. The window is anchored to the longest microphone
+file rather than the middle of the timeline: in a multicam the parts are
+consecutive, so the timeline's midpoint lands inside one part and the other
+part's files would measure as silence.
+
 Progress is weighted by file size, and the stage is the resolution: the plug-in
 processes a file in one piece and cannot be asked how far along it is. Shares
 in `chain.STAGES_*` are measured, not guessed. Processing also logs each file
@@ -100,6 +125,17 @@ The flat export has no angles, so there the twin is a connected clip with
 room tone: turning processing on must not move the microphone the editor is
 looking at on lane −1. Only a processed track gets a twin.
 
+"Up to date" is a fingerprint, not a modification time. A processed file
+newer than its source proves nothing: the plug-in, its controls, the target
+level and the ducking depth never touch the source. Comparing times alone made
+the button skip every file, return before the first log line and leave the
+panel unchanged — indistinguishable from a broken button. `mix.is_fresh`
+compares `mix.fingerprint` against a stamp in `~/Library/Caches/autoraffkat/mix/`,
+and `FINGERPRINT_FIELDS` is written out by hand so a new setting cannot slip in
+or out unnoticed; a test fails if it does. An unknown stamp counts as stale.
+`adopt` uses the same test as `process`, or the export would use a file that
+processing has just decided to redo.
+
 The processed files stay on disk between sessions, but `MixResult` does not.
 `mix.adopt` reads what is already there — `stat` only — and it runs on load and
 again at export. Without it, exporting without pressing the button referenced
@@ -112,7 +148,7 @@ library doesn't do what its name promises, both measured:
 
 * `plugin.process(..., reset=False)` **shortens** the result by the plug-in's
   latency (4641 samples with dxRevive). Always use `reset=True`, and never
-  process a file in chunks.
+  feed one instance a file in chunks.
 * `pedalboard.Limiter` applies makeup gain: it lifted −20 LUFS to −15.8 and
   peaks to zero. It was replaced by `peak_guard`, a static attenuation that
   never raises.

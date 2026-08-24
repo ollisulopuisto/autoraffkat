@@ -23,6 +23,7 @@ käsitellystä äänestä laskettu päätös olisi huonompi.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import subprocess
@@ -79,10 +80,138 @@ def is_current(source: str, target: str) -> bool:
 
     Käsittely on hidas ja sama lähde tulee vastaan joka viennissä.
     Vanhentunut tunnistetaan muokkausajasta, kuten verhokäyrän välimuistissa.
+
+    Tämä on vasta puolet: sama lähde eri asetuksilla antaa eri tuloksen,
+    eikä se näy muokkausajassa mitenkään. Katso ``is_fresh``.
     """
     if not os.path.exists(target) or not os.path.exists(source):
         return False
     return os.path.getmtime(target) >= os.path.getmtime(source)
+
+
+# Asetukset joista lopputulos riippuu. ``enabled`` ja ``room_track``
+# päättävät tehdäänkö työtä lainkaan, eivät miltä tulos kuulostaa, joten ne
+# eivät ole mukana. Lista on tahallaan kirjoitettu auki eikä johdettu
+# kentistä: uusi säädin ei saa livahtaa mukaan tai pois huomaamatta, ja
+# ``test_fingerprint_covers_every_setting`` kaatuu jos niin käy.
+FINGERPRINT_FIELDS = (
+    "high_pass_hz",
+    "target_lufs",
+    "peak_threshold_db",
+    "leveler_threshold_db",
+    "declick",
+    "declick_sensitivity",
+    "plugin_path",
+    "plugin_params",
+    "duck",
+    "duck_db",
+    "duck_lookahead",
+    "duck_hold",
+    "duck_min_open",
+    "duck_dominance_db",
+    "duck_fade",
+    "duck_release",
+    "duck_min_closed",
+    "gain_db",
+    "room_db",
+    "program_target",
+    "plugin_workers",
+)
+
+# Kasvatetaan kun ketju itse muuttuu niin että vanha tulos ei enää vastaa
+# samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
+# ``CACHE_VERSION``:illa.
+FINGERPRINT_VERSION = 1
+
+
+def stamp_dir() -> Path:
+    """Käsittelyn jälkien hakemisto.
+
+    Erillään lähteen vierestä, koska tämä on välimuistia eikä käyttäjän
+    aineistoa: mikkikansioon ei kuulu tiedostoa jota kukaan ei ole pyytänyt.
+    Turvallista tyhjentää — tyhjennys maksaa yhden uuden käsittelyn.
+    """
+    root = Path.home() / "Library" / "Caches" / "autoraffkat" / "mix"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def fingerprint(job: dict, settings: AudioSettings) -> str:
+    """Mistä asetuksista tämä tiedosto syntyisi juuri nyt.
+
+    Mukana on lähde (polku, koko, muokkausaika), työn omat arvot ja
+    ``FINGERPRINT_FIELDS``. Liitännäisen muokkausaika on mukana siksi, että
+    päivitetty liitännäinen kuulostaa eri tavalta samoilla säätimillä.
+
+    Yksi asia jää ulkopuolelle tietoisesti: vaimennuksen ajoitus tulee samasta
+    puheentunnistuksesta kuin kuvan leikkaus, joten raitojen herkkyys vaikuttaa
+    siihen. Sitä ei ole täällä, koska ``adopt`` ajetaan latauksessa ja
+    viennissä pelkillä ``stat``-kutsuilla — ruudukon rakentaminen siinä kohtaa
+    rikkoisi juuri sen säännön, ettei tiedostojen lukeminen kuulu silmukkaan.
+    """
+    plugin_path = settings.plugin_path
+    try:
+        plugin_stamp = os.path.getmtime(plugin_path) if plugin_path else 0.0
+    except OSError:
+        plugin_stamp = 0.0
+    try:
+        st = os.stat(job["source"])
+        source = [os.path.abspath(job["source"]), st.st_size, st.st_mtime_ns]
+    except OSError:
+        source = [os.path.abspath(job["source"]), 0, 0]
+    raw = {
+        "version": FINGERPRINT_VERSION,
+        "source": source,
+        "plugin_mtime": plugin_stamp,
+        "job": {
+            key: job.get(key)
+            for key in ("target_lufs", "gain_db", "speech", "mono", "bit_depth")
+        },
+        "settings": {name: getattr(settings, name) for name in FINGERPRINT_FIELDS},
+    }
+    text = json.dumps(raw, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha1(text.encode("utf-8")).hexdigest()
+
+
+def _stamp_path(target: str) -> Path:
+    key = hashlib.sha1(os.path.abspath(target).encode("utf-8")).hexdigest()
+    return stamp_dir() / f"{key}.txt"
+
+
+def read_stamp(target: str) -> str:
+    """Millä asetuksilla levyllä oleva tiedosto tehtiin, tai ``""``."""
+    try:
+        return _stamp_path(target).read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def write_stamp(job: dict, settings: AudioSettings) -> None:
+    """Merkitsee millä asetuksilla juuri valmistunut tiedosto tehtiin."""
+    try:
+        _stamp_path(job["target"]).write_text(
+            fingerprint(job, settings), encoding="utf-8"
+        )
+    except OSError:
+        # Merkinnän puuttuminen maksaa yhden turhan käsittelyn, ei tulosta.
+        pass
+
+
+def is_fresh(job: dict, settings: AudioSettings) -> bool:
+    """Kelpaako levyllä oleva tulos sellaisenaan.
+
+    Pelkkä muokkausaika ei riitä, ja ero on juuri se joka sai painikkeen
+    näyttämään rikkinäiseltä: liitännäisen vaihto, sen säätimet, tavoitetaso
+    tai vaimennuksen syvyys eivät koske lähdetiedostoon mitenkään, joten
+    ``is_current`` piti vanhaa tulosta ajan tasalla ja käsittely palasi
+    hiljaa tekemättä mitään.
+
+    Tuntematon merkintä on vanhentunut: käsitelty tiedosto jonka
+    syntyhistoriaa ei tiedetä voi olla mistä tahansa asetuksista.
+    """
+    if not is_current(job["source"], job["target"]):
+        return False
+    return read_stamp(job["target"]) == fingerprint(job, settings)
 
 
 def weight_of(path: str) -> float:
@@ -214,6 +343,9 @@ class MixResult:
     # nosto nostaa myös pohjakohinaa eikä sitä saa tehdä huomaamatta.
     gains: dict[str, float] = field(default_factory=dict)
     processed: int = 0
+    # Mitattu ohjelmatrimmi, näytetään käyttäjälle: se selittää miksi
+    # yksittäinen stemi mittaa tavoitteen alle.
+    program_trim: float = 0.0
     skipped: int = 0
 
     @property
@@ -296,6 +428,121 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
     return jobs
 
 
+# Ohjelmatrimmin mittausikkuna. Trimmi on tilastollinen suure — kuinka paljon
+# puhujat menevät päällekkäin ja kuinka paljon mikit kuulevat toisiaan — eikä
+# se muutu jakson aikana niin paljon että koko jakson lukeminen kannattaisi.
+# Kaksitoista minuuttia keskeltä maksaa muutaman sekunnin.
+PROGRAM_WINDOW = 720.0
+
+# Trimmiä ei sallita rajattomasti kumpaankaan suuntaan: se on korjaus
+# päällekkäisyyteen, ei toinen normalisointi. Kuudesta desibelistä ylöspäin
+# olisi kyse mittausvirheestä, ei summasta.
+MAX_PROGRAM_TRIM = 6.0
+
+
+def _item_span(item) -> float:
+    """Median kokonaiskesto aikajanalla, ikkunan ankkurin valintaan."""
+    return sum(float(p.duration) for p in item.placements)
+
+
+def program_trim(jobs: list[dict], settings: AudioSettings) -> float:
+    """Kuinka paljon mikkien summa on tavoitteen yli, desibeleinä (≤ 0).
+
+    Tavoitetaso on **ohjelman** taso, ei yhden stemin. Kaksi -14 LUFS:n
+    mikkiä ei summaudu -14:ään: tällä aineistolla mitattu summa oli -12,3.
+    Ero ei ole 3 dB (silloin molemmat puhuisivat koko ajan) eikä 0 dB
+    (silloin toinen mikki olisi täysin hiljaa toisen puhuessa), joten se
+    mitataan eikä arvata.
+
+    Mitataan raa'asta äänestä ennen käsittelyä ja rajatusta ikkunasta.
+    Tarkka vastaus vaatisi koko ohjelman käsittelyn ensin ja jokaisen
+    tiedoston kirjoittamisen toiseen kertaan — noin viidenneksen lisää
+    aikaa — ja ero on murto-osa desibeliä. Lopullinen taso asetetaan
+    Final Cutissa joka tapauksessa.
+
+    Ikkuna on aikajanan aikaa, koska summa on aikajanalla. Tiedostoaika
+    lasketaan esiintymistä samalla kaavalla kuin ``closed_ranges``:issa.
+    """
+    from pedalboard.io import AudioFile
+
+    mics = [
+        job
+        for job in jobs
+        if job.get("speech")
+        and job.get("item") is not None
+        and os.path.exists(job["source"])
+        and os.path.splitext(job["source"])[1].lower() in READABLE
+    ]
+    if len(mics) < 2:
+        # Yksi mikki *on* ohjelma: sen oma taso on jo oikea.
+        return 0.0
+
+    # Ikkuna ankkuroidaan pisimpään mikkitiedostoon eikä koko aikajanan
+    # keskelle: monikamerassa osat ovat peräkkäin, ja aikajanan keskikohta
+    # osuu yhteen osaan — toisen osan tiedostot mittautuisivat hiljaisiksi
+    # ja koko mittaus kaatuisi siihen. Saman osan mikit ovat aina päällekkäin.
+    anchor = max((job["item"] for job in mics), key=_item_span)
+    low, high = float(anchor.timeline_start), float(anchor.timeline_end)
+    span = min(PROGRAM_WINDOW, high - low)
+    if span <= 1.0:
+        return 0.0
+    middle = (low + high) / 2
+    window = (middle - span / 2, middle + span / 2)
+
+    rate = 0
+    voices = 0
+    total: np.ndarray | None = None
+    for job in mics:
+        item = job["item"]
+        with AudioFile(job["source"]) as handle:
+            if rate and handle.samplerate != rate:
+                # Eri näytetaajuudet vaatisivat uudelleennäytteistyksen.
+                # Trimmi on valinnainen tarkennus, ei syy hidastaa ajoa.
+                _log("ohjelmatrimmi ohitettu: mikeillä eri näytetaajuus")
+                return 0.0
+            rate = handle.samplerate
+            if total is None:
+                total = np.zeros(int(span * rate), dtype=np.float32)
+            here = np.zeros_like(total)
+            for placement in item.placements:
+                first = max(window[0], float(placement.offset))
+                last = min(window[1], float(placement.end))
+                if last <= first:
+                    continue
+                base = float(placement.start - item.asset_start - placement.offset)
+                start = int(round((base + first) * rate))
+                frames = int(round((last - first) * rate))
+                if start < 0 or frames <= 0 or start >= handle.frames:
+                    continue
+                frames = min(frames, handle.frames - start)
+                handle.seek(start)
+                block = handle.read(frames).mean(axis=0)
+                at = int(round((first - window[0]) * rate))
+                end = min(len(here), at + len(block))
+                if end > at:
+                    here[at:end] = block[: end - at]
+        measured = chain.loudness(here, rate)
+        if measured is None:
+            # Tämä mikki ei ole äänessä tässä ikkunassa — toisen osan
+            # tiedosto tai hiljainen kohta. Se ei ole virhe eikä se lisää
+            # summaan mitään.
+            continue
+        # Sama nosto jonka käsittely tekee: summa mitataan siitä mitä
+        # aikajanalle on tulossa, ei siitä mitä levyllä on nyt.
+        total += here * float(10 ** ((settings.target_lufs - measured) / 20))
+        voices += 1
+
+    if voices < 2 or total is None:
+        return 0.0
+    summed = chain.loudness(total, rate)
+    if summed is None:
+        return 0.0
+    trim = float(settings.target_lufs - summed)
+    trim = round(max(-MAX_PROGRAM_TRIM, min(0.0, trim)), 2)
+    _log(f"ohjelmatrimmi {trim:+.2f} dB (summa {summed:.2f} LUFS)")
+    return trim
+
+
 # Tiedoston työ vaiheittain: luku ja kirjoitus ovat gigatavun tiedostolla
 # oikeaa aikaa, ketju on loput. Ketjun sisäinen jako on ``chain.STAGES_*``.
 READ_SHARE = 0.08
@@ -310,6 +557,7 @@ def _run_one(
     masks: dict | None = None,
     program_start: float = 0.0,
     stage=None,
+    trim_db: float = 0.0,
 ) -> float:
     """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston.
 
@@ -338,7 +586,7 @@ def _run_one(
         audio,
         rate,
         settings,
-        job.get("gain_db", 0.0),
+        job.get("gain_db", 0.0) + trim_db,
         job.get("speech", True),
         job.get("target_lufs"),
         plugin,
@@ -393,6 +641,7 @@ def _run_one(
             )
         )
     os.replace(tmp, job["target"])
+    write_stamp(job, settings)
     report("write", READ_SHARE + CHAIN_SHARE + WRITE_SHARE)
     return info.gain_db
 
@@ -407,13 +656,15 @@ def adopt(timeline, roles, settings: AudioSettings) -> MixResult:
     jo tehty eikä sille ole enää muuta lähdettä.
 
     Pelkkiä ``stat``-kutsuja: ei lue ääntä eikä lataa liitännäistä. Vanhaa
-    ei oteta: ``is_current`` vertaa muokkausaikoja kuten ``process``.
+    ei oteta: ``is_fresh`` vertaa muokkausajan lisäksi asetuksia, samoin
+    kuin ``process`` — muuten vienti käyttäisi tiedostoa jonka käsittely
+    juuri totesi vanhentuneeksi.
     """
     result = MixResult()
     if not settings.enabled:
         return result
     for job in _jobs(timeline, roles, settings):
-        if os.path.exists(job["source"]) and is_current(job["source"], job["target"]):
+        if os.path.exists(job["source"]) and is_fresh(job, settings):
             result.skipped += 1
             _record(result, job)
     return result
@@ -498,27 +749,42 @@ def process(
 
     jobs = _jobs(timeline, roles, settings)
     if not jobs:
+        _log("ei käsiteltäviä raitoja")
         return result
 
     todo = []
     for job in jobs:
         if not os.path.exists(job["source"]):
             result.errors[job["key"]] = t("audio.source_missing", path=job["source"])
-        elif is_current(job["source"], job["target"]):
+        elif is_fresh(job, settings):
+            _log(f"ohitetaan {job['name']}: ajan tasalla")
             result.skipped += 1
             _record(result, job)
         else:
             todo.append(job)
     if not todo:
+        # Ilman tätä riviä painike näyttää rikkinäiseltä: ei lokia, ei
+        # palkkia, ei uusia tiedostoja — eikä mitään mikä kertoisi että ajo
+        # todella tapahtui ja oli valmis ennen kuin se alkoi.
+        _log(f"ei mitään tehtävää: {len(jobs)} tiedostoa on jo ajan tasalla")
         return result
 
     try:
-        plugin = chain.load_plugin(settings.plugin_path, settings.plugin_params)
+        workers = chain.worker_count(settings.plugin_workers)
+        plugin = chain.load_pool(
+            settings.plugin_path, settings.plugin_params, workers
+        )
+        if plugin is not None and workers > 1:
+            _log(f"liitännäinen {workers} rinnakkaisena palana")
     except ChainError as exc:
         result.errors["plugin"] = str(exc)
         return result
 
     masks = duck_masks(grid, settings)
+    # Mitataan kaikista mikeistä eikä vain käsiteltävistä: summa on koko
+    # ohjelma riippumatta siitä mikä tiedosto sattuu olemaan jo valmis.
+    trim = program_trim(jobs, settings) if settings.program_target else 0.0
+    result.program_trim = trim
     started = time.perf_counter()
     total_weight = sum(job["weight"] for job in todo) or 1.0
     behind = 0.0  # jo valmiiden tiedostojen paino
@@ -561,7 +827,7 @@ def process(
             )
         try:
             result.gains[job["key"]] = _run_one(
-                job, settings, plugin, masks, program_start, stage
+                job, settings, plugin, masks, program_start, stage, trim
             )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)

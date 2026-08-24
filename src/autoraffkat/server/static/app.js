@@ -838,12 +838,48 @@ function renderAudio() {
   loadPlugins();
   if (audio.plugin_path) renderPluginParams(host, audio);
 
+  /* Liitännäinen käyttää yhtä ydintä ja on 97 % käsittelyn ajasta, joten
+     palojen määrä on ainoa säädin joka vaikuttaa kestoon. Yläraja on koneen
+     ytimet: useampi pala ei ole nopeampi, vain lyhyempi ja muistisyöpömpi.
+     Nolla on automaattinen, ykkönen tarkoittaa yhtenä palana. */
+  if (audio.plugin_path) {
+    const cores = state.cores || 8;
+    host.append(knob({
+      key: 'plugin_workers',
+      label: T('audio.workers'),
+      min: 0,
+      max: cores,
+      step: 1,
+      zero: T('audio.workersAuto', { n: state.workers_auto || 1 }),
+    }, audio.plugin_workers || 0, (v) => {
+      audio.plugin_workers = v;
+      schedule();
+    }));
+  }
+
   AUDIO_KNOBS().forEach((spec) => {
     host.append(knob(spec, audio[spec.key], (v) => {
       audio[spec.key] = v;
       schedule();
     }));
   });
+
+  /* Tavoitetaso koskee ohjelmaa eikä yhtä stemiä: kaksi tavoitteeseen
+     normalisoitua mikkiä summautuu sen yli. Ruutu on heti tavoitetason
+     perässä, koska se kertoo mitä tavoite tarkoittaa. */
+  const program = document.createElement('label');
+  program.className = 'check';
+  const programBox = document.createElement('input');
+  programBox.type = 'checkbox';
+  programBox.checked = !!audio.program_target;
+  programBox.addEventListener('change', () => {
+    audio.program_target = programBox.checked;
+    renderAudio();
+    schedule(0);
+  });
+  program.append(programBox, Object.assign(document.createElement('span'),
+    { textContent: T('audio.programTarget') }));
+  host.append(program);
 
   const ess = document.createElement('label');
   ess.className = 'check';
@@ -959,8 +995,13 @@ function renderAudio() {
       ? T('audio.readyGain', { low: Math.min(...gains).toFixed(1),
                                high: Math.max(...gains).toFixed(1) })
       : '';
+    /* Mitattu trimmi näkyviin: ilman sitä stemi mittaa tavoitteen alle ja
+       se näyttää virheeltä. */
+    const trim = info.program_trim
+      ? T('audio.readyProgram', { db: info.program_trim.toFixed(1) })
+      : '';
     note.textContent = T('audio.ready', { n: info.ready })
-      + (info.room ? T('audio.readyRoom', { n: info.room }) : '') + lift
+      + (info.room ? T('audio.readyRoom', { n: info.room }) : '') + lift + trim
       + T('audio.readyTail');
   } else {
     note.textContent = T('audio.idle');
@@ -1166,7 +1207,7 @@ async function runMix() {
       return;
     }
     banner('');
-    watchMix();
+    watchMix(true);
   } catch (err) {
     banner(T('audio.failed', { error: err.message }), true);
   }
@@ -1179,13 +1220,22 @@ function watchMixIfRunning() {
   if (state.mix && state.mix.progress && state.mix.progress.running) watchMix();
 }
 
-function watchMix() {
+function watchMix(announce) {
   clearInterval(mixTimer);
   mixTimer = setInterval(async () => {
     const data = await (await fetch('/api/state')).json();
     state.mix = data.mix;
     renderAudio();
-    if (!data.mix.progress.running) clearInterval(mixTimer);
+    if (data.mix.progress.running) return;
+    clearInterval(mixTimer);
+    /* Ajo jolla ei ollut mitään tehtävää on ohi ennen ensimmäistä kyselyä:
+       palkki ei ehdi näkyä eikä teksti muutu. Ilman tätä painike näyttää
+       siltä ettei se tee mitään. */
+    if (!announce) return;
+    if (data.mix.errors && data.mix.errors.length) return;
+    /* `processed` on tämän ajon luku: `run_mix` korvaa koko tuloksen. */
+    const done = data.mix.processed || 0;
+    banner(done > 0 ? T('audio.done', { n: done }) : T('audio.nothingToDo'));
   }, 700);
 }
 

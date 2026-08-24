@@ -260,6 +260,15 @@ class AppState:
             a.declick = bool(raw["declick"])
         if "duck" in raw:
             a.duck = bool(raw["duck"])
+        if "program_target" in raw:
+            a.program_target = bool(raw["program_target"])
+        if "plugin_workers" in raw:
+            # Rajaus on ``chain.worker_count``issa; tässä riittää ettei
+            # kenttään päädy roskaa eikä negatiivista.
+            try:
+                a.plugin_workers = max(0, int(raw["plugin_workers"]))
+            except (TypeError, ValueError):
+                a.plugin_workers = 0
         for name in (
             "duck_db",
             "duck_lookahead",
@@ -549,11 +558,20 @@ def _state_json(state: AppState) -> dict:
         "language": state.language,
         "languages": list(LANGUAGES),
         "audio": state.settings.audio.to_json(),
+        # Palojen ylärajan ja automaattivalinnan on oltava käyttöliittymässä
+        # sama luku kuin käsittelyssä: se riippuu koneesta, ei asetuksista.
+        "cores": os.cpu_count() or 1,
+        "workers_auto": chain.worker_count(),
         "mix": {
             "progress": state.mix_progress,
             "ready": len(state.mix_result.replacements),
             "room": len(state.mix_result.room),
             "skipped": state.mix_result.skipped,
+            # Käyttöliittymä erottaa tästä kaksi tilannetta jotka näyttävät
+            # muuten samalta: ajo joka teki työtä ja ajo jolla ei ollut
+            # mitään tehtävää.
+            "processed": state.mix_result.processed,
+            "program_trim": state.mix_result.program_trim,
             "gains": state.mix_result.gains,
             "errors": list(state.mix_result.errors.values()),
         },

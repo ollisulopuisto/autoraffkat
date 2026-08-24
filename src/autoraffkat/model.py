@@ -212,9 +212,9 @@ class AudioSettings:
     # Jokainen mikki nostetaan ensin samaan äänekkyyteen. Ilman tätä
     # kompressorin kynnykset ovat mielivaltaisia: käsittelemätön podcast-mikki
     # on helposti -40 LUFS, jolloin -18 dB:n kynnys ei ylity kertaakaan.
-    # Tavoite on **stemin** eikä ohjelman: yksi puhuja kerrallaan äänessä, joten
-    # summa osuu lähelle samaa lukemaa ja lopullinen taso asetetaan vasta
-    # Final Cutissa.
+    # Tavoite koskee ohjelmaa eikä yhtä stemiä, ks. ``program_target``: kaksi
+    # tavoitteeseen normalisoitua mikkiä summautuu sen yli, tällä aineistolla
+    # mitattuna 1,7 dB. Lopullinen taso asetetaan silti Final Cutissa.
     target_lufs: float = -20.0
     peak_threshold_db: float = -12.0  # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
@@ -260,6 +260,19 @@ class AudioSettings:
     duck_release: float = 0.40  # paluu, s
     duck_min_closed: float = 0.60  # tätä lyhyempää vaimennusta ei tehdä, s
     gain_db: float = 0.0  # yhteinen trimmi kaikille mikeille
+    # Tavoitetaso koskee ohjelmaa, ei yhtä stemiä. Kaksi -14 LUFS:n mikkiä
+    # summautuu tämän yli — mitattuna -12,3 — koska puhujat menevät osittain
+    # päällekkäin ja mikit kuulevat toisiaan. Päällä summa osuu tavoitteeseen
+    # ja stemit jäävät sen verran hiljemmalle; pois päältä jokainen tiedosto
+    # osuu tavoitteeseen yksinään. Ks. ``mix.program_trim``.
+    program_target: bool = True
+    # Liitännäinen käyttää yhtä ydintä, joten tiedosto pilkotaan tämän verran
+    # paloiksi jotka ajetaan rinnakkain omilla instansseillaan. ``0`` on
+    # automaattinen eli osuus koneen ytimistä (``chain.WORKER_SHARE``), ``1``
+    # tarkoittaa yhtenä palana — silloin tulos on tarkalleen se minkä
+    # liitännäinen antaa yhdellä ajolla. Marginaalit ja mitattu ero ovat
+    # ``chain.apply_plugin``issa.
+    plugin_workers: int = 0
     room_track: str = ""  # tilaäänen raita-avain, "" = ei tilaääntä
     room_db: float = -18.0  # tilaääni näin paljon puhetta hiljempaa
 
