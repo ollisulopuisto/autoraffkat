@@ -221,6 +221,103 @@ def test_two_hours_is_fast():
     assert elapsed < 250, f"päätös kesti {elapsed:.0f} ms"
 
 
+def test_three_speakers_each_get_their_own_close_up():
+    """Logiikka ei ole sidottu kahteen puhujaan.
+
+    Kaikki mikä erottaa puhujat — hallitsevuus, päällekkäisyys, vaimennus —
+    on listoja eikä pareja, mutta se on eri asia kuin että se olisi ajettu
+    kolmella. Tämä ajaa.
+    """
+    n = int(40.0 / HOP)
+
+    def lane(spans, name, key, level=-28.0):
+        on = np.zeros(n, dtype=bool)
+        db = np.full(n, -60.0, dtype=np.float32)
+        for start, end in spans:
+            on[int(start / HOP) : int(end / HOP)] = True
+            db[int(start / HOP) : int(end / HOP)] = level
+        return SpeakerLanes(name, db, on, key)
+
+    grid = Grid(
+        n=n,
+        program_start=0.0,
+        speakers=[
+            lane([(2, 8)], "A", "CA"),
+            lane([(10, 16)], "B", "CB"),
+            lane([(18, 24)], "C", "CC"),
+        ],
+        wide_key="W",
+    )
+    g = Globals(min_shot=1.0, lead=0.0, confirm=0.2, min_overlap=0.4, wide_every=0.0)
+    assert angles(decide(grid, g).segments) == [
+        (0.0, "W"), (2.0, "CA"), (10.0, "CB"), (18.0, "CC"),
+    ]
+
+
+def test_three_speakers_overlapping_go_wide():
+    """Päällekkäisyyssääntö koskee mitä tahansa puhujajoukkoa, ei paria."""
+    n = int(40.0 / HOP)
+
+    def lane(spans, name, key, level=-28.0):
+        on = np.zeros(n, dtype=bool)
+        db = np.full(n, -60.0, dtype=np.float32)
+        for start, end in spans:
+            on[int(start / HOP) : int(end / HOP)] = True
+            db[int(start / HOP) : int(end / HOP)] = level
+        return SpeakerLanes(name, db, on, key)
+
+    grid = Grid(
+        n=n,
+        program_start=0.0,
+        speakers=[
+            lane([(2, 8), (12, 18)], "A", "CA"),
+            lane([(12, 18)], "B", "CB"),
+            lane([(12, 18)], "C", "CC"),
+        ],
+        wide_key="W",
+    )
+    g = Globals(min_shot=1.0, lead=0.0, confirm=0.2, min_overlap=0.4, wide_every=0.0,
+                overlap_rule="wide")
+    picked = angles(decide(grid, g).segments)
+    # Kolmen puhuessa yhtä aikaa kuva on laajassa, ei kenessäkään heistä.
+    at_overlap = [key for at, key in picked if 12.0 <= at < 18.0]
+    assert "W" in at_overlap or picked[-1][1] == "W", picked
+
+
+def test_ducking_covers_every_speaker(tmp_path):
+    """Vaimennusmaskit rakennetaan puhujittain, ei parina."""
+    from autoraffkat.audio.mix import duck_masks
+    from autoraffkat.model import AudioSettings
+
+    n = int(30.0 / HOP)
+
+    def lane(spans, name, key):
+        on = np.zeros(n, dtype=bool)
+        db = np.full(n, -60.0, dtype=np.float32)
+        for start, end in spans:
+            on[int(start / HOP) : int(end / HOP)] = True
+            db[int(start / HOP) : int(end / HOP)] = -28.0
+        return SpeakerLanes(name, db, on, key)
+
+    grid = Grid(
+        n=n,
+        program_start=0.0,
+        speakers=[
+            lane([(2, 9)], "A", "CA"),
+            lane([(11, 18)], "B", "CB"),
+            lane([(20, 27)], "C", "CC"),
+        ],
+        wide_key="W",
+    )
+    masks = duck_masks(grid, AudioSettings(duck=True))
+    assert set(masks) == {"A", "B", "C"}
+    # Jokainen on kiinni jonkun toisen puhuessa ja auki omalla vuorollaan.
+    for name, own in (("A", (2, 9)), ("B", (11, 18)), ("C", (20, 27))):
+        mask = masks[name]
+        assert not mask[int(own[0] / HOP) + 20 : int(own[1] / HOP) - 20].any(), name
+        assert mask.any(), name
+
+
 # ------------------------------------------------- pitkä puheenvuoro
 
 
