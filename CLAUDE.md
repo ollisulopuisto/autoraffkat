@@ -52,6 +52,17 @@ is the entire reason a track key is derived from the filename rather than the
 angle name or `angleID`: in a series the cameras stay, the angle numbers do
 not. Change how the key is derived and inheritance stops working silently.
 
+Ducking must never fail quietly. It depends on the envelopes, which are
+computed in a background thread on load, and pressing the button first left
+the grid unbuilt and the masks empty with nothing said. The setting read
+-9 dB and the output had none. Processing now waits for the analysis, and
+"the setting is on and no microphone matched a mask" is an error, not a
+silence — because the symptom is not silence either: independent
+normalisation lifts each microphone's bleed of the other speaker, separation
+drops from 19.2 dB to 15.2, and the same voice arriving twice a few
+milliseconds apart is a comb filter. It is audible only when both tracks
+play together, which is to say only after the export.
+
 ## Sensitivity and gain are not the same thing
 
 Sensitivity is a threshold above the noise floor, so gain does not move it —

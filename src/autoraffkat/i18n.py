@@ -126,6 +126,21 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Asetuksia ei voitu tallentaa: {error}",
         "en": "Could not save the settings: {error}",
     },
+    "audio.duck_waiting": {
+        "fi": "vaimennus odottaa verhokäyriä…",
+        "en": "ducking is waiting for the envelopes…",
+    },
+    "audio.duck_no_analysis": {
+        "fi": "Vaimennus jäi pois: verhokäyriä ei ollut valmiina. "
+        "Aja käsittely uudestaan kun analyysi on valmis.",
+        "en": "Ducking was skipped: the envelopes were not ready. "
+        "Process again once the analysis has finished.",
+    },
+    "audio.duck_none": {
+        "fi": "Vaimennus jäi pois: yhdellekään mikille ei syntynyt maskia "
+        "({speakers}).",
+        "en": "Ducking was skipped: no microphone got a mask ({speakers}).",
+    },
     "export.audio_running": {
         "fi": "Äänen käsittely on kesken, joten {missing}/{total} "
         "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "

@@ -803,6 +803,23 @@ def process(
         return result
 
     masks = duck_masks(grid, settings)
+    if settings.duck:
+        # Maskit avaimetaan puhujan nimellä ja työt hakevat samalla nimellä.
+        # Hiljainen avainten eroaminen olisi juuri se vika joka on jo kerran
+        # jäänyt huomaamatta: asetus päällä, tuloksessa ei mitään.
+        wanted = {job.get("speaker") for job in jobs if job.get("speech")}
+        matched = wanted & set(masks)
+        if not matched:
+            result.errors["duck"] = t(
+                "audio.duck_none", speakers=", ".join(sorted(w for w in wanted if w))
+            )
+            _log(result.errors["duck"])
+        else:
+            covered = sum(int(masks[name].sum()) for name in matched)
+            _log(
+                f"vaimennus: {len(matched)}/{len(wanted)} mikkiä, "
+                f"{covered * HOP / 60:.1f} min vaimennettavaa"
+            )
     # Mitataan kaikista mikeistä eikä vain käsiteltävistä: summa on koko
     # ohjelma riippumatta siitä mikä tiedosto sattuu olemaan jo valmis.
     trim = program_trim(jobs, settings) if settings.program_target else 0.0

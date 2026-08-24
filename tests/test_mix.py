@@ -400,6 +400,35 @@ def test_force_processes_what_is_already_current(fixture_dir, monkeypatch, tmp_p
             stub.unlink(missing_ok=True)
 
 
+def test_ducking_that_matches_nothing_is_reported(fixture_dir, monkeypatch, tmp_path):
+    """Asetus päällä, tuloksessa ei mitään — se ei saa olla hiljainen tila.
+
+    Maskit avaimetaan puhujan nimellä ja työt hakevat samalla nimellä. Kerran
+    jo kävi niin, että vaimennus jäi kokonaan pois eikä mikään kertonut:
+    lopputuloksessa vuoto oli 4 dB kovempaa suhteessa suoraan ääneen, ja se
+    kuului kampasuodatuksena vasta kun molempia raitoja kuunteli yhdessä.
+    """
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
+    monkeypatch.setattr(mix.chain, "load_pool", lambda *a, **k: None)
+    monkeypatch.setattr(mix, "duck_masks", lambda grid, settings: {"Kukaan": None})
+
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    roles = resolve_roles(tl, tracks)
+    settings = AudioSettings(enabled=True, duck=True, program_target=False)
+    result = mix.process(tl, roles, settings)
+    assert "duck" in result.errors
+    assert "Host" in result.errors["duck"] or "host" in result.errors["duck"].lower()
+
+
 def test_readable_formats_pass_through(tmp_path):
     """WAV kelpaa sellaisenaan; purkuun ei mennä turhaan."""
     source = tmp_path / "a.wav"

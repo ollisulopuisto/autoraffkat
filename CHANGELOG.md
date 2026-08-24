@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.62] - 2026-08-25
+
+### Fixed
+- **Ducking Was Silently Skipped, and the Bleed Comb-Filtered**: playing two processed microphones together produced a flanging sound. It was not a sync problem — the files measure 0 samples of offset against their sources, everywhere, and the parallel pieces differ by at most 2 samples. It was the crosstalk. Each microphone is normalised to the same target independently, so the quieter one gets more gain, and that gain lifts the *other* speaker's bleed inside it: separation between direct sound and bleed fell from 19.2 dB to 15.2 dB, which is where a few milliseconds of acoustic path delay stops being inaudible and starts being a comb filter.
+
+  Ducking exists to prevent exactly this, and it had not run. The envelopes are computed in a background thread on load; pressing the button before that finished left `analysis` unset, the grid unbuilt and the masks empty — with no log line, no warning and no error. Measured in the output: the ducked track was **1.7 dB louder** during the other speaker's turn rather than 9 dB quieter. Processing now waits for the envelopes instead of skipping, says so while it waits, and reports it in the panel if they never arrive. It also logs how many microphones got a mask and how much material will be ducked, and treats "the setting is on and nothing matched" as an error rather than a silence.
+
 ## [v26.08.24.61] - 2026-08-24
 
 ### Added
