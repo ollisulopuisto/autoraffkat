@@ -399,6 +399,50 @@ def test_the_angle_carries_the_role_its_mc_source_names(fixture_dir):
         )
 
 
+def test_the_role_is_on_the_channel_source_not_only_the_attribute(
+    fixture_dir, validate_fcpxml
+):
+    """``audioRole`` yksin ei riitä monikameran kulmassa.
+
+    Final Cut ohittaa sen ja jättää kulman oletusaliroolille
+    «Dialogue-1» — mitattu tuomalla molemmat versiot sisään. Toimiva tapa on
+    ``<audio-channel-source>``, joka nimeää komponentin kanavittain. Ilman
+    sitä puhujakohtaisia rooleja ei ole, eikä ``mc-source``in nimeämää
+    roolia ole olemassa siinä kulmassa johon se viittaa.
+    """
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    replacements = {
+        k: f"/mix/{k[:-4]} [mix].wav" for k in tl.media_by_key() if k.endswith(".wav")
+    }
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 36.0)],
+        [("host Track1", "Host")],
+        Fraction(0),
+        Fraction(36),
+        "Kanavaroolit",
+        replacements=replacements,
+    )
+    root = ET.fromstring(xml)
+    named = {}
+    for src in root.iter("mc-source"):
+        source = src.find("audio-role-source")
+        if source is not None and source.get("role") != "dialogue.dialogue-1":
+            named[src.get("angleID")] = source.get("role")
+    assert named, "mikkikulmia ei löytynyt"
+
+    for angle in root.iter("mc-angle"):
+        role = named.get(angle.get("angleID"))
+        if not role:
+            continue
+        sources = list(angle.iter("audio-channel-source"))
+        assert sources, f"kulmalta {angle.get('name')!r} puuttuu audio-channel-source"
+        assert {s.get("role") for s in sources} == {role}
+        # Kanavat luetellaan assetin mukaan; monosta tulee "1".
+        assert all(s.get("srcCh") for s in sources)
+    validate_fcpxml(xml, "channel-roles.fcpxml")
+
+
 def test_raw_twin_only_appears_for_processed_tracks(fixture_dir):
     """Ilman käsittelyä ei ole mitään mistä varmistua: ei kaksosta."""
     _, xml = _multicam_cut(fixture_dir)

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.59] - 2026-08-24
+
+### Fixed
+- **Per-Speaker Roles Now Survive the Import**: `audioRole` on a multicam angle's clip is the obvious way to give it a role, and Final Cut ignores it — the angle stays on the default subrole `Dialogue-1`, which is where it puts every dialogue clip. The working mechanism is `<audio-channel-source>`, which names the component channel by channel. Established by importing both versions and looking: `audioRole` alone shows "Dialogue-1", `audio-channel-source` shows "Nyman". Both are written now, since that is how it was tested and the attribute costs nothing. The Audio Configuration inspector reads "Nyman, Wancke" instead of "Dialogue-1", which means per-speaker faders and role-based stem exports.
+
 ## [v26.08.24.58] - 2026-08-24
 
 ### Fixed

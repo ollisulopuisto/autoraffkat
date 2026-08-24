@@ -130,6 +130,13 @@ Audio Configuration, unticked. When something imports but does not behave,
 compare against a multicam Final Cut wrote itself; our reader accepts
 combinations the application never produces.
 
+A multicam angle's role comes from `<audio-channel-source>`, not from
+`audioRole`. Final Cut ignores the attribute there and leaves the angle on
+`dialogue.dialogue-1`; the channel source names the component and is honoured.
+Both are written, because that is how it was tested. Established by importing
+one version of each and reading the inspector — not from the DTD, which
+permits both and predicts neither.
+
 A subrole is only real if the angle carries it. The angles are copied from
 the source, so their audio keeps Final Cut's default `dialogue.dialogue-1`;
 writing a per-speaker subrole into `mc-source` alone points

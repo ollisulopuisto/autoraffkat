@@ -656,7 +656,7 @@ def _room_asset(source, res_id: str, path: str):
     Ajat peritään lähteestä, koska käsitelty tiedosto on näytteelleen saman
     pituinen. Kuvaan liittyvät tiedot jätetään pois: tilaääni on WAV.
     """
-    from xml.etree import ElementTree as ET
+    from xml.etree import ElementTree as ET  # paikallinen: vain tämä tarvitsee
 
     asset = ET.Element("asset")
     asset.set("id", res_id)
@@ -737,17 +737,20 @@ def _raw_twins(resources, redirects: dict[str, str]) -> dict[str, str]:
 def _stamp_angle_roles(resources, speakers: dict[str, str], raw_angles: dict) -> None:
     """Antaa mikkikulmalle sen oman aliroolin.
 
-    Kulma kopioidaan lähteestä, joten sen ääni jää oletusaliroolille — Final
-    Cut kirjoittaa siihen ``dialogue.dialogue-1``, jolle se sijoittaa kaikki
-    dialogit. ``mc-source``iin kirjoitetaan kuitenkin puhujakohtainen alirooli,
-    ja jos kulma ei kanna sitä, ``audio-role-source`` osoittaa rooliin jota
-    kulmassa ei ole.
+    Kaksi tapaa, ja vain toinen toimii. ``asset-clip``in ``audioRole`` on
+    se ilmeinen, ja monikameran kulmassa Final Cut **ohittaa sen**: kulman
+    ääni jää oletusaliroolille ``dialogue.dialogue-1``, jolle se sijoittaa
+    kaikki dialogit. Silloin ``mc-source``in ``audio-role-source`` osoittaa
+    rooliin jota kulmassa ei ole, eikä ``active="0"`` osu mihinkään.
 
-    Silloin ei tapahdu virhettä vaan ei mitään: ``active="0"`` ei osu
-    mihinkään, ja raaka kaksonen soi käsitellyn päällä. Sen kuulee vasta
-    kuuntelemalla — kaksi lähes samaa signaalia summautuu kampasuodattimeksi
-    — ja siihen mennessä leikkaus on jo tehty. Roolin nimi on rakennettava
-    tässä samalla tavalla kuin ``_mc_sources``issa, muuten ne eroavat taas.
+    Toimiva tapa on ``<audio-channel-source>``, joka nimeää komponentin
+    kanavittain. Mitattu tuomalla molemmat Final Cutiin: ``audioRole``
+    yksin näyttää «Dialogue-1», ``audio-channel-source`` näyttää «Nyman».
+    Molemmat kirjoitetaan silti, koska niin se testattiin eikä
+    ``audioRole``ista ole haittaa.
+
+    Roolin nimi rakennetaan tässä samalla tavalla kuin ``_mc_sources``issa,
+    muuten ne eroavat taas.
     """
     if not speakers:
         return
@@ -760,14 +763,36 @@ def _stamp_angle_roles(resources, speakers: dict[str, str], raw_angles: dict) ->
         if speaker:
             wanted[twin] = f"dialogue.{sanitize_role(f'{speaker} {RAW_TAG}')}"
 
+    from xml.etree import ElementTree as ET  # paikallinen: vain tämä tarvitsee
+
+    channels = {
+        a.get("id", ""): a.get("audioChannels") or "1" for a in resources.iter("asset")
+    }
     for multicam in resources.iter("multicam"):
         for angle in multicam.findall("mc-angle"):
             role = wanted.get(angle.get("angleID", ""))
             if not role:
                 continue
             for clip in angle.iter():
-                if clip.tag in ("asset-clip", "audio", "clip"):
-                    clip.set("audioRole", role)
+                if clip.tag not in ("asset-clip", "audio", "clip"):
+                    continue
+                clip.set("audioRole", role)
+                sources = clip.findall("audio-channel-source")
+                if sources:
+                    for source in sources:
+                        source.set("role", role)
+                    continue
+                try:
+                    count = max(1, int(channels.get(clip.get("ref", ""), "1")))
+                except ValueError:
+                    count = 1
+                source = ET.Element("audio-channel-source")
+                source.set("srcCh", ", ".join(str(i + 1) for i in range(count)))
+                source.set("role", role)
+                # Sisältömallin järjestys: audio-channel-source tulee
+                # markkereiden jälkeen ja suodattimien edelle. Kulman klipissä
+                # ei ole kumpiakaan, joten loppuun lisääminen riittää.
+                clip.append(source)
 
 
 def _next_resource_id(resources) -> str:
@@ -792,7 +817,7 @@ def _source_resources(
     Käsitelty ääni ohjataan paikalleen tätä kopiota muokkaamalla, jolloin
     kaikki muu säilyy koskemattomana.
     """
-    from xml.etree import ElementTree as ET
+    from xml.etree import ElementTree as ET  # paikallinen: vain tämä tarvitsee
 
     tree = ET.parse(path)
     root = tree.getroot()
