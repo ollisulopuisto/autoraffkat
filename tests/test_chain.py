@@ -4,6 +4,7 @@ Painopiste on niissä kolmessa asiassa jotka voivat rikkoa leikkauksen:
 pituus, siirtymä ja taso.
 """
 
+import time
 import numpy as np
 import pytest
 
@@ -74,6 +75,28 @@ def test_lag_finds_a_known_shift():
     assert chain.lag_samples(a, a, RATE) == 0
     shifted = np.concatenate([np.zeros(960, dtype=np.float32), a])[: a.size]
     assert chain.lag_samples(a, shifted, RATE) == pytest.approx(960, abs=48)
+
+
+def test_lag_is_not_quadratic():
+    """Siirtymän mittaus oli kalliimpi kuin koko muu ketju.
+
+    ``np.correlate(..., "full")`` laskee korrelaation suoraan, mikä on
+    O(n²): 20 minuutin tiedostolla se kesti mitattuna 132 sekuntia — enemmän
+    kuin dxRevive samasta tiedostosta — ja tunnin tiedostolla se olisi
+    varttitunti pelkkää tarkistusta. Tässä on viisi minuuttia, jolla suora
+    tapa vie kymmeniä sekunteja ja FFT alle sekunnin.
+    """
+    seconds = 300
+    rng = np.random.default_rng(7)
+    a = rng.standard_normal(RATE * seconds).astype(np.float32) * 0.2
+    shifted = np.concatenate([np.zeros(960, dtype=np.float32), a])[: a.size]
+    started = time.perf_counter()
+    lag = chain.lag_samples(a, shifted, RATE)
+    elapsed = time.perf_counter() - started
+    assert lag == pytest.approx(960, abs=48)
+    # Mitattu 0,05 s; raja on kahdessa sekunnissa, koska tässä ei mitata
+    # nopeutta vaan sitä ettei kertaluokka ole palannut neliölliseksi.
+    assert elapsed < 2.0, f"siirtymän mittaus kesti {elapsed:.1f} s"
 
 
 def _with_transient(freq, amp=0.4, at_s=3.0, seconds=6.0):

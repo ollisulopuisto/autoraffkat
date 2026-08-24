@@ -302,10 +302,21 @@ for (const lang of ['fi', 'en']) {
 
     /* Käsittelyn ollessa kesken piirto menee eri haaraan. */
     fresh.mix = Object.assign({}, fresh.mix, {
-      progress: { done: 1, total: 4, current: 'mic.wav', eta: 120, running: true },
+      progress: {
+        done: 1, total: 4, current: 'mic.wav', stage: 'plugin',
+        fraction: 0.42, eta: 120, running: true,
+      },
     });
     vm.runInContext('state = __state;', context);
     run(`${tag} renderAudio (kesken)`, () => context.renderAudio());
+
+    /* Ilman osuutta palkki on määrittelemättömässä tilassa: eri haara, ja
+       juuri se johon vanha palvelin tai kesken jäänyt kierros osuu. */
+    fresh.mix = Object.assign({}, fresh.mix, {
+      progress: { done: 0, total: 4, current: 'mic.wav', running: true },
+    });
+    vm.runInContext('state = __state;', context);
+    run(`${tag} renderAudio (osuus tuntematon)`, () => context.renderAudio());
   }
 }
 

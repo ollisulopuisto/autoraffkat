@@ -85,6 +85,20 @@ def is_current(source: str, target: str) -> bool:
     return os.path.getmtime(target) >= os.path.getmtime(source)
 
 
+def weight_of(path: str) -> float:
+    """Tiedoston osuus työstä, tiedostokokona.
+
+    Tiedostot ovat eri mittaisia — samassa jaksossa 20 minuuttia ja 64 —
+    joten «2/4» ei kerro paljonko on jäljellä eikä yhtä suuriksi oletettu
+    arvio osu lähellekään. Koko on saatavissa ilman ffprobea ja on samassa
+    muodossa olevilla tiedostoilla suoraan verrannollinen kestoon.
+    """
+    try:
+        return float(max(1, os.path.getsize(path)))
+    except OSError:
+        return 1.0
+
+
 def frame_count(path: str) -> int | None:
     """Äänen näytemäärä ffprobella, tai ``None`` jos ei selviä."""
     try:
@@ -254,6 +268,7 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
                             "target_lufs": settings.target_lufs,
                             "gain_db": settings.gain_db,
                             "speech": True,
+                            "weight": weight_of(item.path),
                         }
                     )
     if settings.room_track:
@@ -275,9 +290,17 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
                         # bittiä: monona ja 16 bitissä se on kuudesosa.
                         "mono": True,
                         "bit_depth": 16,
+                        "weight": weight_of(item.path),
                     }
                 )
     return jobs
+
+
+# Tiedoston työ vaiheittain: luku ja kirjoitus ovat gigatavun tiedostolla
+# oikeaa aikaa, ketju on loput. Ketjun sisäinen jako on ``chain.STAGES_*``.
+READ_SHARE = 0.08
+CHAIN_SHARE = 0.84
+WRITE_SHARE = 0.08
 
 
 def _run_one(
@@ -286,14 +309,26 @@ def _run_one(
     plugin,
     masks: dict | None = None,
     program_start: float = 0.0,
+    stage=None,
 ) -> float:
-    """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston."""
+    """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston.
+
+    ``stage(nimi, osuus)`` kertoo missä kohtaa tätä tiedostoa mennään.
+    Liitännäinen on kallein vaihe eikä kerro itsestään mitään kesken ajon,
+    joten vaiheen tarkkuus on se mitä edistymisestä on saatavissa — ja se
+    riittää siihen, ettei palkki seiso tunnin tiedoston ajan paikallaan.
+    """
     from pedalboard.io import AudioFile
+
+    def report(name: str, share: float) -> None:
+        if stage is not None:
+            stage(name, share)
 
     source = ensure_readable(job["source"])
     with AudioFile(source) as handle:
         audio = handle.read(handle.frames)
         rate = handle.samplerate
+    report("read", READ_SHARE)
     if audio.shape[1] == 0:
         raise MixError(t("audio.empty_file", name=os.path.basename(job["source"])))
     if job.get("mono") and audio.shape[0] > 1:
@@ -307,6 +342,7 @@ def _run_one(
         job.get("speech", True),
         job.get("target_lufs"),
         plugin,
+        stage=lambda name, frac: report(name, READ_SHARE + CHAIN_SHARE * frac),
     )
 
     # Vaimennus viimeisenä: sitä ennen mitattu taso koskee puhetta, ei
@@ -321,6 +357,7 @@ def _run_one(
             settings.duck_fade,
             settings.duck_release,
         )
+    report("duck", READ_SHARE + CHAIN_SHARE)
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
@@ -356,6 +393,7 @@ def _run_one(
             )
         )
     os.replace(tmp, job["target"])
+    report("write", READ_SHARE + CHAIN_SHARE + WRITE_SHARE)
     return info.gain_db
 
 
@@ -482,32 +520,94 @@ def process(
 
     masks = duck_masks(grid, settings)
     started = time.perf_counter()
+    total_weight = sum(job["weight"] for job in todo) or 1.0
+    behind = 0.0  # jo valmiiden tiedostojen paino
+
     for index, job in enumerate(todo):
+        _log(f"{index + 1}/{len(todo)} {job['name']}")
+        # Kello nollataan tiedostoittain: vaiheen kesto on tämän tiedoston
+        # vaiheen kesto, ei kulunut aika koko ajon alusta.
+        stage_at = time.perf_counter()
+
+        def stage(name: str, share: float, job=job, behind=behind) -> None:
+            """Yhden vaiheen valmistuminen: lokiin ja edistymiseen."""
+            nonlocal stage_at
+            now = time.perf_counter()
+            _log(f"    {name} {now - stage_at:.1f}s")
+            stage_at = now
+            fraction = (behind + job["weight"] * share) / total_weight
+            if progress is not None:
+                progress(
+                    {
+                        "done": index,
+                        "total": len(todo),
+                        "current": job["name"],
+                        "stage": name,
+                        "fraction": round(fraction, 4),
+                        "eta": _eta(started, fraction),
+                    }
+                )
+
         if progress is not None:
-            progress(index, len(todo), job["name"], _eta(started, index, len(todo)))
+            progress(
+                {
+                    "done": index,
+                    "total": len(todo),
+                    "current": job["name"],
+                    "stage": "read",
+                    "fraction": round(behind / total_weight, 4),
+                    "eta": _eta(started, behind / total_weight),
+                }
+            )
         try:
             result.gains[job["key"]] = _run_one(
-                job, settings, plugin, masks, program_start
+                job, settings, plugin, masks, program_start, stage
             )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)
+            _log(f"    VIRHE: {exc}")
+            behind += job["weight"]
             continue
+        _log(f"    valmis {result.gains[job['key']]:+.1f} dB")
+        behind += job["weight"]
         result.processed += 1
         _record(result, job)
+    _log(f"valmis {time.perf_counter() - started:.0f}s")
     if progress is not None:
-        progress(len(todo), len(todo), "", 0.0)
+        progress(
+            {
+                "done": len(todo),
+                "total": len(todo),
+                "current": "",
+                "stage": "",
+                "fraction": 1.0,
+                "eta": 0.0,
+            }
+        )
     return result
 
 
-def _eta(started: float, done: int, total: int) -> float:
+def _log(message: str) -> None:
+    """Käsittelyn kulku terminaaliin.
+
+    Käsittely on minuutteja pitkä ja tapahtuu taustasäikeessä, jossa mikään
+    ei näy. Kun se on hidas tai kaatuu, kysymys on aina sama: minkä tiedoston
+    kohdalla ja missä vaiheessa. Suomeksi kuten muukin koodi — tämä on
+    ylläpitäjän loki, ei käyttäjälle näkyvä teksti.
+    """
+    print(f"[ääni] {message}", flush=True)
+
+
+def _eta(started: float, fraction: float) -> float:
     """Arvio jäljellä olevasta ajasta sekunteina.
 
-    Liitännäinen voi olla hidas — dxRevive kulkee noin seitsemän kertaa
-    reaaliaikaa — joten pelkkä «2/4» ei kerro riittävästi.
+    Osuus painotetaan tiedostokoolla ja vaiheella, joten arvio on olemassa
+    jo ensimmäisen vaiheen jälkeen eikä vasta ensimmäisen tiedoston jälkeen —
+    ja 20 minuutin tiedosto ei enää lupaa samaa kuin 64 minuutin.
     """
-    if done <= 0:
+    if fraction <= 0.001:
         return 0.0
-    return (time.perf_counter() - started) / done * (total - done)
+    return (time.perf_counter() - started) / fraction * (1.0 - fraction)
 
 
 def _record(result: MixResult, job: dict) -> None:

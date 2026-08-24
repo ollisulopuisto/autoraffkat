@@ -941,10 +941,13 @@ function renderAudio() {
   if (busy) {
     const p = info.progress;
     /* Liitännäinen voi olla hidas — dxRevive noin 7x reaaliaika — joten
-       pelkkä 2/4 ei riitä kertomaan paljonko vielä menee. */
+       pelkkä 2/4 ei riitä kertomaan paljonko vielä menee. Palkki kertoo
+       painotetun osuuden, vaiheen nimi sen miksi se liikkuu hitaasti. */
+    host.append(progressBar(p.fraction));
     const eta = p.eta ? T('audio.left', { time: fmtLeft(p.eta) }) : '';
+    const stage = p.stage ? ' · ' + T(`audio.stage.${p.stage}`) : '';
     note.textContent = `${p.done}/${p.total}`
-      + (p.current ? ' · ' + p.current : '') + eta;
+      + (p.current ? ' · ' + p.current : '') + stage + eta;
   } else if (info.errors && info.errors.length) {
     note.className = 'warn';
     note.textContent = info.errors.join('\n');
@@ -963,6 +966,24 @@ function renderAudio() {
     note.textContent = T('audio.idle');
   }
   host.append(note);
+}
+
+/* Edistymispalkki. Osuus on painotettu tiedostokoolla ja vaiheella, joten se
+   liikkuu myös tunnin mittaisen tiedoston aikana. Ilman osuutta palkki on
+   määrittelemättömässä tilassa — silloin liike kertoo vain että jokin käy,
+   mikä on silti enemmän kuin liikkumaton palkki. */
+function progressBar(fraction) {
+  const wrap = document.createElement('div');
+  wrap.className = 'progress';
+  const fill = document.createElement('div');
+  if (typeof fraction === 'number' && fraction >= 0) {
+    fill.className = 'progress-fill';
+    fill.style.width = `${Math.min(100, Math.max(1, fraction * 100))}%`;
+  } else {
+    fill.className = 'progress-fill indeterminate';
+  }
+  wrap.append(fill);
+  return wrap;
 }
 
 /* Paluu tehdasasetuksiin. Säätimiä on kolmisenkymmentä ja ne periytyvät
@@ -1149,6 +1170,13 @@ async function runMix() {
   } catch (err) {
     banner(T('audio.failed', { error: err.message }), true);
   }
+}
+
+/* Käsittely on palvelimen taustasäie, ei selaimen. Sivun lataus tai
+   uudelleenluku kesken ajon jättäisi palkin paikalleen, joten seuranta
+   käynnistetään myös silloin kun se oli jo käynnissä ennen tuloa. */
+function watchMixIfRunning() {
+  if (state.mix && state.mix.progress && state.mix.progress.running) watchMix();
 }
 
 function watchMix() {
@@ -1549,6 +1577,7 @@ async function openXml(path) {
   banner('');
   renderHeader(); renderTracks(); renderGlobals();
   watchProgress();
+  watchMixIfRunning();
   if (state.progress && state.progress.ready) send();
 }
 
@@ -1562,6 +1591,7 @@ async function boot() {
   renderTracks();
   renderGlobals();
   watchProgress();
+  watchMixIfRunning();
   if (state.progress && state.progress.ready) send();
 }
 
@@ -1591,6 +1621,7 @@ $('reload').addEventListener('click', async () => {
   banner('');
   renderHeader(); renderTracks(); renderGlobals();
   watchProgress();
+  watchMixIfRunning();
   if (state.progress && state.progress.ready) setBusy(button, false);
 });
 window.addEventListener('resize', () => { drawBar(); renderRuler(); });

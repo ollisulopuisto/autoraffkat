@@ -74,6 +74,15 @@ The sample count must not change. The export references the processed file with
 the same times as the original. The check exists in two places and anything
 deviating is discarded. A shift is measured separately by cross-correlation,
 because length alone cannot detect a plug-in that reports its latency wrongly.
+That correlation must stay an FFT: `np.correlate(..., "full")` is O(n²) and
+took 132 s on a 20-minute file — longer than the plug-in itself. A test fails
+if the order of growth comes back.
+
+Progress is weighted by file size, and the stage is the resolution: the plug-in
+processes a file in one piece and cannot be asked how far along it is. Shares
+in `chain.STAGES_*` are measured, not guessed. Processing also logs each file
+and stage to the terminal — when it is slow or fails, the question is always
+which file and which stage.
 
 When an asset's `src` is redirected, the `<bookmark>` must be removed. It is a
 macOS file reference that beats `src`, and leaving it would mean Final Cut

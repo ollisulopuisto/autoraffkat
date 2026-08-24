@@ -6,6 +6,7 @@ tuoreuden tunnistus ja näytemäärän tarkistus.
 
 import os
 import pathlib
+import time
 
 import pytest
 
@@ -70,6 +71,82 @@ def test_adopt_takes_the_processed_files_already_on_disk(fixture_dir, monkeypatc
     finally:
         for stub in stubs:
             stub.unlink(missing_ok=True)
+
+
+def test_weight_follows_file_size(tmp_path):
+    """Yhtä suuriksi oletetut tiedostot antavat väärän arvion.
+
+    Samassa jaksossa on 20 minuutin ja 64 minuutin tiedosto, joten «2/4» ei
+    kerro mistään.
+    """
+    small = tmp_path / "a.wav"
+    big = tmp_path / "b.wav"
+    small.write_bytes(b"x" * 100)
+    big.write_bytes(b"x" * 400)
+    assert mix.weight_of(str(big)) == 4 * mix.weight_of(str(small))
+    # Puuttuva tiedosto ei saa kaataa eikä nollata jakajaa.
+    assert mix.weight_of(str(tmp_path / "ei-ole.wav")) > 0
+
+
+def test_eta_exists_before_the_first_file_is_done():
+    """Arvio ensimmäisestä vaiheesta, ei ensimmäisestä tiedostosta.
+
+    Vanha arvio laskettiin valmiista tiedostoista, joten se oli nolla koko
+    ensimmäisen — mahdollisesti kymmenen minuutin — tiedoston ajan.
+    """
+    started = time.perf_counter() - 10.0
+    # 20 % tehty kymmenessä sekunnissa -> noin 40 s jäljellä.
+    assert 35 < mix._eta(started, 0.2) < 45
+    # Nollaosuudella ei ole mitään mistä arvioida.
+    assert mix._eta(started, 0.0) == 0.0
+
+
+def test_progress_reports_stages_and_a_rising_fraction(fixture_dir, monkeypatch):
+    """Palkki ei saa seisoa yhden tiedoston ajan paikallaan.
+
+    Liitännäinen käsittelee tiedoston yhtenä palana eikä kerro itsestään
+    mitään, joten vaihe on se tarkkuus joka edistymisestä on saatavissa.
+    """
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    seen: list[dict] = []
+    monkeypatch.setattr(mix.chain, "load_plugin", lambda *a, **k: None)
+    try:
+        result = mix.process(
+            tl,
+            resolve_roles(tl, tracks),
+            AudioSettings(enabled=True, plugin_path=""),
+            progress=seen.append,
+        )
+    finally:
+        # Fixture on istunnon mittainen ja jaettu: valmis [mix] näyttäisi
+        # seuraaville testeille siltä että käsittely on jo tehty.
+        for item in tl.media:
+            if item.path and item.path.endswith(".wav"):
+                pathlib.Path(mix.sibling(item.path, mix.MIX_SUFFIX)).unlink(
+                    missing_ok=True
+                )
+    assert result.ok, result.errors
+    assert result.processed
+
+    stages = [s["stage"] for s in seen if s["stage"]]
+    assert "read" in stages and "write" in stages
+    # Osuus kasvaa monotonisesti ja päätyy täyteen: puolivalmis palkki
+    # jälkeenpäin olisi pahempi kuin ei palkkia ollenkaan.
+    fractions = [s["fraction"] for s in seen]
+    assert fractions == sorted(fractions)
+    assert fractions[-1] == 1.0
+    # Yhden tiedoston sisällä liikutaan: muuten «2/4» olisi kaikki mitä on.
+    within = {s["fraction"] for s in seen if s["done"] == 0}
+    assert len(within) > 2
 
 
 def test_is_current_follows_modification_time(tmp_path):

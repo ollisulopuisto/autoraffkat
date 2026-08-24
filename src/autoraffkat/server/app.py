@@ -95,6 +95,8 @@ class AppState:
             "done": 0,
             "total": 0,
             "current": "",
+            "stage": "",
+            "fraction": 0.0,
             "eta": 0,
             "running": False,
         }
@@ -333,7 +335,15 @@ class AppState:
         assert self.timeline is not None
         roles = resolve_roles(self.timeline, self.settings.tracks)
         self.mix_progress.update(
-            {"done": 0, "total": 0, "current": "", "eta": 0, "running": True}
+            {
+                "done": 0,
+                "total": 0,
+                "current": "",
+                "stage": "",
+                "fraction": 0.0,
+                "eta": 0,
+                "running": True,
+            }
         )
 
         # Vaimennus tarvitsee saman puheentunnistuksen kuin kuvan leikkaus.
@@ -352,10 +362,8 @@ class AppState:
                 )
                 return
 
-        def report(done: int, total: int, current: str, eta: float = 0.0) -> None:
-            self.mix_progress.update(
-                {"done": done, "total": total, "current": current, "eta": round(eta)}
-            )
+        def report(info: dict) -> None:
+            self.mix_progress.update(info | {"eta": round(info.get("eta", 0.0))})
 
         try:
             result = mix.process(
@@ -373,6 +381,7 @@ class AppState:
             traceback.print_exc()
         finally:
             self.mix_progress["running"] = False
+            self.mix_progress["stage"] = ""
 
     def compute(self) -> dict:
         """Ajaa päätöskerroksen ja kokoaa vastauksen käyttöliittymälle.

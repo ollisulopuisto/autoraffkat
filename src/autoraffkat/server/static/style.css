@@ -91,6 +91,38 @@ button.busy::before {
   button.busy::before { animation: none; border-top-color: currentColor; opacity: .5; }
 }
 
+/* Äänen käsittelyn edistyminen. Ajo kestää minuutteja ja tapahtuu
+   taustasäikeessä, joten pelkkä «2/4» ei kerro liikkuuko mikään. Osuus on
+   painotettu tiedostokoolla ja vaiheella, joten palkki liikkuu myös yhden
+   pitkän tiedoston aikana. */
+.progress {
+  width: 100%;
+  height: 6px;
+  margin: 10px 0 6px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  overflow: hidden;
+}
+.progress-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--accent);
+  transition: width .4s ease;
+}
+/* Ilman osuutta: liike kertoo että jokin käy, vaikka määrää ei tiedetä. */
+.progress-fill.indeterminate {
+  width: 35%;
+  animation: slide 1.4s ease-in-out infinite;
+}
+@keyframes slide {
+  0% { margin-left: -35%; }
+  100% { margin-left: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .progress-fill { transition: none; }
+  .progress-fill.indeterminate { animation: none; width: 100%; opacity: .4; }
+}
+
 .banner {
   border-radius: 8px;
   padding: 10px 14px;

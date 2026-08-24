@@ -378,6 +378,30 @@ mittaisen mutta kokonaan siirtyneen raidan. Korrelaatio lasketaan
 verhokäyristä eikä aallonmuodosta — liitännäinen muuttaa sisältöä mutta ei
 puheen rytmiä.
 
+Korrelaation on oltava FFT. `np.correlate(..., "full")` laskee sen suoraan,
+mikä on O(n²): millisekunnin ruudulla 20 minuutin tiedostosta tulee 1,2
+miljoonaa ruutua ja tarkistus kesti **132 sekuntia** — enemmän kuin dxRevive
+samasta tiedostosta — ja tunnin tiedostolla se olisi ollut varttitunti pelkkää
+tarkistusta. FFT antaa saman tuloksen 0,05 sekunnissa. Kertaluokan paluusta
+kaatuu testi.
+
+### Edistyminen on painotettu, ja vaihe on se tarkkuus joka on
+
+Käsittely kestää minuutteja taustasäikeessä. «2/4» ei kerro mitään kun yksi
+tiedosto on 20 minuuttia ja seuraava 64, joten tiedostot painotetaan koolla ja
+arvio lasketaan painotetusta osuudesta — jolloin se on olemassa jo
+ensimmäisestä vaiheesta eikä vasta ensimmäisen tiedoston jälkeen.
+
+Tiedoston sisällä liitännäiseltä ei voi kysyä missä mennään: se käsittelee
+tiedoston yhtenä palana, koska paloittain tulos lyhenisi. Vaiheet ovat siis se
+tarkkuus joka on saatavissa, mitatuin osuuksin — liitännäinen on noin 95 %
+tiedoston työstä silloin kun sellainen on, ja ilman sitä kuva on aivan toinen.
+Luvut eivät ole tarkkoja eivätkä voi olla; ne ovat siksi, että palkki liikkuisi
+tunnin tiedoston aikana eikä seisoisi kymmentä minuuttia paikallaan.
+
+Käsittely kirjoittaa myös jokaisen tiedoston ja vaiheen terminaaliin. Kun se on
+hidas tai kaatuu, kysymys on aina se sama: mikä tiedosto ja mikä vaihe.
+
 ### Ohjaus tapahtuu resurssitasolla
 
 Monikameraviennissä `<resources>` kopioidaan lähteestä, joten käsitelty ääni

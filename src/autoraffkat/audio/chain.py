@@ -284,7 +284,16 @@ def lag_samples(
     liitännäinen muuttaa sisältöä mutta ei puheen rytmiä. Tämä on ainoa tapa
     huomata liitännäinen joka ilmoittaa viiveensä väärin: pituus säilyy, mutta
     ääni on siirtynyt — eikä sitä huomaa ennen kuin leikkaus on koossa.
+
+    Korrelaatio tehdään FFT:llä. ``np.correlate(..., "full")`` laskee sen
+    suoraan, mikä on O(n²): millisekunnin ruudulla 20 minuutin tiedostosta
+    tulee 1,2 miljoonaa ruutua ja mittaus kesti **132 sekuntia** — enemmän
+    kuin dxRevive samasta tiedostosta. FFT antaa saman tuloksen 0,05
+    sekunnissa. Ero kasvaa neliössä, joten tunnin tiedostolla suora tapa oli
+    varttitunti pelkkää tarkistusta.
     """
+    from scipy import signal as sp
+
     step = max(1, int(rate * bin_ms / 1000))
     count = min(before.size, after.size) // step * step
     if count < step * 8:
@@ -295,7 +304,7 @@ def lag_samples(
     b = b - b.mean()
     if not a.any() or not b.any():
         return 0
-    correlation = np.correlate(b, a, mode="full")
+    correlation = sp.fftconvolve(b, a[::-1], mode="full")
     return (int(np.argmax(correlation)) - (a.size - 1)) * step
 
 
@@ -379,6 +388,30 @@ class ChainResult:
     lag: int  # liitännäisen aiheuttama siirtymä näytteinä
 
 
+# Vaiheiden kumulatiiviset osuudet ketjun työstä.
+#
+# Mitattu 20 minuutin mikkitiedostolla dxRevivellä: liitännäinen 163 s, mittaus
+# 2,0 s, dynamiikka 2,2 s, siirtymän mittaus 0,05 s, muut alle sekunnin. Ilman
+# liitännäistä painot ovat aivan toiset, joten taulukoita on kaksi.
+#
+# Luvut eivät ole tarkkoja eivätkä voi olla: liitännäisen nopeus riippuu
+# liitännäisestä. Ne ovat siksi, että palkki liikkuisi tunnin tiedoston aikana
+# eikä seisoisi kymmentä minuuttia paikallaan.
+STAGES_PLUGIN = {
+    "plugin": 0.95,
+    "cleanup": 0.96,
+    "measure": 0.975,
+    "dynamics": 0.995,
+    "lag": 1.0,
+}
+STAGES_PLAIN = {
+    "cleanup": 0.10,
+    "measure": 0.45,
+    "dynamics": 0.90,
+    "lag": 1.0,
+}
+
+
 def process(
     audio: np.ndarray,
     rate: int,
@@ -387,13 +420,25 @@ def process(
     speech: bool,
     target_lufs: float | None,
     plugin=None,
+    stage=None,
 ) -> tuple:
     """Ajaa ketjun. ``audio`` on muotoa ``(kanavat, näytteet)``.
 
     Palauttaa ``(käsitelty, ChainResult)``. Pituus ei muutu; jos jokin vaihe
     muuttaa sitä, se on virhe eikä tulosta käytetä.
+
+    ``stage(nimi, osuus)`` kutsutaan vaiheen **valmistuttua**. Liitännäistä ei
+    voi kysyä kesken ajon — se käsittelee tiedoston yhtenä palana, koska
+    paloittain se lyhentäisi tuloksen — joten vaiheen tarkkuus on se mitä
+    edistymisestä on saatavissa.
     """
     import pedalboard
+
+    weights = STAGES_PLUGIN if plugin is not None else STAGES_PLAIN
+
+    def done(name: str) -> None:
+        if stage is not None:
+            stage(name, weights[name])
 
     frames = audio.shape[1]
     original = audio[0].copy() if speech and plugin is not None else None
@@ -410,6 +455,7 @@ def process(
             raise ChainError(
                 t("audio.plugin_length", before=frames, after=audio.shape[1])
             )
+        done("plugin")
 
     # 2.–3. Siivous ennen mittausta.
     cleanup = _board(
@@ -421,10 +467,12 @@ def process(
         audio = cleanup(audio, rate, reset=True)
     if speech and getattr(settings, "declick", False):
         audio = declick(audio, rate, getattr(settings, "declick_sensitivity", 0.5))
+    done("cleanup")
 
     # 4. Normalisointi siivotusta signaalista.
     measured = loudness(audio.mean(axis=0), rate) if target_lufs is not None else None
     lift = 0.0 if measured is None else float(target_lufs - measured)
+    done("measure")
 
     # 5. Dynamiikka.
     if speech:
@@ -477,8 +525,10 @@ def process(
 
     if audio.shape[1] != frames:
         raise ChainError(t("audio.chain_length", before=frames, after=audio.shape[1]))
+    done("dynamics")
 
     lag = lag_samples(original, audio[0], rate) if original is not None else 0
+    done("lag")
     return audio, ChainResult(
         frames=frames,
         channels=audio.shape[0],

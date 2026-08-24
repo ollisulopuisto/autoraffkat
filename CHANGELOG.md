@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.54] - 2026-08-24
+
+### Performance
+- **The Shift Check Cost More Than the Plug-In**: after processing, the result is cross-correlated against the original to catch a plug-in that reports its latency wrongly. It used `np.correlate(..., "full")`, which computes the correlation directly and is O(n²). On a millisecond grid a 20-minute file is 1.2 million bins, and the check took **132 seconds** — longer than dxRevive spent on the same file — while an hour-long file would have spent a quarter of an hour on the check alone. An FFT gives the identical answer in 0.05 seconds. Processing that file now takes 168 s instead of 300 s.
+
+### Added
+- **A Progress Bar for Audio Processing**: the panel now shows a weighted bar, the stage being worked on (plug-in, measuring, dynamics, shift check, writing) and a time estimate, rather than `2/4` alone. Files are weighted by size, so a 20-minute file and a 64-minute one no longer count the same, and the estimate exists from the first stage instead of appearing only after the first file finishes. The bar moves within a single long file: the plug-in cannot be asked how far along it is — it processes a file in one piece because chunking would shorten the result — so stage boundaries are the resolution available.
+- **Progress Survives a Reload**: processing runs in a background thread on the server, but only the browser tab that started it was watching. Reloading the page mid-run left a frozen panel. The interface now resumes watching whenever it loads and finds a run in progress.
+- **Processing Logs to the Terminal**: one line per file and per stage with its duration, plus the normalisation lift and any error. Processing takes minutes in a background thread where nothing was visible, and when it is slow or fails the question is always the same — which file, and which stage.
+
 ## [v26.08.24.53] - 2026-08-24
 
 ### Added

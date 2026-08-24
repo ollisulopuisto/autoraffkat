@@ -1,6 +1,6 @@
 [project]
 name = "autoraffkat"
-version = "2026.8.24.53"
+version = "2026.8.24.54"
 description = "Automatic multicam editing for interview video: FCPXML in, FCPXML out"
 readme = "README.md"
 requires-python = ">=3.11"

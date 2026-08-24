@@ -386,6 +386,30 @@ correct-length but entirely displaced track. The correlation is computed on
 envelopes rather than waveforms — a plug-in changes the content but not the
 rhythm of the speech. dxRevive measured 0 samples.
 
+The correlation must be an FFT. `np.correlate(..., "full")` computes it
+directly, which is O(n²): on a millisecond grid a 20-minute file is 1.2 million
+bins and the check took **132 seconds** — longer than dxRevive spent on the
+same file — while an hour-long file would have been a quarter of an hour of
+checking alone. The FFT gives the identical answer in 0.05 seconds. There is a
+test that fails if the order of growth comes back.
+
+### Progress is weighted, and the stage is the resolution
+
+Processing runs for minutes in a background thread. `2/4` says nothing when one
+file is 20 minutes and the next is 64, so files are weighted by size and the
+estimate is computed from the weighted fraction — which means it exists from
+the first stage rather than appearing only after the first file finishes.
+
+Within a file the plug-in cannot be asked how far along it is: it processes the
+file in one piece, because chunking would shorten the result. So the stages are
+the resolution available, with measured shares — the plug-in is around 95 % of
+a file's work when there is one, and the picture is entirely different when
+there is not. The numbers are not exact and cannot be; they exist so the bar
+moves during an hour-long file instead of standing still for ten minutes.
+
+Processing also logs each file and stage to the terminal. When it is slow or it
+fails, the question is always which file and which stage.
+
 ### Redirection happens at the resource level
 
 In a multicam export `<resources>` is copied from the source, so the processed
