@@ -116,6 +116,19 @@ back as a source. The reason is not tidiness: the previous export is usually
 already imported into Final Cut and edited by hand, and that work has no other
 source to be rebuilt from.
 
+The name also carries the settings (`project.name_tag`): the rhythm preset
+always, deviating controls after it, `audio` when the microphones were
+processed. `_OUTPUT_RE` therefore accepts a tag between the suffix and the
+number — but only words the tool writes itself, so a foreign
+`interview-cut down.fcpxml` is still a valid source. The numbering runs within
+one tag: a cut made with different controls is a new file, not a new version.
+
+The whole settings set goes into the exported XML as well. The DTD says
+`sequence (note?, spine, metadata?)`, so the `<note>` goes before the spine and
+the `<metadata>` after it — the order is part of the rule, not a style choice.
+The note is translated (it is a user-visible Final Cut field); the `md` keys
+are not, they are machine-readable and prefixed `fi.autoraffkat.`.
+
 ## User-visible text is translated, code is not
 
 Everything the user reads goes through translation: server messages via

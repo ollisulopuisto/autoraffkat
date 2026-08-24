@@ -139,3 +139,55 @@ def test_settings_left_inside_a_bundle_are_still_read(tmp_path):
 
     written = project.save(xml, loaded)
     assert written == str(tmp_path / "episode 12.autoraffkat.json")
+
+
+# ------------------------------------------------- viennin nimi kertoo tyylin
+
+
+def test_export_name_carries_the_edit_style(tmp_path):
+    """Final Cutin selaimessa on monta leikkausta samasta jaksosta.
+
+    Nimi on ainoa mikä niistä erottaa: «jakso-cut» ja «jakso-cut v2» eivät
+    kerro kumpi oli se nopea.
+    """
+    xml = tmp_path / "jakso.fcpxml"
+    settings = ProjectSettings(globals=Globals(rhythm="hectic"))
+    assert project.name_tag(settings) == "hectic"
+    assert project.next_output_path(str(xml), "hectic") == str(
+        tmp_path / "jakso-cut hectic.fcpxml"
+    )
+
+
+def test_name_tag_mentions_the_defaults_only_once(tmp_path):
+    """Oletukset eivät ansaitse sanaa; poikkeamat ansaitsevat."""
+    assert project.name_tag(ProjectSettings()) == "broadcast"
+
+    settings = ProjectSettings(
+        globals=Globals(
+            rhythm="custom",
+            min_shot=3.0,
+            overlap_rule="louder",
+            long_take_rule="stay",
+        )
+    )
+    settings.audio.enabled = True
+    assert project.name_tag(settings) == "custom 3s louder stay audio"
+
+
+def test_name_tags_can_be_turned_off(tmp_path):
+    xml = tmp_path / "jakso.fcpxml"
+    settings = ProjectSettings(globals=Globals(name_tags=False, rhythm="hectic"))
+    assert project.name_tag(settings) == ""
+    assert project.next_output_path(str(xml), "") == str(tmp_path / "jakso-cut.fcpxml")
+
+
+def test_each_style_is_numbered_on_its_own(tmp_path):
+    """Numero erottaa saman tyylin viennit, ei eri tyylejä toisistaan."""
+    xml = tmp_path / "jakso.fcpxml"
+    (tmp_path / "jakso-cut hectic.fcpxml").write_text("<fcpxml/>")
+    assert project.next_output_path(str(xml), "hectic") == str(
+        tmp_path / "jakso-cut hectic v2.fcpxml"
+    )
+    assert project.next_output_path(str(xml), "mellow") == str(
+        tmp_path / "jakso-cut mellow.fcpxml"
+    )

@@ -764,6 +764,24 @@ function renderGlobals() {
   const title = $('project-title');
   title.value = state.globals.project_name;
   title.oninput = () => { state.globals.project_name = title.value; schedule(); };
+
+  /* Säätimet tiedostonimeen. Nimi näkyy heti alla olevalla polkurivillä,
+     joten valinnan vaikutus on luettavissa ilman vientiä. Rasti rakennetaan
+     tässä eikä HTML:ssä, jotta savutesti pääsee laukaisemaan sen. */
+  const tags = $('name-tags');
+  tags.textContent = '';
+  const label = document.createElement('label');
+  label.className = 'check';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = state.globals.name_tags !== false;
+  box.addEventListener('change', () => {
+    state.globals.name_tags = box.checked;
+    schedule(0);
+  });
+  label.append(box, Object.assign(document.createElement('span'),
+    { textContent: T('app.nameTags') }));
+  tags.append(label);
 }
 
 /* Äänenkäsittely. Käsittely itsessään on hidas ja tapahtuu erillisestä
@@ -1185,6 +1203,10 @@ async function send() {
     });
     const data = await response.json();
     latest = data;
+    if (data.output_path && data.output_path !== state.output_path) {
+      state.output_path = data.output_path;
+      renderHeader();
+    }
     if (data.ok) {
       banner('');
       drawBar(); renderRuler(); renderLegend(); renderCuts();

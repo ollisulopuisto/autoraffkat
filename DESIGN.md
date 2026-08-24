@@ -133,6 +133,27 @@ The order:
    If the two together push the cut past the run, no cut is made.
 7. **Long turn & Breath-Snapped Punctuation** (`_force_wide` + `_find_breath_point`).
 
+#### Which of lead and hang wins
+
+They are two edges of the same cut point. `lead` pulls the cut earlier, ahead
+of the incoming voice; `hang` is a floor that keeps the outgoing speaker's face
+on screen after their own speech has ceased. The cut lands at the later of the
+two, so the pause length decides: after a long pause the lead wins and the cut
+anticipates the new speaker (J-cut), in a fast handover the hang wins and the
+old face stays over the new voice (L-cut). With the broadcast defaults the
+crossover is a pause of about 0.9 s, which is longer than a normal conversational
+gap — so most handovers are L-cuts and only real pauses get the anticipation.
+
+The floor applies only when the outgoing speaker has actually stopped. During
+overlapping speech they are still talking, the cut is not caused by them
+finishing, and there is no tail to give: the overlap rule cuts on time. The same
+goes for the first cut of the programme, where the outgoing shot is the wide and
+there is no face to linger on.
+
+A reply shorter than the hang gets no cut at all — the floor pushes the cut past
+the end of that speaker's run, so the picture stays where it is. That is the
+same mechanism as the confirm time, from the other end.
+
 ### Long turn and Reaction Shots
 
 Steps 1–6 produce the right shot but not a rhythm: a monologue gives one
@@ -221,6 +242,24 @@ normalise to the same string.
 One spine, one clip per shot. The cameras' own audio is disabled with
 `srcEnable="video"`. Microphones are connected clips on the first spine clip,
 on lanes −1, −2, … with roles `dialogue.<speaker>`.
+
+### The settings travel with the cut
+
+The name of the export carries the rhythm preset and every control that
+deviates from its default (`episode-cut custom 3s louder stay audio.fcpxml`).
+It is not decoration: in Final Cut's browser the file name is the only thing
+that separates one rough cut from another, and the loop produces several per
+episode. `pick` knows the words it writes itself and only those, so a foreign
+name that happens to end in `-cut` is still offered as a source.
+
+The complete settings go inside the file. The DTD says
+`sequence (note?, spine, metadata?)`, so both have a place and the order is
+part of the rule: the `<note>` is a translated one-line summary — the version,
+the rhythm, the shot lengths, the rules, whether the microphones were
+processed — and the `<metadata>` block holds one `<md>` per control plus the
+whole settings JSON under `fi.autoraffkat.settings`. The reverse-DNS prefix is
+Apple's convention and keeps the keys clear of Final Cut's own. The XML travels
+from machine to machine; the settings file does not necessarily travel with it.
 
 ### Writing multicam
 

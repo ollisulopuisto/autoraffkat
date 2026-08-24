@@ -179,7 +179,11 @@ def _want_array(grid: Grid, g: Globals) -> tuple[np.ndarray, np.ndarray]:
         return want, active
 
     count = active.sum(axis=0)
-    loudest = np.argmax(levels, axis=0)
+    # Vertailu vain äänessä olevien kesken. Hiljaisen mikin taso voi olla
+    # korkein — kuuma mikki, iso vahvistus, eläväinen huone — eikä kuva
+    # kuulu silti hänelle.
+    masked = np.where(active, levels, -300.0)
+    loudest = np.argmax(masked, axis=0)
 
     # Yksi äänessä: hänen lähikuvansa.
     single = count == 1
@@ -197,7 +201,6 @@ def _want_array(grid: Grid, g: Globals) -> tuple[np.ndarray, np.ndarray]:
         elif g.overlap_rule == OVERLAP_HOLD:
             want[overlap] = HOLD
         else:  # OVERLAP_LOUDER
-            masked = np.where(active, levels, -300.0)
             ordered = np.sort(masked, axis=0)
             margin = ordered[-1] - ordered[-2]
             strong = overlap & (margin >= g.dominance_db)
@@ -215,30 +218,82 @@ def _want_array(grid: Grid, g: Globals) -> tuple[np.ndarray, np.ndarray]:
 
 
 def _compute_tempo(active: np.ndarray, n: int) -> np.ndarray:
-    """Laskee keskustelun paikallisen tempon (1/f -vaihtelu liukuvalla ikkunalla)."""
+    """Keskustelun paikallinen tempo (1/f-vaihtelu liukuvalla ikkunalla).
+
+    Reunoilla ikkuna liukuu sisäänpäin eikä kutistu: se on aina yhtä monta
+    askelta, jolloin ohjelman alku ja loppu vertautuvat samaan mittaan kuin
+    keskikohta. Nollilla täytetty konvoluutio näytti alun ja lopun aina
+    hitaimpana mahdollisena aineistona — tempo osui alarajaan riippumatta
+    siitä mitä siinä puhuttiin, ja vähimmäiskesto venyi viidenneksen
+    ensimmäisten ja viimeisten 22 sekunnin ajaksi. Ohjelmaa lyhyempi ikkuna
+    kattaa koko ohjelman.
+
+    Summataulukko eikä konvoluutio: ikkuna on 2250 askelta, ja suora
+    konvoluutio maksoi kahden tunnin ohjelmasta 75 ms — suurimman osan koko
+    päätöskerroksesta, joka on se kerros jonka on pysyttävä millisekunneissa.
+    """
     if active.size == 0 or n == 0:
         return np.ones(n, dtype=np.float32)
     changes = np.sum(
         np.abs(np.diff(active.astype(np.int8), axis=1, prepend=0)), axis=0
-    ).astype(np.float32)
-    window = _hops(45.0)  # 45 sekunnin liukuva ikkuna
-    if n < window:
-        window = max(1, n)
-    kernel = np.ones(window, dtype=np.float32) / window
-    rate = np.convolve(changes, kernel, mode="same")
-    mean_rate = float(np.mean(rate)) + 1e-4
-    tempo = np.clip(rate / mean_rate, 0.7, 1.4)
-    return tempo
+    ).astype(np.float64)
+    window = min(_hops(45.0), n)  # 45 sekunnin liukuva ikkuna
+    total = np.concatenate(([0.0], np.cumsum(changes)))
+    index = np.arange(n)
+    lo = np.clip(index - window // 2, 0, n)
+    hi = np.clip(lo + window, 0, n)
+    lo = np.maximum(hi - window, 0)
+    rate = (total[hi] - total[lo]) / np.maximum(hi - lo, 1)
+    mean_rate = float(np.mean(rate))
+    if mean_rate <= 0.0:
+        # Kukaan ei puhu: tempo on yksi, ei nollalla jakoa. Epsilon summan
+        # päällä olisi harhainen — harvassa vuorottelussa keskinopeus on
+        # tuhannesosia, ja tuhannesosaan lisätty epsilon siirtää temposta
+        # prosentteja.
+        return np.ones(n, dtype=np.float32)
+    return np.clip(rate / mean_rate, 0.7, 1.4).astype(np.float32)
+
+
+def _last_speech(active: np.ndarray) -> np.ndarray:
+    """Kullekin hetkelle viimeisin indeksi, jolloin puhuja oli äänessä (-1 = ei koskaan).
+
+    Kumulatiivinen maksimi kerran, jotta hännän lattian saa jokaisessa
+    leikkauskohdassa vakioajassa. Silmukka jaksojen yli olisi tässä turha:
+    tämä on kaksi numpy-ajoa koko taulukon yli.
+    """
+    if active.size == 0:
+        return active.astype(np.int32)
+    index = np.arange(active.shape[1], dtype=np.int32)
+    return np.maximum.accumulate(np.where(active, index, -1), axis=1)
 
 
 def _cut_points(
-    want: np.ndarray, g: Globals, tempo: np.ndarray | None = None
+    want: np.ndarray,
+    g: Globals,
+    tempo: np.ndarray | None = None,
+    active: np.ndarray | None = None,
 ) -> list[tuple[float, int]]:
-    """Kestorajoitukset: vahvistusaika, ennakko (J-cut), 1/f-tempo-ohjattu kesto."""
+    """Kestorajoitukset: vahvistusaika, ennakko (J-cut), häntä (L-cut), tempo.
+
+    Ennakko ja häntä ovat saman leikkauskohdan kaksi reunaa. Ennakko vetää
+    leikkausta aikaisemmaksi, seuraavan puhujan ääntä edelle; häntä on lattia,
+    joka pitää edellisen puhujan kuvassa vielä hänen puheensa jälkeen. Kumpi
+    voittaa, ratkeaa tauon pituudesta: pitkän tauon jälkeen leikataan
+    ennakolla, nopeassa vuoronvaihdossa jäädään edelliseen kasvoihin sen
+    aikaa mitä häntä sanoo — se on L-cut.
+
+    Häntä koskee vain puhujan kuvasta lähtemistä. Laajassa ei ole kasvoja
+    joihin viivähtää, joten sieltä leikataan aina ennakolla.
+
+    Häntää pidempi vastaus ehtii kuvaan, lyhyempi ei: jos lattia siirtää
+    leikkauksen jakson yli, kuva jää edelliseen puhujaan.
+    """
     confirm = _hops(g.confirm)
     current = WIDE
     cuts: list[tuple[float, int]] = [(0.0, WIDE)]
     last_cut = -g.min_shot
+    hang = g.hang if (g.hang > 0 and active is not None and active.size) else 0.0
+    last_speech = _last_speech(active) if hang else None
 
     for start, end, target in _runs(want):
         if target == HOLD or target == current:
@@ -253,8 +308,16 @@ def _cut_points(
             local_min = g.min_shot
 
         at = max(start * HOP - g.lead, last_cut + local_min, 0.0)
+        if hang and current >= 0 and not active[current, start]:
+            # Kuvassa oleva puhuja on jo vaiennut: hänen kasvonsa jäävät
+            # hännän verran, vaikka seuraava olisi jo äänessä. Jos hän on yhä
+            # äänessä — päällekkäispuhe — hännälle ei ole paikkaa: leikkaus ei
+            # johdu siitä että hän lopetti.
+            spoke = int(last_speech[current, start])
+            if spoke >= 0:
+                at = max(at, (spoke + 1) * HOP + hang)
         if at >= end * HOP:
-            continue  # ennakko ja minimikesto söivät koko jakson
+            continue  # ennakko, häntä ja minimikesto söivät koko jakson
         cuts.append((at, target))
         current = target
         last_cut = at
@@ -301,6 +364,18 @@ def _find_breath_point(
     return target_time
 
 
+def _available_between(sp: SpeakerLanes, grid: Grid, start: float, end: float) -> bool:
+    """Onko puhujan lähikuva olemassa koko välillä [start, end)."""
+    if sp.available is None:
+        return True
+    lo = int(round((start - grid.program_start) / HOP))
+    hi = int(round((end - grid.program_start) / HOP))
+    lo, hi = max(0, lo), min(grid.n, hi)
+    if hi <= lo:
+        return False
+    return bool(sp.available[lo:hi].all())
+
+
 def _force_wide(
     segments: list[Segment],
     g: Globals,
@@ -319,18 +394,19 @@ def _force_wide(
     reaction = g.long_take_rule == "reaction"
     hold = max(g.wide_hold, g.min_shot)
 
-    def alt_target(speaker_angle: str) -> tuple[str, str]:
+    def alt_target(speaker_angle: str, start: float, end: float) -> tuple[str, str]:
+        """Mihin katkaisu menee: reaktiokuvaan jos sellainen on, muuten laajaan.
+
+        Kulman on oltava olemassa koko sen ajan jonka se on kuvassa.
+        Monikamerassa kulma voi puuttua osasta kokonaan, ja siihen
+        leikkaaminen tuottaisi viennissä kuvan jota ei ole.
+        """
         if reaction and grid is not None:
-            other = next(
-                (
-                    s
-                    for s in grid.speakers
-                    if s.close_key and s.close_key != speaker_angle
-                ),
-                None,
-            )
-            if other and other.close_key:
-                return other.close_key, other.name
+            for other in grid.speakers:
+                if not other.close_key or other.close_key == speaker_angle:
+                    continue
+                if _available_between(other, grid, start, end):
+                    return other.close_key, other.name
         return wide_key, wide_label
 
     out: list[Segment] = []
@@ -338,7 +414,6 @@ def _force_wide(
         if seg.angle == wide_key or seg.duration <= g.wide_every:
             out.append(seg)
             continue
-        insert_key, insert_label = alt_target(seg.angle)
         if stay:
             target_cut = seg.start + g.wide_every
             cut = _find_breath_point(
@@ -350,6 +425,7 @@ def _force_wide(
                 # Loppu on liian lyhyt omaksi kuvakseen; puhuja jatkaa.
                 out.append(seg)
                 continue
+            insert_key, insert_label = alt_target(seg.angle, cut, seg.end)
             out.append(Segment(seg.angle, seg.label, seg.start, cut))
             out.append(Segment(insert_key, insert_label, cut, seg.end))
             continue
@@ -370,6 +446,7 @@ def _force_wide(
             if seg.end - stop < g.min_shot:
                 stop = seg.end
             if to_alt:
+                insert_key, insert_label = alt_target(seg.angle, cursor, stop)
                 out.append(Segment(insert_key, insert_label, cursor, stop))
             else:
                 out.append(Segment(seg.angle, seg.label, cursor, stop))
@@ -395,7 +472,7 @@ def decide(grid: Grid, g: Globals) -> Decision:
     """Leikkauslista. Tämän on pyörittävä millisekunneissa."""
     want, active = _want_array(grid, g)
     tempo = _compute_tempo(active, grid.n)
-    cuts = _cut_points(want, g, tempo=tempo)
+    cuts = _cut_points(want, g, tempo=tempo, active=active)
     total = grid.duration
 
     segments: list[Segment] = []

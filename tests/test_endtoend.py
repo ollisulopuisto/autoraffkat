@@ -446,10 +446,10 @@ def test_second_export_writes_a_new_file(scratch_xml):
     second = client.post("/api/export", json=payload).json()
     assert first["ok"] and second["ok"]
     assert first["path"] != second["path"]
-    assert second["path"].endswith("-cut v2.fcpxml")
+    assert second["path"].endswith("-cut broadcast v2.fcpxml")
     assert os.path.exists(first["path"]) and os.path.exists(second["path"])
     # Ruudulla näkyvä polku kertoo mihin seuraava vienti menee.
-    assert second["next_path"].endswith("-cut v3.fcpxml")
+    assert second["next_path"].endswith("-cut broadcast v3.fcpxml")
     assert client.get("/api/state").json()["output_path"] == second["next_path"]
 
 
@@ -631,3 +631,68 @@ def test_opening_another_xml_does_not_hang(scratch_xml):
     assert not worker.is_alive(), "avaus jäi jumiin"
     assert answer["data"]["kind"] == "multicam"
     assert state.xml_path == str(second)
+
+
+def test_export_name_and_note_follow_the_controls(scratch_xml):
+    """Säätimet näkyvät sekä tiedostonimessä että viedyssä XML:ssä."""
+    source = scratch_xml("multicam.fcpxml")
+    state = AppState(xml_path=str(source))
+    state.load()
+    for _ in range(200):
+        if state.progress.get("ready"):
+            break
+        time.sleep(0.05)
+    client = TestClient(create_app(state))
+
+    payload = {
+        "tracks": {k: v.to_json() for k, v in _multicam_tracks().items()},
+        "globals": Globals(
+            rhythm="hectic", min_shot=1.4, overlap_rule="louder"
+        ).to_json(),
+    }
+    result = client.post("/api/settings", json=payload).json()
+    assert result["ok"], result.get("problems")
+    # Ruudulla näkyvä polku kertoo mitä vienti kirjoittaa.
+    assert result["output_path"].endswith("-cut hectic louder.fcpxml")
+
+    exported = client.post("/api/export", json=payload).json()
+    assert exported["ok"]
+    assert exported["path"].endswith("-cut hectic louder.fcpxml")
+    assert exported["next_path"].endswith("-cut hectic louder v2.fcpxml")
+
+    sequence = ET.parse(exported["path"]).getroot().find(".//sequence")
+    assert [c.tag for c in sequence] == ["note", "spine", "metadata"]
+    assert "1.4" in sequence.find("note").text
+    md = {m.get("key"): m.get("value") for m in sequence.findall("metadata/md")}
+    assert md["fi.autoraffkat.rhythm"] == "hectic"
+    assert md["fi.autoraffkat.source"] == "multicam.fcpxml"
+
+
+def test_rhythm_and_hang_reach_the_server(scratch_xml):
+    """Säädin joka ei mene läpi jäisi nimeen ja metatietoon väärin.
+
+    Rytmi ja häntä olivat käyttöliittymässä mutta puuttuivat vastaanotosta,
+    joten tallennettu arvo pysyi oletuksena riippumatta siitä mitä ruudulla
+    valittiin.
+    """
+    from autoraffkat import project
+
+    source = scratch_xml("multicam.fcpxml")
+    state = AppState(xml_path=str(source))
+    state.load()
+    client = TestClient(create_app(state))
+    client.post(
+        "/api/settings",
+        json={
+            "tracks": {},
+            "globals": {"rhythm": "mellow", "hang": 1.0, "name_tags": False},
+        },
+    )
+    saved = project.load(str(source)).globals
+    assert saved.rhythm == "mellow"
+    assert saved.hang == 1.0
+    assert saved.name_tags is False
+    # Tunnisteet pois: nimi on entisensä.
+    assert project.next_output_path(
+        str(source), project.name_tag(project.load(str(source)))
+    ).endswith("-cut.fcpxml")

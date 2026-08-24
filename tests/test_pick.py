@@ -140,3 +140,21 @@ def test_picker_says_so_when_there_is_none(tmp_path, monkeypatch):
     source = _touch(str(tmp_path / "jakso" / "a.fcpxml"))
     client = TestClient(create_app(AppState(xml_path=source)))
     assert client.post("/api/pick").json() == {"path": "", "unavailable": True}
+
+
+def test_tagged_export_is_not_a_candidate(tmp_path):
+    """Nimeen kirjoitetut säätimet eivät saa tehdä viennistä lähdettä."""
+    source = _touch(str(tmp_path / "jakso.fcpxml"))
+    _touch(str(tmp_path / "jakso-cut hectic audio.fcpxml"))
+    _touch(str(tmp_path / "jakso-cut custom 2.5s louder stay v3.fcpxml"))
+    assert pick.candidates(str(tmp_path)) == [source]
+
+
+def test_a_foreign_word_after_the_suffix_is_still_a_source(tmp_path):
+    """Tunnus tunnistaa vain omat sanansa.
+
+    Muuten mikä tahansa «-cut»-loppuinen nimi katoaisi valikosta sen mukaan
+    mitä sen perässä sattuu lukemaan.
+    """
+    source = _touch(str(tmp_path / "haastattelu-cut down.fcpxml"))
+    assert pick.candidates(str(tmp_path)) == [source]

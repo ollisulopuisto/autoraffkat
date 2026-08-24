@@ -449,3 +449,125 @@ def test_compute_tempo_1_over_f():
     assert np.all(tempo >= 0.7) and np.all(tempo <= 1.4)
     # Alussa tempo on korkeampi kuin lopussa
     assert np.mean(tempo[: int(50.0 / HOP)]) > np.mean(tempo[int(70.0 / HOP) :])
+
+
+# ------------------------------------------------------------- häntä (L-cut)
+
+
+def test_hang_holds_the_outgoing_speaker():
+    """Häntä pitää edellisen puhujan kuvassa, vaikka seuraava on jo äänessä.
+
+    Ilman tätä säädin oli olemassa käyttöliittymässä ja profiileissa mutta ei
+    vaikuttanut leikkaukseen mitenkään.
+    """
+    # A lopettaa 8.0, B aloittaa 8.2 — nopea vuoronvaihto.
+    quick = ([(2, 8)], [(8.2, 14)])
+    g = Globals(min_shot=1.0, lead=0.3, hang=0.0, confirm=0.2, wide_every=0.0)
+    without = decide(grid_for(*quick), g)
+    assert angles(without.segments)[2][0] == pytest.approx(7.9, abs=0.05)
+
+    g = Globals(min_shot=1.0, lead=0.3, hang=1.0, confirm=0.2, wide_every=0.0)
+    with_hang = decide(grid_for(*quick), g)
+    assert angles(with_hang.segments)[2] == (9.0, "CB")
+
+
+def test_lead_still_wins_over_a_long_pause():
+    """Tauon jälkeen leikataan ennakolla: häntä on lattia, ei viive."""
+    g = Globals(min_shot=1.0, lead=0.3, hang=1.0, confirm=0.2, wide_every=0.0)
+    d = decide(grid_for([(2, 8)], [(14, 20)]), g)
+    assert angles(d.segments)[2] == (13.7, "CB")
+
+
+def test_hang_does_not_delay_the_first_cut():
+    """Ennen ensimmäistä puhujaa ei ole ketään kenen kuvassa viivyttäisiin."""
+    g = Globals(min_shot=1.0, lead=0.0, hang=2.0, confirm=0.2, wide_every=0.0)
+    d = decide(grid_for([(5, 12)], []), g)
+    assert angles(d.segments)[1] == (5.0, "CA")
+
+
+# ------------------------------------------------ kovin ei ole kuka tahansa
+
+
+def test_brief_backchannel_never_cuts_to_a_silent_speaker():
+    """Myötäilyssä kuva menee äänessä olevista kovimmalle, ei kovimmalle mikille.
+
+    Hiljaisen puhujan mikki voi olla tasoltaan korkein — kuuma mikki, iso
+    vahvistus, eläväinen huone. Kuva ei silti kuulu hänelle.
+    """
+    n = int(30.0 / HOP)
+
+    def lane(name, key, spans, level, quiet=-60.0):
+        on = np.zeros(n, dtype=bool)
+        db = np.full(n, quiet, dtype=np.float32)
+        for start, end in spans:
+            on[int(start / HOP) : int(end / HOP)] = True
+            db[int(start / HOP) : int(end / HOP)] = level
+        return SpeakerLanes(name, db, on, key)
+
+    grid = Grid(
+        n=n,
+        program_start=0.0,
+        wide_key="W",
+        speakers=[
+            lane("A", "CA", [(2, 10)], -30.0),
+            lane("B", "CB", [(5, 5.3)], -28.0),  # 0,3 s myötäily
+            lane("C", "CC", [], -20.0, quiet=-20.0),  # hiljaa, mutta kovin taso
+        ],
+    )
+    g = Globals(min_shot=0.5, lead=0.0, confirm=0.1, min_overlap=1.0, wide_every=0.0)
+    d = decide(grid, g)
+    assert "CC" not in [s.angle for s in d.segments]
+
+
+# ---------------------------------------------- reaktiokuvaa ei ole aina
+
+
+def test_reaction_needs_a_closeup_that_exists():
+    """Reaktiokuvaan ei leikata kulmaan jota ei kyseisessä kohdassa ole.
+
+    Monikamerassa kulma voi puuttua osasta kokonaan; sinne leikkaaminen
+    tuottaisi viennissä kuvan jota ei ole.
+    """
+    from autoraffkat.model import LONGTAKE_REACTION
+
+    n = int(40.0 / HOP)
+    speakers = lanes([(2, 40)], [], n)
+    speakers[1].available = np.zeros(n, dtype=bool)  # B:n lähikuvaa ei ole
+    grid = Grid(n=n, program_start=0.0, speakers=speakers, wide_key="W")
+    g = Globals(
+        min_shot=1.0,
+        lead=0.0,
+        confirm=0.2,
+        wide_every=5.0,
+        wide_hold=2.0,
+        long_take_rule=LONGTAKE_REACTION,
+    )
+    d = decide(grid, g)
+    seen = [s.angle for s in d.segments]
+    assert "CB" not in seen
+    assert "W" in seen  # katkaisu tehdään silti, laajaan
+
+
+# ------------------------------------------------------------ tempon reunat
+
+
+def test_tempo_does_not_slow_down_at_the_edges():
+    """Tasainen vuorottelu on tasainen myös ohjelman alussa ja lopussa.
+
+    Liukuva ikkuna laskettiin nollilla täytettynä, joten ensimmäiset ja
+    viimeiset 22 sekuntia näyttivät aina hitaimmalta mahdolliselta
+    aineistolta ja vähimmäiskesto venyi viidenneksen.
+    """
+    from autoraffkat.decide import _compute_tempo
+
+    n = int(200.0 / HOP)
+    active = np.zeros((2, n), dtype=bool)
+    step = int(2.0 / HOP)
+    for t in range(0, n - step, step):
+        active[0, t : t + step // 2] = True
+        active[1, t + step // 2 : t + step] = True
+
+    tempo = _compute_tempo(active, n)
+    middle = float(tempo[n // 2])
+    assert float(tempo[0]) == pytest.approx(middle, abs=0.1)
+    assert float(tempo[-1]) == pytest.approx(middle, abs=0.1)

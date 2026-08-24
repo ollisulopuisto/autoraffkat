@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.50] - 2026-08-24
+
+### Added
+- **Settings in the Export Name**: The export is now named after the controls it was made with — the rhythm preset always, plus any control that deviates from its default (`episode-cut custom 3s louder stay audio.fcpxml`). In Final Cut's browser the file name is the only thing separating one rough cut from the next. New **Settings in the file name** checkbox in the Project section turns it off; the path shown in the interface follows the controls live.
+- **Settings Embedded in the Exported FCPXML**: `<sequence>` now carries a translated one-line `<note>` (version, rhythm, shot lengths, rules, whether the microphones were processed) and a `<metadata>` block with one `<md>` per control plus the complete settings JSON under `fi.autoraffkat.settings`. A cut is reproducible from the file alone, on a machine that never saw the settings file.
+
+### Fixed
+- **Rhythm Preset and Hang Never Reached the Server**: `/api/settings` dropped `rhythm` and `hang` from the incoming payload, so the saved settings kept the defaults no matter what was chosen in the interface.
+- **Hang (L-cut) Did Nothing**: `decide.py` never read `g.hang`. The slider, the rhythm presets and the documentation all promised an L-cut that was not implemented. The hang is now a floor on the cut point — the outgoing speaker's face stays on screen for that long after their speech ceases, so a fast handover becomes an L-cut while a real pause still gets the J-cut lead. It does not apply during overlapping speech, where the outgoing speaker has not stopped.
+- **Brief Overlap Could Cut to a Silent Speaker**: in backchannelling the picture went to the loudest *microphone* rather than the loudest speaker who was actually talking. With three or more people, a hot mic or a large gain on a silent participant took the shot.
+- **Reaction Shot Could Cut to an Angle That Does Not Exist**: the co-host chosen for a reaction shot was not checked against the close-up's availability, so in a multicam the cut could land on an angle missing from that part. The candidate must now be available for the whole insert; otherwise the break goes wide as before.
+- **Programme Edges Were Always Cut at the Slowest Tempo**: the 1/f tempo window was zero-padded, so the first and last 22 seconds measured as the slowest possible material and stretched the shortest shot by a fifth regardless of content. The window now slides inward at the edges instead of being padded with zeros, so the start and end are measured against the same span as the middle, and the mean-rate epsilon no longer skews sparse material by several percent.
+
+### Performance
+- The 1/f tempo window is a summed-area lookup instead of a direct convolution: a two-hour programme decides in 24 ms instead of 90 ms, of which the tempo is now 9 ms instead of 75 ms. The decision layer runs on every slider movement, so this is the interface's response time.
+
+### Changed
+- Export version numbering now runs within one set of settings: a cut made with different controls is a new file, not the next version of the same one.
+
 ## [v26.08.22.49] - 2026-08-22
 
 ### Documentation

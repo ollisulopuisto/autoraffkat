@@ -12,7 +12,15 @@ import json
 import os
 from dataclasses import dataclass, field
 
-from .model import AudioSettings, Globals, TrackConfig
+from .model import (
+    LONGTAKE_RETURN,
+    OVERLAP_WIDE,
+    RHYTHM_CUSTOM,
+    RHYTHM_PRESETS,
+    AudioSettings,
+    Globals,
+    TrackConfig,
+)
 
 FORMAT_VERSION = 1
 
@@ -56,26 +64,74 @@ def legacy_settings_path(xml_path: str) -> str:
     return f"{os.path.splitext(os.path.abspath(xml_path))[0]}{SETTINGS_SUFFIX}"
 
 
-def default_output_path(xml_path: str) -> str:
+def _seconds(value: float) -> str:
+    """Sekuntiluku nimeen: ``3.0`` -> ``3s``, ``2.5`` -> ``2.5s``.
+
+    Piste desimaalierottimena kielestä riippumatta. Tiedostonimi jää levylle
+    pidemmäksi aikaa kuin käyttöliittymän kieliasetus, eikä sama leikkaus saa
+    saada eri nimeä sen mukaan kummalla kielellä ohjelma sattui olemaan auki.
+    """
+    return f"{value:g}s"
+
+
+def name_tag(settings: ProjectSettings) -> str:
+    """Viennin nimeen tuleva tiiviste säätimistä, tai ``""``.
+
+    Samasta jaksosta syntyy silmukan aikana monta leikkausta, ja Final Cutin
+    selaimessa niistä näkyy vain nimi: ``jakso-cut`` ja ``jakso-cut v2`` eivät
+    kerro kumpi niistä oli se nopea.
+
+    Mukaan tulee rytmi aina, koska se on se mitä nimestä haetaan, ja muut
+    säätimet vain kun ne poikkeavat oletuksesta. Muuten jokaisessa nimessä
+    lukisi sama rivi sanoja eikä yksikään erottuisi.
+    """
+    g = settings.globals
+    if not g.name_tags:
+        return ""
+    rhythm = g.rhythm if g.rhythm in RHYTHM_PRESETS else RHYTHM_CUSTOM
+    parts = [rhythm]
+    if rhythm == RHYTHM_CUSTOM:
+        # Mukautetussa rytmissä nimi ei kerro mitään ilman lukua.
+        parts.append(_seconds(g.min_shot))
+    if g.overlap_rule != OVERLAP_WIDE:
+        parts.append(g.overlap_rule)
+    if g.long_take_rule != LONGTAKE_RETURN:
+        parts.append(g.long_take_rule)
+    if settings.audio.enabled:
+        parts.append("audio")
+    return " ".join(parts)
+
+
+def default_output_path(xml_path: str, tag: str = "") -> str:
     """Viennin perusnimi: ``jakso.fcpxml`` -> ``jakso-cut.fcpxml``.
 
     Erillinen nimi on tahallinen: vienti ei saa osua lähde-XML:n päälle, koska
-    silmukassa palataan aina samaan lähteeseen.
+    silmukassa palataan aina samaan lähteeseen. ``tag`` on ``name_tag``in
+    tiiviste ja tulee tunnuksen perään.
     """
-    return f"{derived_base(xml_path)}{OUTPUT_SUFFIX}.fcpxml"
+    return f"{_output_base(xml_path, tag)}.fcpxml"
 
 
-def next_output_path(xml_path: str) -> str:
+def _output_base(xml_path: str, tag: str) -> str:
+    """Viennin nimen kanta ilman päätettä ja numeroa."""
+    base = f"{derived_base(xml_path)}{OUTPUT_SUFFIX}"
+    return f"{base} {tag}" if tag else base
+
+
+def next_output_path(xml_path: str, tag: str = "") -> str:
     """Ensimmäinen vapaa viennin polku.
 
     ``jakso-cut.fcpxml``, sitten ``jakso-cut v2.fcpxml``, ``v3`` ja niin
     edelleen. Valmiin leikkauksen päälle ei kirjoiteta: edellinen vienti
     on tyypillisesti jo tuotu Final Cutiin ja sitä on ehditty leikata, eikä
     siihen työhön ole enää muuta lähdettä. Numero tulee nimen loppuun
-    tunnuksen jälkeen, jotta ``pick`` tunnistaa myös numeroidut viennit
-    omikseen eikä tarjoa niitä uudeksi lähteeksi.
+    tunnuksen ja tiivisteen jälkeen, jotta ``pick`` tunnistaa myös numeroidut
+    viennit omikseen eikä tarjoa niitä uudeksi lähteeksi.
+
+    Numero juoksee tiivisteen sisällä: eri säätimillä tehty leikkaus on eri
+    tiedosto eikä saman tiedoston seuraava versio.
     """
-    base = f"{derived_base(xml_path)}{OUTPUT_SUFFIX}"
+    base = _output_base(xml_path, tag)
     if not os.path.exists(f"{base}.fcpxml"):
         return f"{base}.fcpxml"
     number = 2

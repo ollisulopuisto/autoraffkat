@@ -16,7 +16,7 @@ from autoraffkat.model import Segment
 from autoraffkat.timeline import parse_time
 
 
-def _cut(fixture_dir, name="sync.fcpxml", fd=Fraction(1, 25)):
+def _cut(fixture_dir, name="sync.fcpxml", fd=Fraction(1, 25), settings=None):
     tl = read_fcpxml(str(fixture_dir / name))
     by_key = {m.key: m for m in tl.media}
     segments = [
@@ -33,6 +33,8 @@ def _cut(fixture_dir, name="sync.fcpxml", fd=Fraction(1, 25)):
         tl.start,
         tl.start + Fraction(35),
         "Testi",
+        settings=settings,
+        source="jakso.fcpxml",
     )
     return tl, xml
 
@@ -141,7 +143,7 @@ def test_role_sanitizing():
 # ------------------------------------------------------------------ multicam
 
 
-def _multicam_cut(fixture_dir, segments=None):
+def _multicam_cut(fixture_dir, segments=None, settings=None):
     """Monikameraleikkaus fixturesta. Kolmas kuva ylittää osien rajan 18 s."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     segments = segments or [
@@ -157,6 +159,8 @@ def _multicam_cut(fixture_dir, segments=None):
         Fraction(0),
         Fraction(36),
         "Monikameratesti",
+        settings=settings,
+        source="multicam.fcpxml",
     )
     return tl, xml
 
@@ -401,3 +405,77 @@ def test_room_asset_declares_mono(fixture_dir):
     )
     assert asset.get("audioChannels") == "1"
     assert asset.get("audioSources") == "1"
+
+
+# ------------------------------------------------------ säätimet mukaan XML:ään
+
+
+def _settings():
+    from autoraffkat.model import Globals, TrackConfig
+    from autoraffkat.project import ProjectSettings
+
+    settings = ProjectSettings(
+        tracks={"MIC_A.wav": TrackConfig(role="mic", speaker="Host", gain_db=-3.0)},
+        globals=Globals(rhythm="hectic", min_shot=1.4, overlap_rule="louder"),
+    )
+    settings.audio.enabled = True
+    return settings
+
+
+def test_sequence_children_stay_in_dtd_order(fixture_dir):
+    """DTD: ``sequence (note?, spine, metadata?)``. Järjestys on osa sääntöä."""
+    _, xml = _cut(fixture_dir, settings=_settings())
+    sequence = ET.fromstring(xml).find(".//sequence")
+    assert [c.tag for c in sequence] == ["note", "spine", "metadata"]
+
+
+def test_note_says_what_the_settings_were(fixture_dir):
+    """Notes-kenttä on se paikka jonka Final Cut näyttää ilman kaivamista."""
+    _, xml = _cut(fixture_dir, settings=_settings())
+    note = ET.fromstring(xml).find(".//sequence/note").text
+    assert "autoraffkat" in note
+    assert "1.4" in note  # lyhin kuva
+
+
+def test_metadata_carries_every_setting_back(fixture_dir):
+    """Koko asetusjoukko on luettavissa viennistä, ei vain tiivistelmä."""
+    import json
+
+    from autoraffkat.project import ProjectSettings
+
+    settings = _settings()
+    _, xml = _cut(fixture_dir, settings=settings)
+    md = {
+        m.get("key"): m.get("value")
+        for m in ET.fromstring(xml).findall(".//sequence/metadata/md")
+    }
+    assert md["fi.autoraffkat.rhythm"] == "hectic"
+    assert md["fi.autoraffkat.min_shot"] == "1.4"
+    assert md["fi.autoraffkat.overlap_rule"] == "louder"
+    assert md["fi.autoraffkat.audio.enabled"] == "1"
+    assert md["fi.autoraffkat.source"] == "jakso.fcpxml"
+
+    again = ProjectSettings.from_json(json.loads(md["fi.autoraffkat.settings"]))
+    assert again.to_json() == settings.to_json()
+
+
+def test_settings_are_optional(fixture_dir):
+    """Ilman asetuksia vienti on entisensä."""
+    _, xml = _cut(fixture_dir)
+    sequence = ET.fromstring(xml).find(".//sequence")
+    assert [c.tag for c in sequence] == ["spine"]
+
+
+def test_multicam_sequence_carries_the_settings(fixture_dir):
+    _, xml = _multicam_cut(fixture_dir, settings=_settings())
+    sequence = ET.fromstring(xml).find(".//sequence")
+    assert [c.tag for c in sequence] == ["note", "spine", "metadata"]
+    assert (
+        sequence.find("metadata/md[@key='fi.autoraffkat.rhythm']").get("value")
+        == "hectic"
+    )
+
+
+def test_settings_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    _, xml = _multicam_cut(fixture_dir, settings=_settings())
+    validate_fcpxml(xml, "settings.fcpxml")

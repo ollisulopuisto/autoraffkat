@@ -8,18 +8,24 @@ aukkoja eikä päällekkäisyyksiä.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from fractions import Fraction
+from typing import TYPE_CHECKING
 from urllib.request import pathname2url
-from xml.sax.saxutils import quoteattr
+from xml.sax.saxutils import escape, quoteattr
 
 from dataclasses import replace
 
+from .. import __version__
 from ..audio.mix import ROOM_ROLE
 from ..i18n import t
 from ..model import DEFAULT_PROJECT_NAME, MediaItem, Segment
 from ..timeline import FPS_LABELS, format_time, frames_str, fps_of, to_frames
+
+if TYPE_CHECKING:  # vain tyypitystä varten: kirjoitus ei riipu asetuksista
+    from ..project import ProjectSettings
 
 STANDARD_HEIGHTS = {480, 540, 576, 720, 1080, 1440, 2160, 4320}
 
@@ -161,6 +167,99 @@ def _quantize(
     return spans
 
 
+# ------------------------------------------------------- säätimet ulos XML:ään
+
+# Metatiedon avainten etuliite. Käänteinen nimiavaruus on Applen tapa
+# (`com.apple.proapps.*`), ja se on ainoa mikä takaa ettei avain törmää
+# Final Cutin omiin.
+MD_PREFIX = "fi.autoraffkat."
+
+
+def _number(value: float) -> str:
+    """Luku ilman liukulukuroskaa: ``1.4``, ei ``1.4000000000000001``."""
+    return f"{float(value):g}"
+
+
+def _md(key: str, value: str, md_type: str = "string") -> str:
+    return (
+        f"            <md key={quoteattr(MD_PREFIX + key)} "
+        f'value={quoteattr(value)} type="{md_type}"/>'
+    )
+
+
+def settings_note(settings: "ProjectSettings", source: str = "") -> str:
+    """Yhden rivin tiivistelmä säätimistä, käyttäjän kielellä.
+
+    Tämä menee ``<sequence>``in ``<note>``-kenttään, joka on Final Cutissa
+    projektin muistiinpano: se näkyy selaimen Notes-sarakkeessa ilman että
+    tiedostoa tarvitsee avata tekstieditorissa. Koko asetusjoukko on
+    ``<metadata>``ssa; tämä on se mikä luetaan silmäyksellä.
+    """
+    g = settings.globals
+    return t(
+        "export.note",
+        version=__version__,
+        rhythm=t(f"rhythm.{g.rhythm}"),
+        min_shot=_number(g.min_shot),
+        lead=_number(g.lead),
+        hang=_number(g.hang),
+        overlap=t(f"overlap.{g.overlap_rule}"),
+        longtake=t(f"longtake.{g.long_take_rule}"),
+        audio=t("export.audio_on" if settings.audio.enabled else "export.audio_off"),
+        source=os.path.basename(source),
+    )
+
+
+def settings_metadata(settings: "ProjectSettings", source: str = "") -> list[str]:
+    """``<metadata>``-lohko: jokainen säädin omana ``<md>``-rivinään.
+
+    Erilliset avaimet ovat luettavuutta varten, ja koko asetusjoukko on lisäksi
+    yhtenä JSONina: siitä leikkauksen saa toistettua sellaisenaan, myös
+    raitakohtaiset roolit ja herkkyydet, joita yksittäisinä avaimina olisi
+    kymmeniä. Tiedosto kulkee koneelta toiselle, asetustiedosto ei
+    välttämättä kulje sen mukana.
+    """
+    g = settings.globals
+    lines = [
+        _md("version", __version__),
+        _md("source", os.path.basename(source)),
+        _md("rhythm", g.rhythm),
+        _md("min_shot", _number(g.min_shot), "float"),
+        _md("lead", _number(g.lead), "float"),
+        _md("hang", _number(g.hang), "float"),
+        _md("confirm", _number(g.confirm), "float"),
+        _md("overlap_rule", g.overlap_rule),
+        _md("dominance_db", _number(g.dominance_db), "float"),
+        _md("min_overlap", _number(g.min_overlap), "float"),
+        _md("wide_every", _number(g.wide_every), "float"),
+        _md("wide_hold", _number(g.wide_hold), "float"),
+        _md("long_take_rule", g.long_take_rule),
+        _md("audio.enabled", "1" if settings.audio.enabled else "0", "boolean"),
+        _md(
+            "settings",
+            json.dumps(settings.to_json(), ensure_ascii=False, sort_keys=True),
+        ),
+    ]
+    return ["          <metadata>", *lines, "          </metadata>"]
+
+
+def _sequence_extras(
+    settings: "ProjectSettings | None", source: str
+) -> tuple[list[str], list[str]]:
+    """``<sequence>``in lapset säätimistä: (ennen spineä, spinen jälkeen).
+
+    DTD sanoo ``sequence (note?, spine, metadata?)``, eli järjestys ei ole
+    makuasia: väärässä järjestyksessä Final Cut hylkää koko tiedoston.
+    """
+    if settings is None:
+        return [], []
+    note = settings_note(settings, source)
+    return (
+        [f"          <note>{escape(note)}</note>"],
+        settings_metadata(settings, source),
+    )
+
+
 def build_fcpxml(
     media_by_key: dict[str, MediaItem],
     segments: list[Segment],
@@ -172,6 +271,8 @@ def build_fcpxml(
     version: str = "1.10",
     replacements: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
+    settings: "ProjectSettings | None" = None,
+    source: str = "",
 ) -> str:
     """Rakentaa FCPXML-merkkijonon.
 
@@ -181,6 +282,9 @@ def build_fcpxml(
     ``replacements`` ohjaa median käsiteltyyn tiedostoon, ``room`` liittää
     tilaäänen omalle lanelleen. Molemmat ovat saman pituisia kuin lähteensä,
     joten aikoihin ei kosketa.
+
+    ``settings`` ja ``source`` kirjoitetaan sekvenssin muistiinpanoon ja
+    metatietoon, jotta leikkauksen säätimet kulkevat tiedoston mukana.
     """
     replacements = replacements or {}
     room = room or []
@@ -302,6 +406,7 @@ def build_fcpxml(
         else:
             body.append(clip + "/>")
 
+    note, metadata = _sequence_extras(settings, source)
     out: list[str] = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         "<!DOCTYPE fcpxml>",
@@ -316,9 +421,11 @@ def build_fcpxml(
         f'        <sequence format="{seq_format}" '
         f'duration="{frames_str(program_frames, frame_duration)}" '
         'tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">',
+        *note,
         "          <spine>",
         *body,
         "          </spine>",
+        *metadata,
         "        </sequence>",
         "      </project>",
         "    </event>",
@@ -603,12 +710,17 @@ def build_multicam_fcpxml(
     project_name: str = DEFAULT_PROJECT_NAME,
     replacements: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
+    settings: "ProjectSettings | None" = None,
+    source: str = "",
 ) -> str:
     """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
 
     Tulos on natiivi monikameraleikkaus, ei littana: kuvakulman voi vaihtaa
     Final Cutissa jälkikäteen kulmanäkymästä. Resurssit tulevat lähde-XML:stä
     sellaisenaan, joten multicamin sisäinen synkkaus säilyy bittiä myöten.
+
+    ``settings`` ja ``source`` kirjoitetaan sekvenssin muistiinpanoon ja
+    metatietoon, jotta leikkauksen säätimet kulkevat tiedoston mukana.
     """
     if not segments:
         raise WriteError(t("write.empty_cut"))
@@ -691,6 +803,7 @@ def build_multicam_fcpxml(
         else:
             body.append("            <mc-clip " + " ".join(attrs) + "/>")
 
+    note, metadata = _sequence_extras(settings, source)
     out = [
         '<?xml version="1.0" encoding="UTF-8"?>',
         "<!DOCTYPE fcpxml>",
@@ -702,9 +815,11 @@ def build_multicam_fcpxml(
         f'        <sequence format="{seq_format}" '
         f'duration="{frames_str(program_frames, frame_duration)}" '
         'tcStart="0s" tcFormat="NDF" audioLayout="stereo" audioRate="48k">',
+        *note,
         "          <spine>",
         *body,
         "          </spine>",
+        *metadata,
         "        </sequence>",
         "      </project>",
         "    </event>",

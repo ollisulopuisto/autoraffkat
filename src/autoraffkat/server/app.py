@@ -36,6 +36,7 @@ from ..model import (
     DEFAULT_PROJECT_NAME,
     LONGTAKE_RULES,
     OVERLAP_RULES,
+    RHYTHM_PRESETS,
     ROLE_MIC,
     ROLES,
     AudioSettings,
@@ -203,6 +204,7 @@ class AppState:
         for name in (
             "min_shot",
             "lead",
+            "hang",
             "confirm",
             "dominance_db",
             "min_overlap",
@@ -215,6 +217,10 @@ class AppState:
             g.overlap_rule = raw["overlap_rule"]
         if raw.get("long_take_rule") in LONGTAKE_RULES:
             g.long_take_rule = raw["long_take_rule"]
+        if raw.get("rhythm") in RHYTHM_PRESETS:
+            g.rhythm = raw["rhythm"]
+        if "name_tags" in raw:
+            g.name_tags = bool(raw["name_tags"])
         self._apply_audio(payload.get("audio") or {})
         if "project_name" in raw:
             g.project_name = str(raw["project_name"])[:120] or DEFAULT_PROJECT_NAME
@@ -459,7 +465,9 @@ def _state_json(state: AppState) -> dict:
     return {
         "xml_path": state.xml_path,
         "settings_path": project.settings_path(state.xml_path),
-        "output_path": project.next_output_path(state.xml_path),
+        "output_path": project.next_output_path(
+            state.xml_path, project.name_tag(state.settings)
+        ),
         "name": timeline.name if timeline else "",
         "kind": timeline.kind if timeline else "",
         "parts": len(timeline.multicams) if timeline else 0,
@@ -639,6 +647,11 @@ def create_app(state: AppState) -> FastAPI:
             state.apply(payload)
             result = state.compute()
             result.pop("_grid", None)
+            # Nimi seuraa säätimiä, joten ruudulla näkyvä polku muuttuu niiden
+            # mukana. Muuten se lupaisi tiedostoa jota vienti ei kirjoita.
+            result["output_path"] = project.next_output_path(
+                state.xml_path, project.name_tag(state.settings)
+            )
             try:
                 project.save(state.xml_path, state.settings)
             except OSError as exc:
@@ -670,7 +683,9 @@ def create_app(state: AppState) -> FastAPI:
             for name in roles.speakers:
                 for key in roles.mics.get(name, []):
                     mic_tracks.append((key, name))
-            out_path = project.next_output_path(state.xml_path)
+            out_path = project.next_output_path(
+                state.xml_path, project.name_tag(state.settings)
+            )
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
                 raise HTTPException(400, t("export.would_overwrite"))
             if os.path.dirname(out_path).endswith(project.BUNDLE_EXT):
@@ -702,6 +717,8 @@ def create_app(state: AppState) -> FastAPI:
                         state.settings.globals.project_name,
                         replacements=replacements,
                         room=room,
+                        settings=state.settings,
+                        source=state.xml_path,
                     )
                 else:
                     xml = build_fcpxml(
@@ -714,6 +731,8 @@ def create_app(state: AppState) -> FastAPI:
                         state.settings.globals.project_name,
                         replacements=replacements,
                         room=room,
+                        settings=state.settings,
+                        source=state.xml_path,
                     )
                 write_fcpxml(out_path, xml)
             except (WriteError, OSError) as exc:
@@ -728,7 +747,9 @@ def create_app(state: AppState) -> FastAPI:
             "mixed": len(replacements),
             "room": len(room),
             "warnings": warnings,
-            "next_path": project.next_output_path(state.xml_path),
+            "next_path": project.next_output_path(
+                state.xml_path, project.name_tag(state.settings)
+            ),
         }
 
     @app.post("/api/mix")

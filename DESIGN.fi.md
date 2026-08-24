@@ -134,6 +134,28 @@ Järjestys:
    leikkauksen jakson yli, leikkausta ei tehdä.
 7. **Pitkä puheenvuoro ja hengähdystaukohaku** (`_force_wide` + `_find_breath_point`).
 
+#### Kumpi voittaa, ennakko vai häntä
+
+Ne ovat saman leikkauskohdan kaksi reunaa. `lead` vetää leikkausta
+aikaisemmaksi, tulevan äänen edelle; `hang` on lattia, joka pitää edellisen
+puhujan kasvot kuvassa vielä hänen oman puheensa loputtua. Leikkaus osuu
+myöhempään näistä, joten tauon pituus ratkaisee: pitkän tauon jälkeen ennakko
+voittaa ja leikkaus ennakoi seuraavaa puhujaa (J-cut), nopeassa
+vuoronvaihdossa häntä voittaa ja vanhat kasvot jäävät uuden äänen päälle
+(L-cut). Lähetysoletuksilla raja on noin 0,9 sekunnin tauko, mikä on pidempi
+kuin tavallinen puheenvuorojen väli — eli useimmat vaihdot ovat L-cutteja ja
+vain todelliset tauot saavat ennakon.
+
+Lattia pätee vain kun väistyvä puhuja on todella vaiennut. Päällekkäispuheessa
+hän on yhä äänessä, leikkaus ei johdu siitä että hän lopetti, eikä hännälle ole
+paikkaa: päällekkäispuheen sääntö leikkaa ajallaan. Sama koskee ohjelman
+ensimmäistä leikkausta, jossa väistyvä kuva on laaja eikä siinä ole kasvoja
+joihin viivähtää.
+
+Häntää lyhyempi vastaus ei saa kuvaa lainkaan — lattia työntää leikkauksen sen
+puhujan jakson yli, ja kuva jää siihen missä on. Se on sama mekanismi kuin
+vahvistusaika, toisesta päästä.
+
 ### Pitkä puheenvuoro ja reaktiokuvat
 
 Kohdat 1–6 tuottavat oikean kuvan mutta eivät rytmiä: yksinpuhelu antaa yhden
@@ -221,6 +243,23 @@ normalisoituisivat samoiksi.
 Yksi spine, yksi klippi per kuva. Kameroiden oma ääni pois
 `srcEnable="video"`. Mikit liitettyinä klippeinä ensimmäiseen spine-klippiin
 laneilla −1, −2, … rooleilla `dialogue.<puhuja>`.
+
+### Säätimet kulkevat leikkauksen mukana
+
+Viennin nimessä on rytmiprofiili ja jokainen säädin joka poikkeaa
+oletuksestaan (`jakso-cut custom 3s louder stay audio.fcpxml`). Se ei ole
+koriste: Final Cutin selaimessa tiedostonimi on ainoa mikä erottaa leikkaukset
+toisistaan, ja silmukka tuottaa niitä jaksoa kohti useita. `pick` tuntee omat
+sanansa eikä muita, joten vieras `-cut`-loppuinen nimi kelpaa yhä lähteeksi.
+
+Koko asetusjoukko menee tiedoston sisään. DTD sanoo
+`sequence (note?, spine, metadata?)`, joten molemmille on paikka ja järjestys
+on osa sääntöä: `<note>` on käännetty yhden rivin tiivistelmä — versio, rytmi,
+kuvien kestot, säännöt ja se käsiteltiinkö mikit — ja `<metadata>`-lohkossa on
+oma `<md>` jokaiselle säätimelle sekä koko asetusjoukko JSONina avaimella
+`fi.autoraffkat.settings`. Käänteinen nimiavaruus on Applen tapa ja pitää
+avaimet erossa Final Cutin omista. XML kulkee koneelta toiselle,
+asetustiedosto ei välttämättä kulje sen mukana.
 
 ### Monikameran kirjoitus
 

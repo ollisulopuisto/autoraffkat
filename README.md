@@ -61,16 +61,32 @@ The loop:
 Steps 2 and 3 are milliseconds apart: moving a slider runs only the decision
 layer, and the preview bar shows the result without a round trip through XML.
 
-Export writes a new file `episode-cut.fcpxml`; the source XML is never
-touched. Settings are saved next to it as `episode.autoraffkat.json`.
+Export writes a new file `episode-cut broadcast.fcpxml`; the source XML is
+never touched. Settings are saved next to it as `episode.autoraffkat.json`.
 
-An earlier export is never overwritten either. If `episode-cut.fcpxml`
-exists, the next one becomes `episode-cut v2.fcpxml`, then `v3`, and so on. The path shown in the interface is always the one the next export will
-write.
+The name says what was cut: the rhythm preset always, plus any control that
+deviates from the default (`episode-cut custom 3s louder stay audio.fcpxml`).
+In Final Cut's browser the name is all that separates one rough cut from the
+next, and `-cut` and `-cut v2` do not say which one was the fast one. Turn it
+off with **Settings in the file name** in the Project section; the path shown
+in the interface follows the controls, so the effect is visible before you
+export.
+
+An earlier export is never overwritten either. If `episode-cut broadcast.fcpxml`
+exists, the next one becomes `episode-cut broadcast v2.fcpxml`, then `v3`, and
+so on. The number runs within one set of settings: a cut made with different
+controls is a different file, not the next version of the same one.
+
+Every control also travels inside the exported XML. The sequence carries a
+one-line `<note>` — the version, the rhythm, the shot lengths, the rules,
+whether the microphones were processed — and a `<metadata>` block with one
+`<md>` entry per setting plus the complete settings JSON under
+`fi.autoraffkat.settings`. That block is what makes a cut reproducible from
+the file alone, on a machine that never saw the settings file.
 
 When the source is a `.fcpxmld` bundle, neither file goes inside it. Both land
 beside it and take the bundle's name: `episode 12.fcpxmld` produces
-`episode 12-cut.fcpxml` and `episode 12.autoraffkat.json`. The
+`episode 12-cut broadcast.fcpxml` and `episode 12.autoraffkat.json`. The
 bundle belongs to Final Cut.
 
 A new episode inherits its roles from the previous one. Track keys are derived

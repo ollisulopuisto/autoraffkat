@@ -184,6 +184,10 @@ class Globals:
     wide_hold: float = 3.5  # laajan kesto ennen paluuta, s (vain «return»)
     long_take_rule: str = LONGTAKE_RETURN
     project_name: str = DEFAULT_PROJECT_NAME
+    # Kirjoitetaanko säätimet viennin tiedostonimeen. Samasta jaksosta
+    # syntyy monta leikkausta, ja Final Cutin selaimessa nimi on ainoa mikä
+    # ne erottaa toisistaan.
+    name_tags: bool = True
 
     def to_json(self) -> dict:
         return asdict(self)

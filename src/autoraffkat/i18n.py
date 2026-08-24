@@ -140,6 +140,40 @@ CATALOG: dict[str, dict[str, str]] = {
         "en": "{missing}/{total} microphone files are exported unprocessed: "
         "processing has not been run, or it failed.",
     },
+    # Viennin muistiinpano. Tämä menee <sequence>-elementin <note>-kenttään ja
+    # näkyy Final Cutissa projektin muistiinpanona, joten se on käyttäjälle
+    # näkyvää tekstiä siinä missä käyttöliittymän omat viestit. Säätimien
+    # nimet ovat samat kuin selaimen puolella, jotta muistiinpanon voi lukea
+    # rinnakkain sen ruudun kanssa jolla arvot asetettiin.
+    "export.note": {
+        "fi": "autoraffkat {version} · rytmi: {rhythm} · lyhin kuva {min_shot} s · "
+        "ennakko {lead} s · häntä {hang} s · päällekkäispuhe: {overlap} · "
+        "pitkä puheenvuoro: {longtake} · mikit: {audio} · lähde: {source}",
+        "en": "autoraffkat {version} · rhythm: {rhythm} · shortest shot {min_shot} s · "
+        "lead {lead} s · hang {hang} s · overlapping speech: {overlap} · "
+        "long turn: {longtake} · microphones: {audio} · source: {source}",
+    },
+    "export.audio_on": {
+        "fi": "käsitelty",
+        "en": "processed",
+    },
+    "export.audio_off": {
+        "fi": "käsittelemätön",
+        "en": "unprocessed",
+    },
+    # Säätimien arvot muistiinpanossa. Sanamuodot ovat samat kuin
+    # `static/i18n.js`:ssä; kaksi luetteloa siksi, että selain ei lue
+    # palvelimen katalogia eikä palvelin selaimen.
+    "rhythm.broadcast": {"fi": "Tv ja podcast", "en": "Broadcast & Podcast"},
+    "rhythm.mellow": {"fi": "Rauhallinen", "en": "Mellow"},
+    "rhythm.hectic": {"fi": "Korkeatempoinen", "en": "Hectic"},
+    "rhythm.custom": {"fi": "Mukautettu", "en": "Custom"},
+    "overlap.wide": {"fi": "Laaja", "en": "Wide"},
+    "overlap.hold": {"fi": "Pidä nykyinen", "en": "Hold current"},
+    "overlap.louder": {"fi": "Vahvempi voittaa", "en": "Louder wins"},
+    "longtake.return": {"fi": "Palaa puhujaan", "en": "Return to speaker"},
+    "longtake.stay": {"fi": "Jää laajaan", "en": "Stay wide"},
+    "longtake.reaction": {"fi": "Reaktiokuva", "en": "Reaction shot"},
     "audio.envelope_failed": {
         "fi": "Verhokäyrien laskenta epäonnistui: {error}",
         "en": "Computing the envelopes failed: {error}",

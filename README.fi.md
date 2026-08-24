@@ -61,18 +61,33 @@ Silmukka:
 Kohdan 2 ja 3 välissä kuluu millisekunteja: liukusäätimen liike ajaa vain
 päätöskerroksen, ja esikatselupalkki näyttää lopputuloksen ilman XML-kierrosta.
 
-Vienti kirjoittaa uuden tiedoston `jakso-cut.fcpxml`; lähde-XML:ää ei
-kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
+Vienti kirjoittaa uuden tiedoston `jakso-cut broadcast.fcpxml`; lähde-XML:ää
+ei kosketa. Asetukset tallentuvat tiedostoon `jakso.autoraffkat.json` XML:n
 viereen.
 
-Aiemman viennin päälle ei kirjoiteta. Jos `jakso-cut.fcpxml` on jo
-olemassa, seuraavasta tulee `jakso-cut v2.fcpxml`, sitten `v3` ja niin
-edelleen. Käyttöliittymässä näkyvä polku on aina se johon seuraava vienti
-menee.
+Nimi kertoo millä säätimillä leikkaus tehtiin: rytmiprofiili aina, ja lisäksi
+ne säätimet jotka poikkeavat oletuksesta (`jakso-cut custom 3s louder stay
+audio.fcpxml`). Final Cutin selaimessa nimi on ainoa mikä erottaa leikkaukset
+toisistaan, eivätkä `-cut` ja `-cut v2` kerro kumpi niistä oli se nopea.
+Tunnisteet saa pois valinnalla **Säätimet tiedostonimeen** Projekti-osiosta;
+käyttöliittymässä näkyvä polku seuraa säätimiä, joten valinnan vaikutuksen
+näkee ennen vientiä.
+
+Aiemman viennin päälle ei kirjoiteta. Jos `jakso-cut broadcast.fcpxml` on jo
+olemassa, seuraavasta tulee `jakso-cut broadcast v2.fcpxml`, sitten `v3` ja
+niin edelleen. Numero juoksee saman asetusjoukon sisällä: eri säätimillä tehty
+leikkaus on eri tiedosto eikä saman tiedoston seuraava versio.
+
+Säätimet kulkevat myös viedyn XML:n sisällä. Sekvenssissä on yhden rivin
+`<note>` — versio, rytmi, kuvien kestot, säännöt ja se käsiteltiinkö mikit —
+ja `<metadata>`-lohko, jossa on oma `<md>` jokaiselle säätimelle sekä koko
+asetusjoukko JSONina avaimella `fi.autoraffkat.settings`. Sen ansiosta
+leikkauksen voi toistaa pelkän tiedoston perusteella koneella, joka ei ole
+nähnyt asetustiedostoa.
 
 Kun lähde on `.fcpxmld`-paketti, kumpikaan tiedosto ei mene paketin sisään
 vaan sen viereen ja saa paketin nimen: `episode 12.fcpxmld` tuottaa
-`episode 12-cut.fcpxml` ja `episode 12.autoraffkat.json`.
+`episode 12-cut broadcast.fcpxml` ja `episode 12.autoraffkat.json`.
 Paketti kuuluu Final Cutille.
 
 Uusi jakso perii roolit edellisestä: raita-avaimet on johdettu
