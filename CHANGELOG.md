@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.65] - 2026-08-25
+
+### Fixed
+- **The Plug-In Pool Loaded on the Wrong Thread**: moving processing into a child process was necessary but not sufficient. The pool then loaded each instance *lazily, inside the worker thread that would use it*, which is exactly what pedalboard forbids — and the error says `reset=False`, which points at processing and hides that the rule is about **loading**. Processing from a worker thread is fine; loading is not. Every instance is now created when the pool is built, on the thread that builds it, and each piece is handed one. Verified end to end on the real project: plug-in 59 s for a 20-minute file across six pieces, with ducking active.
+
 ## [v26.08.25.64] - 2026-08-25
 
 ### Fixed

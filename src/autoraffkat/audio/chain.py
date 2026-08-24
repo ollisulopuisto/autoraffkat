@@ -230,18 +230,21 @@ class PluginPool:
         self.path = path
         self.params = params
         self.workers = max(1, workers)
-        self._local = threading.local()
+        # **Kaikki instanssit ladataan tässä**, eli siinä säikeessä joka
+        # varannon rakentaa. Laiska säiekohtainen lataus oli ensimmäinen
+        # yritys ja se on juuri se mitä pedalboard kieltää: lataus onnistuu
+        # vain pääsäikeessä, ja työsäikeessä se kaatuu viestiin «must be
+        # reloaded on the main thread». Käsittely työsäikeestä on sallittua,
+        # lataus ei — ja ero on helppo sekoittaa, koska virhe puhuu
+        # `reset`istä.
+        self.instances = [load_plugin(path, params) for _ in range(self.workers)]
         self._pool = ThreadPoolExecutor(
             max_workers=self.workers, thread_name_prefix="plugin"
         )
 
-    def plugin(self):
-        """Tämän säikeen oma instanssi, ladattuna kerran."""
-        got = getattr(self._local, "plugin", None)
-        if got is None:
-            got = load_plugin(self.path, self.params)
-            self._local.plugin = got
-        return got
+    def plugin(self, index: int = 0):
+        """Instanssi numero ``index``. Yksi pala, yksi instanssi."""
+        return self.instances[index % len(self.instances)]
 
     def run(self, function, items) -> list:
         """Ajaa työt säikeissä ja palauttaa tulokset järjestyksessä."""
@@ -259,7 +262,6 @@ def load_pool(path: str, params: dict | None = None, count: int = 1):
     """
     if not path:
         return None
-    load_plugin(path, params)  # varhainen virhe: polku ja säätimet kunnossa
     return PluginPool(path, params, count)
 
 
@@ -320,7 +322,7 @@ def _apply_pool(pool: "PluginPool", audio: np.ndarray, rate: int) -> np.ndarray:
     frames = audio.shape[1]
     pieces = min(pool.workers, max(1, int(frames / rate / PIECE_MIN)))
     if pieces < 2:
-        return pool.plugin().process(audio, rate, reset=True)
+        return pool.plugin(0).process(audio, rate, reset=True)
 
     margin = int(PIECE_MARGIN * rate)
     edges = [int(round(i * frames / pieces)) for i in range(pieces + 1)]
@@ -329,7 +331,7 @@ def _apply_pool(pool: "PluginPool", audio: np.ndarray, rate: int) -> np.ndarray:
     def one(index: int) -> None:
         first, last = edges[index], edges[index + 1]
         low, high = max(0, first - margin), min(frames, last + margin)
-        done = pool.plugin().process(audio[:, low:high], rate, reset=True)
+        done = pool.plugin(index).process(audio[:, low:high], rate, reset=True)
         if done.shape[1] != high - low:
             raise ChainError(
                 t("audio.plugin_length", before=high - low, after=done.shape[1])

@@ -52,6 +52,14 @@ is the entire reason a track key is derived from the filename rather than the
 angle name or `angleID`: in a series the cameras stay, the angle numbers do
 not. Change how the key is derived and inheritance stops working silently.
 
+Loading a plug-in and using one are different rules. pedalboard loads only
+on the main thread; it processes from any thread. The error text says
+"pass reset=False if calling this plugin from a non-main thread", which
+points at processing and hides that the constraint is on loading — a lazy
+per-thread load looks reasonable and fails every time. `PluginPool` builds
+every instance in its constructor, on whichever thread constructs it, and
+hands one to each piece.
+
 The plug-in runs in a child process, and that is not an optimisation.
 pedalboard loads a VST3 only on the **main thread**; the server's main thread
 is the event loop and cannot be held for minutes. Hosting it in the server
