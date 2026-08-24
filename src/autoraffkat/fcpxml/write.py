@@ -29,6 +29,11 @@ if TYPE_CHECKING:  # vain tyypitystä varten: kirjoitus ei riipu asetuksista
 
 STANDARD_HEIGHTS = {480, 540, 576, 720, 1080, 1440, 2160, 4320}
 
+# Käsittelemättömän kaksosen tunnus nimessä ja aliroolissa. Ei käännetä:
+# roolin nimi on osa vientiä, ja kielen vaihtuminen tekisi samasta jaksosta
+# kaksi eri roolia Final Cutin roolilistaan.
+RAW_TAG = "raw"
+
 
 class WriteError(Exception):
     """Leikkausta ei voi kirjoittaa."""
@@ -329,6 +334,7 @@ def build_fcpxml(
             needed.append(key)
 
     res_ids: dict[str, str] = {}
+    fmt_ids: dict[str, str | None] = {}
     asset_lines: list[str] = []
     for key in needed:
         item = media_by_key.get(key)
@@ -340,9 +346,28 @@ def build_fcpxml(
             fmt_id = formats.get(
                 item.width or seq_width, item.height or seq_height, fd, next_id
             )
+        fmt_ids[key] = fmt_id
         res_ids[key] = next_id()
         asset_lines += _asset_lines(
             item, res_ids[key], fmt_id, replacements.get(key, "")
+        )
+
+    # Käsitellyn mikin raaka kaksonen: sama media, oma assettinsa, joka
+    # osoittaa alkuperäiseen tiedostoon. ``_asset_lines`` ilman polkua ottaa
+    # median oman ``src``:n, joten ohjauksen ohi ei tarvitse päätellä mitään.
+    #
+    # Assetti on muuten identtinen käsitellyn kanssa — sama media, sama
+    # formaatti — koska kyse on samasta tiedostosta. Tilaäänen tapaan sitä ei
+    # riisuta pelkäksi ääneksi: siellä lähde on kamera ja tulos WAV, tässä
+    # molemmat ovat sama tiedosto ja assetin pitää kertoa siitä sama totuus.
+    raw_ids: dict[str, str] = {}
+    for key, _ in mic_tracks:
+        item = media_by_key.get(key)
+        if item is None or key not in replacements:
+            continue
+        raw_ids[key] = next_id()
+        asset_lines += _asset_lines(
+            item, raw_ids[key], fmt_ids.get(key), "", f"{item.name} {RAW_TAG}"
         )
 
     # Tilaääni on oma assettinsa, vaikka lähde olisi sama kamera jota
@@ -390,10 +415,19 @@ def build_fcpxml(
         if index == 0 and (mic_tracks or room_ids):
             body.append(clip + ">")
             attached = [
-                (k, f"dialogue.{sanitize_role(name)}", res_ids)
+                (k, f"dialogue.{sanitize_role(name)}", res_ids, False)
                 for k, name in mic_tracks
             ]
-            attached += [(k, ROOM_ROLE, room_ids) for k, _ in room if k in room_ids]
+            attached += [
+                (k, ROOM_ROLE, room_ids, False) for k, _ in room if k in room_ids
+            ]
+            # Kaksoset viimeisenä, jotta työstettävien lanet eivät siirry:
+            # -1 on yhä ensimmäinen mikki, olipa käsittely päällä tai ei.
+            attached += [
+                (k, f"dialogue.{sanitize_role(f'{name} {RAW_TAG}')}", raw_ids, True)
+                for k, name in mic_tracks
+                if k in raw_ids
+            ]
             body += _mic_lines(
                 media_by_key,
                 attached,
@@ -465,7 +499,9 @@ def _mic_lines(
 ) -> list[str]:
     """Liitetyt ääniklipit ensimmäiseen spine-klippiin.
 
-    ``attached`` on lista kolmikoita (median key, rooli, resurssi-id-taulukko).
+    ``attached`` on lista nelikoita (median key, rooli, resurssi-id-taulukko,
+    raaka). Raaka kaksonen kirjoitetaan ``enabled="0"``: se on varakopio
+    käsitellylle, ei toinen mikki.
 
     Liitetyn klipin ``offset`` on isännän paikallisessa aikapohjassa, jonka
     nollakohta on isännän ``start``. Siksi ohjelman alkuun osuva mikki saa
@@ -473,12 +509,13 @@ def _mic_lines(
     """
     lines: list[str] = []
     lane = 0
-    for key, role, res_ids in attached:
+    for key, role, res_ids, raw in attached:
         item = media_by_key.get(key)
         if item is None or not item.has_audio or key not in res_ids:
             continue
         lane -= 1
-        src_enable = ""
+        src_enable = ' enabled="0"' if raw else ""
+        name = f"{item.name} {RAW_TAG}" if raw else item.name
         for placement in item.placements:
             clip_start = max(placement.offset, program_start)
             clip_end = min(placement.end, program_end)
@@ -493,7 +530,7 @@ def _mic_lines(
                 "              <asset-clip "
                 f'ref="{res_ids[key]}" lane="{lane}" '
                 f'offset="{frames_str(parent_start_frames + off_frames, frame_duration)}" '
-                f"name={quoteattr(item.name)} "
+                f"name={quoteattr(name)} "
                 f'start="{frames_str(src_frames, frame_duration)}" '
                 f'duration="{frames_str(dur_frames, frame_duration)}" '
                 f"audioRole={quoteattr(role)}{src_enable}/>"
@@ -621,9 +658,6 @@ def _room_asset(source, res_id: str, path: str):
     asset.set("audioChannels", "1")
     ET.SubElement(asset, "media-rep", {"kind": "original-media", "src": file_url(path)})
     return asset
-
-
-RAW_TAG = "raw"
 
 
 def _raw_twins(resources, redirects: dict[str, str]) -> dict[str, str]:

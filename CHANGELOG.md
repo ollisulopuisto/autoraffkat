@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.53] - 2026-08-24
+
+### Added
+- **The Raw Microphone Also Travels With a Flat Cut**: the muted twin now exists in the non-multicam export too. There are no angles there, so it is a connected clip on its own lane with `enabled="0"` and the subrole `dialogue.<Speaker> raw`. Twins sit on the lowest lanes — after the microphones and the room tone — so switching processing on does not move the microphone on lane −1. Only a processed track gets one; without processing there is nothing to fall back from.
+
 ## [v26.08.24.52] - 2026-08-24
 
 ### Fixed

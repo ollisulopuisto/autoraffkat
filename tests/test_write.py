@@ -434,6 +434,62 @@ def test_flat_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
     validate_fcpxml(xml, "flat-mixed.fcpxml")
 
 
+def test_flat_export_keeps_the_raw_audio_on_a_disabled_lane(
+    fixture_dir, validate_fcpxml
+):
+    """Littanassa kaksonen on lane, ei kulma — muuten sama sääntö.
+
+    Kaksoset menevät alimmille laneille, jotta käsittelyn kytkeminen päälle ei
+    siirrä sitä mikkiä jota leikkaaja katsoo lanella −1.
+    """
+    tl = read_fcpxml(str(fixture_dir / "sync.fcpxml"))
+    by_key = {m.key: m for m in tl.media}
+    xml = build_fcpxml(
+        by_key,
+        [Segment("WIDE.mp4", "Laaja", 0.0, 20.0)],
+        [("MIC_A.wav", "Host"), ("MIC_B.wav", "Guest")],
+        tl.frame_duration,
+        Fraction(0),
+        Fraction(20),
+        "Käsitelty",
+        replacements={"MIC_A.wav": "/mix/MIC_A [mix].wav"},
+    )
+    root = ET.fromstring(xml)
+    attached = root.findall(".//spine/asset-clip/asset-clip")
+    lanes = {c.get("audioRole"): c.get("lane") for c in attached}
+    # Kaksonen on viimeisenä: lomitettuna se olisi lanella −2 ja työntäisi
+    # Guestin alas pelkästään siksi että Hostin ääni käsiteltiin.
+    assert lanes["dialogue.Host"] == "-1"
+    assert lanes["dialogue.Guest"] == "-2"
+    assert lanes["dialogue.Host raw"] == "-3"
+
+    raw = next(c for c in attached if c.get("audioRole") == "dialogue.Host raw")
+    assert raw.get("enabled") == "0"
+    # Vain käsitelty saa kaksosen: MIC_B meni läpi raakana eikä tarvitse sitä.
+    assert "dialogue.Guest raw" not in lanes
+
+    # Kaksonen osoittaa alkuperäiseen, käsitelty ei.
+    assets = {a.get("id"): a for a in root.iter("asset")}
+
+    def src_of(clip):
+        return assets[clip.get("ref")].find("media-rep").get("src")
+
+    live = next(c for c in attached if c.get("audioRole") == "dialogue.Host")
+    assert "%5Bmix%5D" in src_of(live)
+    assert "%5Bmix%5D" not in src_of(raw)
+    assert raw.get("start") == live.get("start")
+    assert raw.get("duration") == live.get("duration")
+    assert raw.get("offset") == live.get("offset")
+    validate_fcpxml(xml, "flat-raw.fcpxml")
+
+
+def test_flat_raw_twin_only_appears_for_processed_tracks(fixture_dir):
+    """Ilman käsittelyä ei ole mitään mistä varmistua: ei kaksosta."""
+    _, xml = _cut(fixture_dir)
+    assert " raw" not in xml
+    assert 'enabled="0"' not in xml
+
+
 def test_room_asset_declares_mono(fixture_dir):
     """Tilaääni kirjoitetaan monona, joten assetti ei saa luvata stereota."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))

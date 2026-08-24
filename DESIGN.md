@@ -417,6 +417,21 @@ A separate subrole is deliberate: if the twin is switched on it must be
 adjustable on its own, otherwise it would sum with the processed track under
 one fader.
 
+In a flat export there are no angles, so the twin is a connected clip on its
+own lane with `enabled="0"`. Twins go **below** everything else — after the
+microphones and the room tone — so that turning processing on does not move
+the microphone the editor is looking at on lane −1. Interleaving each twin
+under its own microphone would do exactly that.
+
+Its asset is otherwise identical to the processed one — same media, same
+format — because it is the same file. Unlike the room tone it is not stripped
+to audio: there the source is a camera and the result a WAV, here both are the
+same file and the asset has to say the same thing about it.
+
+Only a processed track gets a twin. Without processing there is nothing to
+fall back from, and an extra disabled lane under every microphone would be
+noise.
+
 ### Ducking uses the picture's speech detection
 
 A microphone gate is classically hard: the detection flickers across word gaps

@@ -408,6 +408,19 @@ tarvitse päätellä takaisin jälkikäteen.
 Oma alirooli on tahallinen: jos kaksosen kytkee päälle, sitä pitää voida säätää
 erikseen — muuten se summautuisi käsitellyn kanssa saman liukusäätimen alle.
 
+Littanassa ei ole kulmia, joten kaksonen on liitetty klippi omalla lanellaan ja
+`enabled="0"`. Kaksoset menevät **alimmiksi** — mikkien ja tilaäänen jälkeen —
+jotta käsittelyn kytkeminen päälle ei siirrä sitä mikkiä jota leikkaaja katsoo
+lanella −1. Lomittaminen kunkin mikin alle tekisi juuri niin.
+
+Assetti on muuten identtinen käsitellyn kanssa — sama media, sama formaatti —
+koska kyse on samasta tiedostosta. Tilaäänen tapaan sitä ei riisuta pelkäksi
+ääneksi: siellä lähde on kamera ja tulos WAV, tässä molemmat ovat sama tiedosto
+ja assetin pitää kertoa siitä sama totuus.
+
+Kaksonen syntyy vain käsitellylle raidalle. Ilman käsittelyä ei ole mitään mistä
+varmistua, ja ylimääräinen vaimennettu lane jokaisen mikin alla olisi kohinaa.
+
 ### Vaimennus käyttää kuvan puheentunnistusta
 
 Mikin portti on klassisesti vaikea: tunnistus välkkyy tavuvälien yli ja

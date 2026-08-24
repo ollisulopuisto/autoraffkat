@@ -86,6 +86,11 @@ the `<bookmark>` and is therefore in sync to the sample, and the original `src`
 never has to be reconstructed. Own subrole, so switching it on gives it its own
 fader instead of summing with the processed track.
 
+The flat export has no angles, so there the twin is a connected clip with
+`enabled="0"`. Twins go on the **lowest** lanes, after the microphones and the
+room tone: turning processing on must not move the microphone the editor is
+looking at on lane −1. Only a processed track gets a twin.
+
 The processed files stay on disk between sessions, but `MixResult` does not.
 `mix.adopt` reads what is already there — `stat` only — and it runs on load and
 again at export. Without it, exporting without pressing the button referenced
