@@ -631,3 +631,101 @@ def test_closed_ranges_stay_inside_the_clip(fixture_dir):
     ranges = mix.closed_ranges(item, closed, 0.0, 48000)
     assert len(ranges) == 1
     assert ranges[0][1] <= 18 * 48000 + 48
+
+
+def test_run_mix_talks_to_the_child_process(scratch_xml, monkeypatch):
+    """Ajaa koko lapsiprosessin polun ilman lasta.
+
+    Tämä polku ei ollut testien ulottuvilla, ja siitä puuttui import: painike
+    kaatui virheeseen «name 'json' is not defined» eikä yksikään testi
+    huomannut. Nyt jokainen rivi ajetaan, vaikka itse liitännäistä ei ole.
+    """
+    import io
+    import json as _json
+
+    from autoraffkat.server.app import AppState
+
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    state.settings.audio.enabled = True
+
+    sent: dict = {}
+
+    class FakeChild:
+        returncode = 0
+
+        def __init__(self):
+            self.stdin = io.StringIO()
+            self.stdout = iter(
+                [
+                    _json.dumps(
+                        {
+                            "kind": "progress",
+                            "done": 0,
+                            "total": 2,
+                            "current": "a.wav",
+                            "stage": "read",
+                            "fraction": 0.1,
+                            "eta": 12.0,
+                        }
+                    )
+                    + "\n",
+                    "[ääni] lapsen oma lokirivi\n",  # ei JSONia: ei saa kaataa
+                    _json.dumps(
+                        {
+                            "kind": "done",
+                            "processed": 2,
+                            "skipped": 0,
+                            "gains": {"k": 3.0},
+                            "errors": {},
+                            "replacements": {"k": "/x [mix].wav"},
+                            "room": [],
+                            "program_trim": -1.5,
+                        }
+                    )
+                    + "\n",
+                ]
+            )
+
+        def wait(self):
+            return 0
+
+    def fake_popen(command, **kwargs):
+        sent["command"] = command
+        return FakeChild()
+
+    monkeypatch.setattr("autoraffkat.server.app.subprocess.Popen", fake_popen)
+    state.run_mix()
+
+    assert "autoraffkat.audio.worker" in sent["command"]
+    assert state.mix_result.processed == 2
+    assert state.mix_result.program_trim == -1.5
+    assert state.mix_result.replacements == {"k": "/x [mix].wav"}
+    assert state.mix_progress["running"] is False
+
+
+def test_a_child_that_dies_is_reported(scratch_xml, monkeypatch):
+    """Hiljainen kuolema olisi sama vika kuin vaimennuksen katoaminen."""
+    import io
+
+    from autoraffkat.server.app import AppState
+
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    state.settings.audio.enabled = True
+
+    class DeadChild:
+        returncode = 3
+
+        def __init__(self):
+            self.stdin = io.StringIO()
+            self.stdout = iter([])
+
+        def wait(self):
+            return 3
+
+    monkeypatch.setattr(
+        "autoraffkat.server.app.subprocess.Popen", lambda command, **kw: DeadChild()
+    )
+    state.run_mix()
+    assert "mix" in state.mix_result.errors

@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.64] - 2026-08-25
+
+### Fixed
+- **"Process Audio" Raised `name 'json' is not defined`**: the child-process change added a `json.dump` to the server without the import, and no test reached that path — the whole of `run_mix` was untested, so 235 green tests said nothing about the button. Two tests now drive it end to end with a stand-in child: one that reports progress, a non-JSON log line and a result, and one that dies with a non-zero code. Both were confirmed to fail without the fix.
+
 ## [v26.08.25.63] - 2026-08-25
 
 ### Fixed
