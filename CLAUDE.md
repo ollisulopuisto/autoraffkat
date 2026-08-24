@@ -79,6 +79,20 @@ When an asset's `src` is redirected, the `<bookmark>` must be removed. It is a
 macOS file reference that beats `src`, and leaving it would mean Final Cut
 opens the unprocessed file without saying anything.
 
+Redirection leaves no reference to the original, so every processed microphone
+angle gets a muted twin angle carrying the raw file (`_raw_twins`). The twin is
+a **copy** of the angle taken before the redirect: it inherits the times and
+the `<bookmark>` and is therefore in sync to the sample, and the original `src`
+never has to be reconstructed. Own subrole, so switching it on gives it its own
+fader instead of summing with the processed track.
+
+The processed files stay on disk between sessions, but `MixResult` does not.
+`mix.adopt` reads what is already there — `stat` only — and it runs on load and
+again at export. Without it, exporting without pressing the button referenced
+raw audio while the file name still said `audio`, and that difference is not
+noticed until someone listens, by which time the cut has been edited in Final
+Cut. Never make the export depend on which buttons were pressed this session.
+
 The channel strip is in `audio/chain.py`, on pedalboard. Two places where the
 library doesn't do what its name promises, both measured:
 

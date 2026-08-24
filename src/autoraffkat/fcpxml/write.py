@@ -543,12 +543,20 @@ def _split_spans(spans, marks: list[int]):
 
 
 def _mc_sources(
-    video_angle: str, audio_angles: list[tuple[str, str]], roles: dict[str, str]
+    video_angle: str,
+    audio_angles: list[tuple[str, str]],
+    roles: dict[str, str],
+    raw_angles: dict[str, str] | None = None,
 ) -> list[str]:
     """``<mc-source>``-rivit: yksi kuva, loput ääntä omilla rooleillaan.
 
     Kuvakulman oma ääni kytketään pois samalla tavalla kuin Final Cut sen
     kirjoittaa: rooli jää näkyviin mutta ``active="0"``.
+
+    ``raw_angles`` lisää jokaisen käsitellyn mikin viereen saman kulman
+    raakana ja vaimennettuna. Oma aliroolinsa siksi, että jos sen kytkee
+    päälle, sitä pitää voida säätää erikseen — muuten se summautuisi
+    käsitellyn kanssa samaan liukuun.
     """
     lines: list[str] = []
     if video_angle:
@@ -565,6 +573,16 @@ def _mc_sources(
             f"                <audio-role-source role={quoteattr(role)}/>",
             "              </mc-source>",
         ]
+        twin = (raw_angles or {}).get(angle_id)
+        if twin:
+            raw_role = f"dialogue.{sanitize_role(f'{speaker} {RAW_TAG}')}"
+            twin_id = quoteattr(twin)
+            lines += [
+                f'              <mc-source angleID={twin_id} srcEnable="audio">',
+                "                <audio-role-source "
+                + f'role={quoteattr(raw_role)} active="0"/>',
+                "              </mc-source>",
+            ]
     return lines
 
 
@@ -605,6 +623,71 @@ def _room_asset(source, res_id: str, path: str):
     return asset
 
 
+RAW_TAG = "raw"
+
+
+def _raw_twins(resources, redirects: dict[str, str]) -> dict[str, str]:
+    """Käsittelemätön ääni omaksi, vaimennetuksi kulmakseen.
+
+    Käsitelty ääni ohjataan assetin ``src``:llä, jolloin alkuperäiseen ei jää
+    viittausta. Se on peruuttamatonta silloin kun leikkaus on jo tehty Final
+    Cutissa: liitännäisen jälki kuullaan vasta kuuntelemalla, eikä raakaa
+    ääntä saa siinä vaiheessa enää takaisin ilman uutta vientiä, joka ei tuo
+    tehtyä työtä mukanaan. Siksi rinnalle kirjoitetaan sama kulma raakana.
+
+    Kulma **kopioidaan** ennen ohjausta eikä rakenneta uudestaan: kopio perii
+    ajat ja ``<bookmark>``in sellaisenaan, joten se osoittaa alkuperäiseen
+    tiedostoon ja on synkassa näytteen tarkkuudella. Vain ``angleID``,
+    näkyvä nimi ja assettiviittaukset muuttuvat.
+
+    Kaksonen on ``active="0"``: se on varakopio, ei toinen mikki. Palauttaa
+    ``alkuperäinen angleID -> raa'an angleID``.
+    """
+    from copy import deepcopy
+
+    if not redirects:
+        return {}
+    by_id = {a.get("id", ""): a for a in resources.iter("asset")}
+    twins: dict[str, str] = {}
+    for asset_id in redirects:
+        asset = by_id.get(asset_id)
+        if asset is None:
+            continue
+        copy = deepcopy(asset)
+        res_id = _next_resource_id(resources)
+        copy.set("id", res_id)
+        copy.set("name", f"{asset.get('name', '')} {RAW_TAG}".strip())
+        resources.append(copy)
+        twins[asset_id] = res_id
+
+    angles: dict[str, str] = {}
+    for multicam in resources.iter("multicam"):
+        used = {a.get("angleID", "") for a in multicam.findall("mc-angle")}
+        for angle in list(multicam.findall("mc-angle")):
+            refs = {
+                clip.get("ref", "") for clip in angle.iter() if clip.get("ref") in twins
+            }
+            if not refs:
+                continue
+            angle_id = angle.get("angleID", "")
+            twin = f"{angle_id}-{RAW_TAG}"
+            index = 2
+            while twin in used:
+                twin = f"{angle_id}-{RAW_TAG}{index}"
+                index += 1
+            used.add(twin)
+            copy = deepcopy(angle)
+            copy.set("angleID", twin)
+            copy.set("name", f"{angle.get('name', '')} {RAW_TAG}".strip())
+            for clip in copy.iter():
+                ref = clip.get("ref")
+                if ref in twins:
+                    clip.set("ref", twins[ref])
+            multicam.append(copy)
+            angles[angle_id] = twin
+    return angles
+
+
 def _next_resource_id(resources) -> str:
     """Vapaa resurssi-id kopioidusta lohkosta."""
     used = {child.get("id", "") for child in resources.iter()}
@@ -618,7 +701,7 @@ def _source_resources(
     path: str,
     redirects: dict[str, str] | None = None,
     room: list[tuple[str, str]] | None = None,
-) -> tuple[str, str, str, dict[str, str]]:
+) -> tuple[str, str, str, dict[str, str], dict[str, str]]:
     """Lähde-XML:n ``<resources>``, versio, sekvenssin formaatti ja tilaääni-id:t.
 
     Multicam-määrittelyä ei rakenneta uudestaan vaan se kopioidaan: kulmien
@@ -636,6 +719,10 @@ def _source_resources(
     sequence = root.find(".//sequence")
     seq_format = sequence.get("format", "") if sequence is not None else ""
 
+    # Raakakulmat ennen ohjausta: kopio perii alkuperäisen ``src``:n ja
+    # ``<bookmark>``in, eikä ohjattua tiedostoa tarvitse arvata takaisin.
+    raw_angles = _raw_twins(resources, redirects or {})
+
     by_id = {a.get("id", ""): a for a in resources.iter("asset")}
     for asset_id, target in (redirects or {}).items():
         asset = by_id.get(asset_id)
@@ -652,7 +739,7 @@ def _source_resources(
         room_ids[asset_id] = res_id
 
     body = ET.tostring(resources, encoding="unicode")
-    return body, root.get("version", "1.10"), seq_format, room_ids
+    return body, root.get("version", "1.10"), seq_format, room_ids, raw_angles
 
 
 def _room_lines(
@@ -750,7 +837,7 @@ def build_multicam_fcpxml(
         if k in by_key
     }
     room_jobs = [(by_key[k].asset_id, path) for k, path in (room or []) if k in by_key]
-    resources, version, seq_format, room_ids = _source_resources(
+    resources, version, seq_format, room_ids, raw_angles = _source_resources(
         timeline.source_path, redirects, room_jobs
     )
 
@@ -784,7 +871,7 @@ def build_multicam_fcpxml(
             f'start="{frames_str(start_frames, frame_duration)}"',
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
-        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles)
+        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles, raw_angles)
         if not attached_room and room_ids:
             attached_room = True
             sources = sources + _room_lines(

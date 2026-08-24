@@ -5,6 +5,7 @@ tuoreuden tunnistus ja näytemäärän tarkistus.
 """
 
 import os
+import pathlib
 
 import pytest
 
@@ -26,6 +27,49 @@ def test_original_is_never_the_target():
     for suffix in (mix.MIX_SUFFIX, mix.ROOM_SUFFIX):
         source = "/x/mic.wav"
         assert mix.sibling(source, suffix) != source
+
+
+def test_adopt_takes_the_processed_files_already_on_disk(fixture_dir, monkeypatch):
+    """Käsittely on kerran tehty työ; nappi ei saa olla sen ehto.
+
+    Ilman tätä sama jakso uudestaan avattuna vietäisiin raakana, vaikka
+    valmis ``[mix]`` on lähteen vieressä.
+    """
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+    from autoraffkat.analysis import resolve_roles
+
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    roles = resolve_roles(tl, tracks)
+    settings = AudioSettings(enabled=True)
+
+    # Mitään ei ole vielä levyllä.
+    assert not mix.adopt(tl, roles, settings).replacements
+
+    # Jäljet siivotaan: fixture on istunnon mittainen ja jaettu.
+    stubs = [
+        pathlib.Path(mix.sibling(item.path, mix.MIX_SUFFIX))
+        for item in tl.media
+        if item.path and item.path.endswith(".wav")
+    ]
+    try:
+        for stub in stubs:
+            stub.write_bytes(b"x")
+        found = mix.adopt(tl, roles, settings)
+        assert found.replacements
+        assert found.skipped == len(found.replacements)
+        assert all(p.endswith(" [mix].wav") for p in found.replacements.values())
+
+        # Pois kytkettynä ei mitään: vienti ei saa poiketa ruudusta.
+        assert not mix.adopt(tl, roles, AudioSettings(enabled=False)).replacements
+    finally:
+        for stub in stubs:
+            stub.unlink(missing_ok=True)
 
 
 def test_is_current_follows_modification_time(tmp_path):

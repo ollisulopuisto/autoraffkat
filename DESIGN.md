@@ -396,6 +396,27 @@ The `<bookmark>` must be **removed** at the same time. It is a macOS file
 reference that beats `src`: leaving it would mean Final Cut opens the original
 unprocessed file without saying anything.
 
+### The raw microphone travels with the cut, muted
+
+Redirection leaves no reference to the original, and that is a one-way door:
+the plug-in's mark is heard only by listening, and by then the cut has usually
+been imported into Final Cut and edited by hand. A fresh export would not bring
+that work along.
+
+So every processed microphone angle gets a twin in the multicam that carries
+the untouched file, `active="0"` and on its own subrole `dialogue.<Speaker>
+raw`. Enabling it in the Audio inspector is the way back.
+
+The twin is a **copy** of the angle rather than a new one built from scratch:
+it inherits the angle's times and its `<bookmark>`, so it points at the
+original file and is in sync to the sample. Only `angleID`, the visible name
+and the asset references change. The copy is taken before the redirect, which
+is why the original `src` does not have to be reconstructed afterwards.
+
+A separate subrole is deliberate: if the twin is switched on it must be
+adjustable on its own, otherwise it would sum with the processed track under
+one fader.
+
 ### Ducking uses the picture's speech detection
 
 A microphone gate is classically hard: the detection flickers across word gaps

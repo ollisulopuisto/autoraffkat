@@ -202,6 +202,10 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Äänen purku epäonnistui: {name}",
         "en": "Extracting the audio failed: {name}",
     },
+    "audio.would_overwrite": {
+        "fi": "Käsittely olisi kirjoittanut alkuperäisen päälle: {name}",
+        "en": "Processing would have written over the original: {name}",
+    },
     "audio.empty_file": {
         "fi": "Tyhjä äänitiedosto: {name}",
         "en": "Empty audio file: {name}",

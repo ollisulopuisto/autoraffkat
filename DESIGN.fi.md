@@ -388,6 +388,26 @@ viittaavat assettiin, joten leikkauslistaan ei tarvitse koskea.
 voittaa `src`:n: jättäminen tarkoittaisi että Final Cut avaa alkuperäisen
 käsittelemättömän tiedoston kertomatta siitä mitään.
 
+### Raaka mikki kulkee leikkauksen mukana vaimennettuna
+
+Ohjaus vie alkuperäisen viittauksen mennessään, ja se on yksisuuntainen ovi:
+liitännäisen jäljen kuulee vasta kuuntelemalla, ja siinä vaiheessa leikkaus on
+yleensä jo tuotu Final Cutiin ja käsin leikattu. Uusi vienti ei toisi sitä
+työtä mukanaan.
+
+Siksi jokainen käsitelty mikkikulma saa multicamiin kaksosen, joka kantaa
+koskemattoman tiedoston, `active="0"` ja omalla aliroolillaan
+`dialogue.<Puhuja> raw`. Paluutie on kytkeä se päälle ääni-inspektorista.
+
+Kaksonen on kulman **kopio** eikä uudestaan rakennettu: se perii kulman ajat ja
+`<bookmark>`in, joten se osoittaa alkuperäiseen tiedostoon ja on synkassa
+näytteen tarkkuudella. Vain `angleID`, näkyvä nimi ja assettiviittaukset
+muuttuvat. Kopio otetaan ennen ohjausta, minkä vuoksi alkuperäistä `src`:ää ei
+tarvitse päätellä takaisin jälkikäteen.
+
+Oma alirooli on tahallinen: jos kaksosen kytkee päälle, sitä pitää voida säätää
+erikseen — muuten se summautuisi käsitellyn kanssa saman liukusäätimen alle.
+
 ### Vaimennus käyttää kuvan puheentunnistusta
 
 Mikin portti on klassisesti vaikea: tunnistus välkkyy tavuvälien yli ja

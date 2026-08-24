@@ -128,6 +128,7 @@ class AppState:
             # asetuksia, ja kieli tulee edellisestä kuten muutkin.
             if self.settings.language:
                 self.language = i18n.normalise(self.settings.language)
+            self.adopt_mix()
         threading.Thread(target=self._analyze, daemon=True).start()
 
     def _inherit(self) -> set[str]:
@@ -297,6 +298,35 @@ class AppState:
             keys = {t.key for t in self.timeline.tracks} if self.timeline else set()
             wanted = str(raw["room_track"])
             a.room_track = wanted if wanted in keys else ""
+
+    def adopt_mix(self) -> None:
+        """Ottaa levyllä jo olevan käsitellyn äänen tämän istunnon käyttöön.
+
+        Käsittelyn tulos jää lähteen viereen, mutta ``mix_result`` katoaa
+        istunnon mukana. Ilman tätä sama jakso uudestaan avattuna vietäisiin
+        raakana, vaikka valmis ``[mix]`` on levyllä ja ajan tasalla.
+
+        Kutsutaan latauksessa ja viennissä, ei säätösilmukassa: kutsu tekee
+        ``stat``-kutsun kutakin mikkitiedostoa kohti, ja tiedoston lukeminen
+        ei kuulu siihen silmukkaan. Jo tiedettyjä ei ylikirjoiteta — oikea
+        ajo tietää enemmän kuin levyn tarkastelu.
+
+        Ei ota ``lock``ia itse: vienti pitää sitä jo, eikä ``threading.Lock``
+        ole uudelleensyötettävä. Kutsuja vastaa lukosta.
+        """
+        if self.timeline is None or self.mix_progress.get("running"):
+            return
+        roles = resolve_roles(self.timeline, self.settings.tracks)
+        found = mix.adopt(self.timeline, roles, self.settings.audio)
+        for key, path in found.replacements.items():
+            if key not in self.mix_result.replacements:
+                self.mix_result.replacements[key] = path
+                self.mix_result.skipped += 1
+        have = {k for k, _ in self.mix_result.room}
+        for key, path in found.room:
+            if key not in have:
+                self.mix_result.room.append((key, path))
+                self.mix_result.skipped += 1
 
     def run_mix(self) -> None:
         """Käsittelee äänet taustalla. Kestää minuutteja, ei kuulu silmukkaan."""
@@ -739,6 +769,10 @@ def create_app(state: AppState) -> FastAPI:
             try:
                 # Käsitelty ääni otetaan mukaan jos se on olemassa ja
                 # ajan tasalla. Vanhentunutta ei käytetä hiljaa.
+                # Levyllä jo oleva käsitelty ääni mukaan: rooli on voinut
+                # vaihtua avaamisen jälkeen, eikä painamatta jäänyt nappi saa
+                # olla syy siihen että vienti viittaa raakaan ääneen.
+                state.adopt_mix()
                 result = (
                     state.mix_result
                     if state.settings.audio.enabled

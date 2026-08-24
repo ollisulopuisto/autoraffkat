@@ -303,6 +303,59 @@ def test_multicam_export_uses_the_processed_audio(fixture_dir, validate_fcpxml):
     validate_fcpxml(xml, "mixed.fcpxml")
 
 
+def test_multicam_export_keeps_the_raw_audio_as_a_muted_angle(
+    fixture_dir, validate_fcpxml
+):
+    """Käsitelty soi, raaka on rinnalla vaimennettuna.
+
+    Ohjaus vie alkuperäisen viittauksen mennessään, ja liitännäisen jäljen
+    kuulee vasta Final Cutissa — jolloin leikkaus on jo tehty. Kaksoiskulma on
+    se paluutie, jota uusi vienti ei anna.
+    """
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    replacements = {
+        k: f"/mix/{k[:-4]} [mix].wav" for k in tl.media_by_key() if k.endswith(".wav")
+    }
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 36.0)],
+        [("host Track1", "Host")],
+        Fraction(0),
+        Fraction(36),
+        "Käsitelty",
+        replacements=replacements,
+    )
+    root = ET.fromstring(xml)
+    clip = root.find(".//spine/mc-clip")
+    audio = clip.findall('mc-source[@srcEnable="audio"]')
+    roles = [(a.get("angleID"), a.find("audio-role-source")) for a in audio]
+    live = [(i, r) for i, r in roles if r.get("active") != "0"]
+    muted = [(i, r) for i, r in roles if r.get("active") == "0"]
+    assert [r.get("role") for _, r in live] == ["dialogue.Host"]
+    assert [r.get("role") for _, r in muted] == ["dialogue.Host raw"]
+    # Kaksonen on eri kulma, ei sama kahdesti.
+    assert live[0][0] != muted[0][0]
+
+    # Käsitelty on siinä kulmassa jota soitetaan, raaka kaksosessa.
+    assets = {a.get("id"): a for a in root.iter("asset")}
+
+    def src_of(angle_id):
+        angle = next(a for a in root.iter("mc-angle") if a.get("angleID") == angle_id)
+        ref = next(c.get("ref") for c in angle.iter() if c.get("ref") in assets)
+        return assets[ref].find("media-rep").get("src")
+
+    assert "%5Bmix%5D" in src_of(live[0][0])
+    assert "%5Bmix%5D" not in src_of(muted[0][0])
+    validate_fcpxml(xml, "raw-twin.fcpxml")
+
+
+def test_raw_twin_only_appears_for_processed_tracks(fixture_dir):
+    """Ilman käsittelyä ei ole mitään mistä varmistua: ei kaksosta."""
+    _, xml = _multicam_cut(fixture_dir)
+    assert "-raw" not in xml
+    assert ET.fromstring(xml).find(".//spine/mc-clip") is not None
+
+
 def test_multicam_room_tone_is_one_lane_with_its_own_role(fixture_dir, validate_fcpxml):
     """Tilaääni ei ole kulma vaan liitetty klippi: kuva vaihtuu, ääni jatkuu."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))

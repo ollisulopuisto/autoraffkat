@@ -333,6 +333,12 @@ def _run_one(
             )
         )
 
+    # Alkuperäiseen ei kosketa. ``sibling`` takaa tämän jo, mutta tarkistus
+    # on kirjoituskohdassa, koska kohteen laskeminen on muualla ja yksi
+    # virhe siellä olisi peruuttamaton.
+    if os.path.abspath(job["target"]) == os.path.abspath(job["source"]):
+        raise MixError(t("audio.would_overwrite", name=os.path.basename(job["source"])))
+
     tmp = job["target"] + ".tmp.wav"
     with AudioFile(
         tmp, "w", rate, audio.shape[0], bit_depth=job.get("bit_depth", 24)
@@ -351,6 +357,28 @@ def _run_one(
         )
     os.replace(tmp, job["target"])
     return info.gain_db
+
+
+def adopt(timeline, roles, settings: AudioSettings) -> MixResult:
+    """Ottaa käyttöön ne käsitellyt tiedostot jotka ovat jo levyllä.
+
+    Käsittely tehdään kerran, mutta ``MixResult`` on istunnon tila. Ilman
+    tätä jakson uusi avaus veisi raakaa ääntä pelkästään siksi että nappia
+    ei painettu tällä kertaa — vaikka ajan tasalla oleva ``[mix]`` on
+    lähteen vieressä. Eron kuulee vasta Final Cutissa, jolloin leikkaus on
+    jo tehty eikä sille ole enää muuta lähdettä.
+
+    Pelkkiä ``stat``-kutsuja: ei lue ääntä eikä lataa liitännäistä. Vanhaa
+    ei oteta: ``is_current`` vertaa muokkausaikoja kuten ``process``.
+    """
+    result = MixResult()
+    if not settings.enabled:
+        return result
+    for job in _jobs(timeline, roles, settings):
+        if os.path.exists(job["source"]) and is_current(job["source"], job["target"]):
+            result.skipped += 1
+            _record(result, job)
+    return result
 
 
 def duck_masks(grid, settings: AudioSettings) -> dict:

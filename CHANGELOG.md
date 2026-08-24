@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.52] - 2026-08-24
+
+### Fixed
+- **The Export Used Raw Audio Unless the Button Was Pressed in That Session**: processed audio is written once and stays on disk beside the source, but the fact that it existed lived only in the session's memory. Reopening an episode — or opening a new one whose settings were inherited — and exporting straight away referenced the untouched originals, while the file name still said `audio`. Processed files that are up to date beside their source are now adopted on load and again at export, so the export follows what is on disk rather than which buttons were pressed.
+
+### Added
+- **The Raw Microphone Travels With the Cut**: every processed microphone angle now has a twin in the multicam carrying the untouched original, muted (`active="0"`) and on its own subrole (`dialogue.<Speaker> raw`). Redirecting an asset to the processed file leaves no reference to the original, and a plug-in's mark is heard only by listening — by which time the cut has usually been edited in Final Cut and a fresh export would not bring that work along. The twin is a copy of the angle, so it inherits its timing and bookmark and is in sync to the sample.
+
+### Changed
+- Processing now refuses outright to write to its source path. The target has always been a `[mix]` sibling, but the check now sits at the write itself, because that step is not reversible.
+
 ## [v26.08.24.51] - 2026-08-24
 
 ### Added
