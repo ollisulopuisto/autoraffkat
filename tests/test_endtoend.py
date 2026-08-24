@@ -476,12 +476,17 @@ def test_plugin_parameters_endpoint_lists_the_controls(scratch_xml, monkeypatch)
 
 
 def test_plugin_parameters_endpoint_reports_a_missing_plugin(scratch_xml):
-    """Virhe tulee heti eikä minuuttien päästä käsittelyn keskeltä."""
+    """Virhe tulee heti eikä minuuttien päästä käsittelyn keskeltä.
+
+    Viesti on käyttäjän kielellä, joten sitä ei verrata tekstinä: kieli on
+    ContextVar eikä testin ajojärjestys saa ratkaista tulosta. Polku on siinä
+    molemmilla kielillä, ja juuri se kertoo mikä meni pieleen.
+    """
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
     client = TestClient(create_app(state))
     response = client.get("/api/plugin-params", params={"path": "/ei/ole.vst3"})
     assert response.status_code == 400
-    assert "ei löydy" in response.json()["detail"].lower()
+    assert "/ei/ole.vst3" in response.json()["detail"]
 
 
 def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
