@@ -447,7 +447,7 @@ def process(
         return result
 
     try:
-        plugin = chain.load_plugin(settings.plugin_path)
+        plugin = chain.load_plugin(settings.plugin_path, settings.plugin_params)
     except ChainError as exc:
         result.errors["plugin"] = str(exc)
         return result

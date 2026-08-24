@@ -226,6 +226,15 @@ class AudioSettings:
     # tehdään kohinanpoisto ja restaurointi: ketjussa itsessään ei ole
     # kohinanvaimennusta, koska hyvä sellainen on liitännäinen.
     plugin_path: str = ""
+    # Liitännäisen omat säätimet: nimi -> arvo liitännäisen omissa
+    # yksiköissä (dB, %, päällä/pois), ei 0–1-raakana. pedalboard osaa
+    # muunnoksen itse (``plugin.input_gain = 3.0``), ja luettava arvo on
+    # myös se mikä päätyy asetustiedostoon ja viennin metatietoon.
+    #
+    # Vain käyttäjän koskemat säätimet ovat täällä; muut jäävät liitännäisen
+    # omiin oletuksiin. Tuntematon nimi ohitetaan äänettömästi, koska
+    # asetukset periytyvät jaksosta toiseen ja liitännäinen voi olla vaihtunut.
+    plugin_params: dict = field(default_factory=dict)
     # Toisen mikin vaimennus kun puhuja on hiljaa. Ohjaus tulee samasta
     # puheentunnistuksesta kuin kuvan leikkaus, mutta omilla ajoillaan: kuva
     # odottaa vahvistusaikaa ennen leikkausta, portin on avauduttava heti.

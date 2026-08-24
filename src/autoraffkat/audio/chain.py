@@ -111,8 +111,9 @@ def plugins() -> list[dict]:
     return [{"name": name, "path": path} for name, path in sorted(found.items())]
 
 
-def load_plugin(path: str):
-    """Lataa liitännäisen. Virhe on luettava, ei pedalboardin oma."""
+def load_plugin(path: str, params: dict | None = None):
+    """Lataa liitännäisen ja asettaa sen säätimet. Virhe on luettava, ei
+    pedalboardin oma."""
     import pedalboard
 
     if not path:
@@ -120,11 +121,141 @@ def load_plugin(path: str):
     if not os.path.exists(path):
         raise ChainError(t("audio.plugin_missing", path=path))
     try:
-        return pedalboard.load_plugin(path)
+        plugin = pedalboard.load_plugin(path)
     except Exception as exc:
         raise ChainError(
             t("audio.plugin_failed", name=os.path.basename(path), error=exc)
         ) from exc
+    apply_parameters(plugin, params)
+    return plugin
+
+
+def apply_parameters(plugin, params: dict | None) -> list[str]:
+    """Asettaa liitännäisen säätimet. Palauttaa nimet jotka ohitettiin.
+
+    Arvo on liitännäisen omissa yksiköissä (``plugin.input_gain = 3.0``);
+    pedalboard muuntaa sen liitännäisen raaka-arvoksi itse, eikä muunnos ole
+    aina lineaarinen — siksi asetuksissakin on yksikköarvo eikä 0–1.
+
+    Nimi tarkistetaan ``parameters``-sanakirjasta ennen kirjoitusta. Ilman
+    tarkistusta tuntematon nimi menisi läpi hiljaa: pedalboardin
+    liitännäisolio ottaa vastaan minkä tahansa attribuutin, jolloin asetus
+    näyttäisi menneen perille eikä vaikuttaisi mihinkään.
+
+    Ohitus ei ole virhe. Asetukset periytyvät jaksosta toiseen, ja edellisen
+    jakson liitännäinen on voinut olla toinen — silloin oikea käytös on ajaa
+    liitännäinen omilla oletuksillaan eikä kaataa koko käsittelyä.
+    """
+    skipped: list[str] = []
+    known = getattr(plugin, "parameters", None) or {}
+    for name, value in (params or {}).items():
+        if name not in known:
+            skipped.append(str(name))
+            continue
+        try:
+            setattr(plugin, name, value)
+        except (ValueError, TypeError):
+            skipped.append(str(name))
+    return skipped
+
+
+# Kuinka monta säädintä käyttöliittymälle kerrotaan. Puheliitännäisessä niitä
+# on muutama, syntikassa tuhansia. Katkaisu kerrotaan käyttäjälle: hiljainen
+# katkaisu näyttäisi siltä ettei liitännäisessä ole enempää.
+MAX_PARAMS = 64
+# Valikollisen säätimen vaihtoehdot. Sama syy.
+MAX_CHOICES = 64
+
+# Säätimien kuvaukset polun mukaan. Lataus kestää sekunteja, eikä liitännäinen
+# muutu ohjelman ajon aikana.
+_SPECS: dict[str, tuple[list[dict], int]] = {}
+
+
+def _spec(name: str, param) -> dict | None:
+    """Yksi säädin käyttöliittymän ymmärtämässä muodossa, tai ``None`` jos
+    sitä ei voi piirtää.
+
+    Tyyppi ratkaisee elementin: totuusarvo on valintaruutu, merkkijono on
+    valikko ja luku on liukusäädin. Rajat tulevat liitännäiseltä
+    (``range``), koska ne ovat sen omissa yksiköissä — desibeleissä,
+    prosenteissa tai hertseissä sen mukaan mistä säätimestä on kyse.
+    """
+    kind = getattr(param, "type", float)
+    label = str(getattr(param, "name", None) or name)
+    if kind is bool:
+        return {"name": name, "label": label, "type": "bool"}
+    if kind is str:
+        choices = [str(v) for v in (getattr(param, "valid_values", None) or [])]
+        if not choices:
+            return None
+        return {
+            "name": name,
+            "label": label,
+            "type": "choice",
+            "choices": choices[:MAX_CHOICES],
+        }
+    span = tuple(getattr(param, "range", None) or ())
+    low, high, step = (span + (None, None, None))[:3]
+    if low is None or high is None or float(high) <= float(low):
+        return None
+    low, high = float(low), float(high)
+    # Askel puuttuu portaattomalta säätimeltä. Sadasosa alueesta on se mitä
+    # liitännäisen oma yleiskäyttöliittymä näyttäisi.
+    step = float(step) if step else (high - low) / 100.0
+    out = {
+        "name": name,
+        "label": label,
+        "type": "float",
+        "min": low,
+        "max": high,
+        "step": step,
+    }
+    units = getattr(param, "units", None)
+    if units:
+        out["units"] = str(units)
+    return out
+
+
+def _default_value(plugin, name: str, kind: str):
+    """Säätimen nykyarvo omana tyyppinään, tai ``None`` jos sitä ei saa.
+
+    Muunnos on pakollinen: pedalboard palauttaa kääritun arvon, joka ei
+    mene sellaisenaan JSONiin.
+    """
+    cast = {"bool": bool, "choice": str}.get(kind, float)
+    try:
+        return cast(getattr(plugin, name))
+    except (AttributeError, TypeError, ValueError):
+        return None
+
+
+def parameter_specs(path: str) -> tuple[list[dict], int]:
+    """Liitännäisen säätimet käyttöliittymälle: ``(kuvaukset, kokonaismäärä)``.
+
+    Kuvaukseen tulee myös liitännäisen oma oletusarvo (``value``), jotta
+    säädin näyttää oikeaa lukua ennen kuin siihen on koskettu: asetuksiin
+    tallennetaan vain ne säätimet joita käyttäjä on liikuttanut.
+    """
+    if not path:
+        return [], 0
+    if path in _SPECS:
+        return _SPECS[path]
+    plugin = load_plugin(path)
+    known = getattr(plugin, "parameters", None) or {}
+    specs: list[dict] = []
+    for name in known:
+        spec = _spec(name, known[name])
+        if spec is None:
+            continue
+        value = _default_value(plugin, name, spec["type"])
+        if value is None:
+            continue
+        spec["value"] = value
+        specs.append(spec)
+        if len(specs) >= MAX_PARAMS:
+            break
+    _SPECS[path] = (specs, len(known))
+    return _SPECS[path]
 
 
 def loudness(mono: np.ndarray, rate: int) -> float | None:

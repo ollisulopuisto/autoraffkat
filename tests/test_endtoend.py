@@ -396,6 +396,94 @@ def test_unknown_room_track_is_refused(scratch_xml):
     assert state.settings.audio.room_track == ""
 
 
+def test_plugin_parameters_belong_to_their_plugin(scratch_xml, tmp_path):
+    """Säätimet nollataan kun liitännäinen vaihtuu.
+
+    Toisen liitännäisen nimet eivät osu mihinkään — ja jos osuvat, ne osuvat
+    väärään säätimeen. Se olisi huomaamaton virhe: käsittely menisi läpi ja
+    kuulostaisi väärältä.
+    """
+    first = tmp_path / "Yksi.vst3"
+    second = tmp_path / "Kaksi.vst3"
+    first.mkdir()
+    second.mkdir()
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+
+    def post(path, params):
+        client.post(
+            "/api/settings",
+            json={
+                "tracks": {},
+                "globals": {},
+                "audio": {"plugin_path": str(path), "plugin_params": params},
+            },
+        )
+
+    post(first, {"input_gain": 3.0})
+    assert state.settings.audio.plugin_params == {"input_gain": 3.0}
+    post(second, {})
+    assert state.settings.audio.plugin_params == {}
+    assert state.settings.audio.plugin_path == str(second)
+
+
+def test_plugin_parameters_accept_only_scalars(scratch_xml, tmp_path):
+    """Arvot menevät ulkopuoliselle liitännäiselle, joten muu kuin luku,
+    totuusarvo tai teksti ei pääse läpi."""
+    fake = tmp_path / "Vale.vst3"
+    fake.mkdir()
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    client.post(
+        "/api/settings",
+        json={
+            "tracks": {},
+            "globals": {},
+            "audio": {
+                "plugin_path": str(fake),
+                "plugin_params": {
+                    "gain": 3,
+                    "bypass": True,
+                    "mode": "Voice",
+                    "roska": [1, 2],
+                    "tyhja": None,
+                },
+            },
+        },
+    )
+    assert state.settings.audio.plugin_params == {
+        "gain": 3.0,
+        "bypass": True,
+        "mode": "Voice",
+    }
+
+
+def test_plugin_parameters_endpoint_lists_the_controls(scratch_xml, monkeypatch):
+    """Säätimet ovat oma pyyntönsä: liitännäisen lataus kestää sekunteja."""
+    from autoraffkat.audio import chain
+
+    monkeypatch.setattr(
+        chain,
+        "parameter_specs",
+        lambda path: ([{"name": "mix", "label": "Mix", "type": "float"}], 7),
+    )
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    client = TestClient(create_app(state))
+    data = client.get("/api/plugin-params", params={"path": "/x/Vale.vst3"}).json()
+    assert data["total"] == 7 and data["params"][0]["name"] == "mix"
+
+
+def test_plugin_parameters_endpoint_reports_a_missing_plugin(scratch_xml):
+    """Virhe tulee heti eikä minuuttien päästä käsittelyn keskeltä."""
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    client = TestClient(create_app(state))
+    response = client.get("/api/plugin-params", params={"path": "/ei/ole.vst3"})
+    assert response.status_code == 400
+    assert "ei löydy" in response.json()["detail"].lower()
+
+
 def test_export_ignores_processed_audio_that_is_not_there(scratch_xml):
     """Puuttuvaan [mix]-tiedostoon ei viitata, vaikka se olisi kirjattu."""
     from autoraffkat.audio import mix as mixer

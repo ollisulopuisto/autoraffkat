@@ -23,6 +23,7 @@ from fastapi.staticfiles import StaticFiles
 from .. import i18n, pick, probe, project, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
+from ..audio.chain import ChainError
 from ..decide import WIDE_LABEL, decide
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (
@@ -46,6 +47,28 @@ from ..paths import get_resource_path
 from ..preview import build as build_preview
 
 STATIC_DIR = get_resource_path("server/static")
+
+
+def _plugin_params(raw) -> dict:
+    """Liitännäisen säätimet selaimesta: nimi -> arvo.
+
+    Arvot menevät suoraan ulkopuoliselle liitännäiselle, joten tästä päästää
+    läpi vain skalaarit ja korkeintaan sen verran nimiä kuin
+    käyttöliittymälle ylipäätään näytetään. Nimiä ei tarkisteta täällä:
+    liitännäisen lataus kestää sekunteja eikä sitä tehdä säätökierroksella —
+    tuntematon nimi ohitetaan vasta ``chain.apply_parameters``issa.
+    """
+    if not isinstance(raw, dict):
+        return {}
+    out: dict = {}
+    for name, value in list(raw.items())[: chain.MAX_PARAMS]:
+        if isinstance(value, bool):
+            out[str(name)] = value
+        elif isinstance(value, (int, float)):
+            out[str(name)] = float(value)
+        elif isinstance(value, str):
+            out[str(name)] = value[:120]
+    return out
 
 
 @dataclass
@@ -261,7 +284,15 @@ class AppState:
             wanted = str(raw["plugin_path"]).strip()
             # Tuntematon polku nollataan heti: käsittely kaatuisi siihen
             # vasta minuuttien päästä.
-            a.plugin_path = wanted if (not wanted or os.path.exists(wanted)) else ""
+            wanted = wanted if (not wanted or os.path.exists(wanted)) else ""
+            # Säätimet kuuluvat siihen liitännäiseen josta ne luettiin.
+            # Toisen liitännäisen nimet eivät osu mihinkään, ja jos osuvat,
+            # ne osuvat väärään säätimeen.
+            if wanted != a.plugin_path:
+                a.plugin_params = {}
+            a.plugin_path = wanted
+        if "plugin_params" in raw:
+            a.plugin_params = _plugin_params(raw["plugin_params"])
         if "room_track" in raw:
             keys = {t.key for t in self.timeline.tracks} if self.timeline else set()
             wanted = str(raw["room_track"])
@@ -592,6 +623,19 @@ def create_app(state: AppState) -> FastAPI:
     def list_plugins():
         """Asennetut VST3- ja AU-liitännäiset. Haetaan vasta pyydettäessä."""
         return {"plugins": chain.plugins()}
+
+    @app.get("/api/plugin-params")
+    def plugin_parameters(path: str = ""):
+        """Yhden liitännäisen säätimet.
+
+        Erillinen pyyntö liitännäisluettelosta, koska tämä lataa
+        liitännäisen: se kestää sekunteja, eikä sitä saa tehdä 800:lle.
+        """
+        try:
+            specs, total = chain.parameter_specs(path)
+        except ChainError as exc:
+            raise HTTPException(400, str(exc)) from exc
+        return {"params": specs, "total": total}
 
     @app.get("/api/state")
     def get_state():

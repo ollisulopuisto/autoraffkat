@@ -312,6 +312,33 @@ paikalliseen **maksimiin**, vaikka kommentti puhui keskiarvosta. Naksu on
 määritelmän mukaan oman ympäristönsä maksimi, joten ehto ei voinut täyttyä
 koskaan ja koko käsittely oli nolla-operaatio. Keskiarvolla se toimii.
 
+### Liitännäisen säätimet ovat liitännäisen omissa yksiköissä
+
+Ketjussa ei ole omaa kohinanvaimennusta — se on ulkoisen liitännäisen työ, ja
+liitännäinen ilman säätimiään on se preset joka sattui olemaan tehdasoletus.
+`AudioSettings.plugin_params` on `{nimi: arvo}` -kartta, ja arvo on
+liitännäisen omassa yksikössä (`plugin.input_gain = 3.0` on kolme desibeliä)
+eikä se 0–1-raaka-arvo jota formaatti alla käyttää. Syitä on kaksi: muunnos
+raa'asta näkyvään ei ole aina lineaarinen ja pedalboard osaa sen valmiiksi, ja
+desibeliluku on luettava asetustiedostossa ja viedyn XML:n metatiedossa, joissa
+`0,5625` ei kertoisi kenellekään mitään.
+
+Tallennetaan vain kosketut säätimet; muut jäävät liitännäisen oletuksiin, eikä
+asetustiedosto täyty arvoista joita kukaan ei ole valinnut.
+
+Kaksi sääntöä estää väärän arvon päätymisen liitännäiselle huomaamatta. Nimi
+tarkistetaan `plugin.parameters`-sanakirjasta ennen kirjoitusta, koska
+pedalboardin liitännäisolio ottaa vastaan *minkä tahansa* attribuutin —
+tuntematon nimi näyttäisi menneen perille eikä vaikuttaisi mihinkään. Ja
+tuntematon tai rajojen ulkopuolinen nimi ohitetaan eikä kaadeta: asetukset
+periytyvät edellisestä jaksosta, jonka liitännäinen on voinut olla toinen, ja
+oikea käytös on silloin ajaa liitännäinen omilla oletuksillaan.
+
+Säätimien luettelointi lataa liitännäisen, mikä kestää sekunteja, joten se on
+oma pyyntönsä (`/api/plugin-params`) eikä osa liitännäisluetteloa — siinä on
+satoja rivejä. Tulos jää polun mukaan välimuistiin: liitännäinen ei muutu
+ohjelman ajon aikana.
+
 ### Miksi analyysi ajetaan raa'asta äänestä
 
 Kompressori tekee kaksi asiaa, jotka molemmat huonontavat päätöstä. Se nostaa

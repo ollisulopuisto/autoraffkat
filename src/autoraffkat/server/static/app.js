@@ -122,6 +122,7 @@ let inflight = null;            // AbortController
 let progressTimer = null;
 let mixTimer = null;
 let pluginList = null;          // haetaan kerran, samat koko koneella
+let pluginParams = {};          // polku -> säätimet, tai 'loading' / 'error'
 
 const $ = (id) => document.getElementById(id);
 const css = (name) => getComputedStyle(document.documentElement)
@@ -825,11 +826,17 @@ function renderAudio() {
   plugInput.addEventListener('change', () => {
     audio.plugin_path = pluginPath(plugInput.value);
     plugInput.value = pluginName(audio.plugin_path);
+    /* Säätimet kuuluvat siihen liitännäiseen josta ne luettiin: toisen
+       liitännäisen nimet eivät osu mihinkään, ja jos osuvat, ne osuvat
+       väärään säätimeen. Palvelin tekee saman tarkistuksen. */
+    audio.plugin_params = {};
+    renderAudio();
     schedule(0);
   });
   plug.append(plugInput);
   host.append(plug);
   loadPlugins();
+  if (audio.plugin_path) renderPluginParams(host, audio);
 
   AUDIO_KNOBS().forEach((spec) => {
     host.append(knob(spec, audio[spec.key], (v) => {
@@ -971,6 +978,7 @@ async function resetSection(which) {
   } else {
     const keep = { room_track: state.audio.room_track,
                    plugin_path: state.audio.plugin_path,
+                   plugin_params: state.audio.plugin_params,
                    enabled: state.audio.enabled };
     state.audio = Object.assign(data.audio, keep);
     renderAudio();
@@ -1011,6 +1019,110 @@ function pluginPath(name) {
   if (!wanted) return '';
   const hit = (pluginList || []).find((p) => p.name === wanted);
   return hit ? hit.path : '';
+}
+
+/* Liitännäisen omat säätimet. Luettelo tulee palvelimelta, koska se joutuu
+   lataamaan liitännäisen — sekunteja, eikä sitä tehdä kaikille 800:lle.
+   Vastaus jää polun mukaan talteen: liitännäinen ei muutu ajon aikana. */
+async function loadPluginParams(path) {
+  if (!path || pluginParams[path]) return;
+  pluginParams[path] = 'loading';
+  try {
+    const response = await fetch('/api/plugin-params?path='
+                                 + encodeURIComponent(path));
+    const data = await response.json();
+    pluginParams[path] = (response.ok && data && data.params) ? data : 'error';
+  } catch (err) {
+    pluginParams[path] = 'error';
+  }
+  renderAudio();
+}
+
+/* Säätimet ruudulle. Arvo on liitännäisen omassa yksikössä — desibeliä,
+   prosenttia, hertsiä sen mukaan mitä liitännäinen sanoo — eikä 0–1-raakana,
+   koska raaka-arvon ja näkyvän luvun välinen muunnos ei ole aina lineaarinen
+   ja pedalboard osaa sen itse.
+
+   Asetuksiin kirjoitetaan vain koskettu säädin. Koskematon jää liitännäisen
+   omaan oletukseen, jolloin asetustiedostoon ei jää kymmeniä rivejä
+   arvoja jotka ovat oletuksia joka tapauksessa. */
+function renderPluginParams(host, audio) {
+  const cached = pluginParams[audio.plugin_path];
+  if (!cached || cached === 'loading') {
+    loadPluginParams(audio.plugin_path);
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'muted small', textContent: T('audio.pluginLoading') }));
+    return;
+  }
+  /* h3 kuten muutkin osion otsikot: tyyli on jo olemassa eikä tähän
+     tarvita uutta. */
+  const head = document.createElement('h3');
+  head.textContent = T('audio.pluginParams');
+  host.append(head);
+  if (cached === 'error') {
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'warn', textContent: T('audio.pluginFailed') }));
+    return;
+  }
+  const specs = cached.params || [];
+  if (!specs.length) {
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'muted small', textContent: T('audio.pluginNoParams') }));
+    return;
+  }
+  const values = audio.plugin_params || (audio.plugin_params = {});
+  const set = (name, value) => { values[name] = value; schedule(); };
+  specs.forEach((spec) => {
+    const value = (spec.name in values) ? values[spec.name] : spec.value;
+    if (spec.type === 'bool') {
+      const label = document.createElement('label');
+      label.className = 'check';
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.checked = !!value;
+      box.addEventListener('change', () => set(spec.name, box.checked));
+      label.append(box, Object.assign(document.createElement('span'),
+        { textContent: spec.label }));
+      host.append(label);
+    } else if (spec.type === 'choice') {
+      const field = document.createElement('label');
+      field.className = 'field';
+      field.append(Object.assign(document.createElement('span'),
+        { textContent: spec.label }));
+      const select = document.createElement('select');
+      (spec.choices || []).forEach((choice) => {
+        const opt = document.createElement('option');
+        opt.value = choice; opt.textContent = choice;
+        if (choice === value) opt.selected = true;
+        select.append(opt);
+      });
+      select.addEventListener('change', () => set(spec.name, select.value));
+      field.append(select);
+      host.append(field);
+    } else {
+      host.append(knob({ key: spec.name, label: spec.label, min: spec.min,
+                         max: spec.max, step: spec.step,
+                         unit: spec.units ? ' ' + spec.units : '' },
+                       Number(value), (v) => set(spec.name, v)));
+    }
+  });
+  /* Katkaisu sanotaan ääneen: hiljainen katkaisu näyttäisi siltä ettei
+     liitännäisessä ole enempää säädettävää. */
+  if (cached.total > specs.length) {
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'muted small',
+        textContent: T('audio.pluginMore', { n: cached.total - specs.length }) }));
+  }
+  const defaults = document.createElement('button');
+  defaults.className = 'ghost small';
+  defaults.type = 'button';
+  defaults.textContent = T('audio.pluginDefaults');
+  defaults.addEventListener('click', () => {
+    audio.plugin_params = {};
+    renderAudio();
+    schedule(0);
+  });
+  host.append(defaults);
 }
 
 /* Jäljellä oleva aika lyhyesti: minuutit riittävät, sekunnit eivät auta. */

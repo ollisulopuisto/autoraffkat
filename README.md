@@ -176,6 +176,13 @@ External VST3 and AU plug-ins are discovered automatically from standard locatio
 * **Linux:** `/usr/lib/vst3`, `/usr/local/lib/vst3`, `~/.vst3`, `~/.local/lib/vst3`
 * **Windows:** `%CommonProgramFiles%\VST3`, `%LOCALAPPDATA%\Programs\Common\VST3`
 
+Once a plug-in is selected, its own controls appear below the field — the same
+parameters the plug-in exposes to a host, in the plug-in's own units (dB, %,
+on/off). Only the controls you touch are saved; the rest stay at the plug-in's
+own defaults. **Plug-in defaults** clears them all. The settings belong to the
+plug-in they were read from: choosing another plug-in clears them, because the
+same name in another plug-in would land on the wrong control.
+
 ## Controls
 
 **Rhythm & Profile**: Choose a macro pacing profile or tune individually:

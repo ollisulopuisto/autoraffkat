@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.51] - 2026-08-24
+
+### Added
+- **Plug-in Controls**: The external VST3/AU plug-in can now be given its parameters instead of running on whatever preset happened to be its factory default. Choosing a plug-in lists its own controls under the field — slider, checkbox or menu according to the parameter's type — in the plug-in's own units (dB, %, on/off), not the 0–1 raw value underneath. Only touched controls are saved; the rest stay at the plug-in's defaults, and **Plug-in defaults** clears them. The settings belong to the plug-in they were read from, so choosing another plug-in clears them: the same name in another plug-in would land on the wrong control. An unknown or out-of-range name is skipped rather than raised, because settings are inherited from the previous episode, whose plug-in may have been a different one.
+
 ## [v26.08.24.50] - 2026-08-24
 
 ### Added

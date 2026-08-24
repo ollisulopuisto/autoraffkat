@@ -155,3 +155,114 @@ def test_missing_plugin_is_a_readable_error():
     with pytest.raises(chain.ChainError, match="ei löydy"):
         chain.load_plugin("/ei/ole/mitaan.vst3")
     assert chain.load_plugin("") is None
+
+
+class _Param:
+    """pedalboardin säätimen olennaiset osat: nimi, tyyppi ja rajat."""
+
+    def __init__(self, name, kind=float, span=(-24.0, 24.0, 0.1), choices=()):
+        self.name = name
+        self.type = kind
+        self.range = span
+        self.valid_values = list(choices)
+        self.units = None
+
+
+class _Plugin:
+    """Liitännäinen joka hyväksyy vain omat säätimensä ja omat rajansa.
+
+    Oikea pedalboardin olio ottaa vastaan minkä tahansa attribuutin, joten
+    tuntematon nimi menisi läpi hiljaa. Se on juuri se mitä
+    ``apply_parameters`` estää, ja siksi tämä vale on tiukempi kuin oikea.
+    """
+
+    def __init__(self):
+        self.parameters = {
+            "bypass": _Param("Bypass", bool, (False, True, 1)),
+            "input_gain": _Param("Input Gain"),
+            "mode": _Param("Mode", str, None, ("Voice", "Music")),
+        }
+        self.values = {"bypass": False, "input_gain": 0.0, "mode": "Voice"}
+
+    def __setattr__(self, name, value):
+        if name in ("parameters", "values"):
+            return object.__setattr__(self, name, value)
+        if name not in self.parameters:
+            return object.__setattr__(self, name, value)
+        span = self.parameters[name].range
+        if (
+            span
+            and self.parameters[name].type is float
+            and not (span[0] <= value <= span[1])
+        ):
+            raise ValueError("out of range")
+        self.values[name] = value
+
+    def __getattr__(self, name):
+        try:
+            return object.__getattribute__(self, "values")[name]
+        except KeyError:
+            raise AttributeError(name) from None
+
+
+def test_plugin_parameters_are_set_in_the_plugins_own_units():
+    """``input_gain = 3.0`` on kolme desibeliä, ei 0–1-raaka."""
+    plugin = _Plugin()
+    assert chain.apply_parameters(plugin, {"input_gain": 3.0, "bypass": True}) == []
+    assert plugin.values["input_gain"] == 3.0 and plugin.values["bypass"] is True
+
+
+def test_unknown_parameter_is_skipped_not_written():
+    """Asetukset periytyvät jaksosta toiseen, ja liitännäinen voi vaihtua.
+
+    Väärä nimi ei saa kaataa käsittelyä eikä päätyä liitännäiselle: oikea
+    pedalboardin olio ottaisi sen vastaan tavallisena attribuuttina, jolloin
+    asetus näyttäisi menneen perille eikä vaikuttaisi mihinkään.
+    """
+    plugin = _Plugin()
+    skipped = chain.apply_parameters(plugin, {"eiOle": 1.0, "input_gain": 6.0})
+    assert skipped == ["eiOle"]
+    assert plugin.values == {"bypass": False, "input_gain": 6.0, "mode": "Voice"}
+
+
+def test_out_of_range_parameter_is_skipped_not_raised():
+    """Liitännäisen rajat ovat sen omat, eikä niitä tiedetä säätökierroksella."""
+    plugin = _Plugin()
+    assert chain.apply_parameters(plugin, {"input_gain": 999.0}) == ["input_gain"]
+    assert plugin.values["input_gain"] == 0.0
+
+
+def test_parameter_specs_describe_every_kind(tmp_path, monkeypatch):
+    """Käyttöliittymä piirtää tyypin mukaan: ruutu, valikko vai liuku."""
+    fake = tmp_path / "Vale.vst3"
+    fake.mkdir()
+    monkeypatch.setattr(chain, "_SPECS", {})
+    monkeypatch.setattr(chain, "load_plugin", lambda path, params=None: _Plugin())
+    specs, total = chain.parameter_specs(str(fake))
+    assert total == 3
+    kinds = {s["name"]: s for s in specs}
+    assert kinds["bypass"]["type"] == "bool" and kinds["bypass"]["value"] is False
+    assert kinds["mode"]["choices"] == ["Voice", "Music"]
+    gain = kinds["input_gain"]
+    assert (gain["min"], gain["max"], gain["step"]) == (-24.0, 24.0, 0.1)
+    assert gain["value"] == 0.0
+
+
+def test_too_many_parameters_are_cut_and_the_cut_is_reported(tmp_path, monkeypatch):
+    """Syntikassa säätimiä on tuhansia. Katkaisu ei saa olla hiljainen."""
+
+    class Many(_Plugin):
+        def __init__(self):
+            super().__init__()
+            self.parameters = {
+                f"p{i}": _Param(f"P {i}") for i in range(chain.MAX_PARAMS + 5)
+            }
+            self.values = {name: 0.0 for name in self.parameters}
+
+    fake = tmp_path / "Iso.vst3"
+    fake.mkdir()
+    monkeypatch.setattr(chain, "_SPECS", {})
+    monkeypatch.setattr(chain, "load_plugin", lambda path, params=None: Many())
+    specs, total = chain.parameter_specs(str(fake))
+    assert len(specs) == chain.MAX_PARAMS
+    assert total == chain.MAX_PARAMS + 5

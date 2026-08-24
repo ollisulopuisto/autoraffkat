@@ -152,6 +152,16 @@ const routes = {
   '/api/state': () => state,
   '/api/settings': () => latest,
   '/api/plugins': () => ({ plugins: [{ name: 'Example', path: '/x/Example.vst3' }] }),
+  '/api/plugin-params': () => ({
+    total: 9,
+    params: [
+      { name: 'mix', label: 'Mix', type: 'float', min: 0, max: 100, step: 0.1,
+        value: 50, units: '%' },
+      { name: 'bypass', label: 'Bypass', type: 'bool', value: false },
+      { name: 'mode', label: 'Mode', type: 'choice', value: 'Voice',
+        choices: ['Voice', 'Music'] },
+    ],
+  }),
   '/api/defaults': () => ({ globals: state.globals, audio: state.audio }),
   '/api/language': () => ({ language: 'fi', languages: ['fi', 'en'] }),
   '/api/export': () => ({ ok: true, path: '/x/out.fcpxml', cuts: 3, warnings: [] }),
@@ -339,6 +349,23 @@ async function asyncPaths() {
   await step('runMix', () => context.runMix());
   await step('resetSection(globals)', () => context.resetSection('globals'));
   await step('resetSection(audio)', () => context.resetSection('audio'));
+  /* Liitännäisen säätimet piirtyvät vasta kun palvelin on kertonut mitä
+     liitännäisessä on, eli asynkronisen kierroksen jälkeen. Ilman tätä
+     renderPluginParams ei ajaisi kuin lataushaaransa. */
+  const withPlugin = JSON.parse(JSON.stringify(context.__state));
+  withPlugin.audio.enabled = true;
+  withPlugin.audio.plugin_path = '/x/Example.vst3';
+  withPlugin.audio.plugin_params = { mix: 25 };
+  withPlugin.mix = { progress: {} };
+  context.__state = withPlugin;
+  vm.runInContext('state = __state;', context);
+  await step('loadPluginParams', () => context.loadPluginParams('/x/Example.vst3'));
+  step('renderAudio (liitännäisen säätimet)', () => context.renderAudio());
+  step('liitännäisen säätimien käsittelijät', () => {
+    let first = null;
+    fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
+    if (first) throw first;
+  });
   step('banner', () => { context.banner('viesti'); context.banner('virhe', true);
                          context.banner(''); });
   step('redrawAll', () => context.redrawAll());

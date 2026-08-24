@@ -314,6 +314,33 @@ against a local **maximum**, although the comment said mean. A click is by
 definition the maximum of its own neighbourhood, so the condition could never
 be true and the whole operation was a no-op. With a mean it works.
 
+### Plug-in parameters are stored in the plug-in's own units
+
+The chain has no noise reduction of its own — that is the external plug-in's
+job, and a plug-in without its parameters is whatever preset happened to be
+its factory default. `AudioSettings.plugin_params` is a `{name: value}` map,
+and the value is in the plug-in's own units (`plugin.input_gain = 3.0` means
+three decibels), not the 0–1 raw value the format underneath actually uses.
+Two reasons: the raw-to-displayed mapping is not always linear and pedalboard
+already knows it, and a decibel figure is readable in the settings file and in
+the exported XML's metadata, where a `0.5625` would tell nobody anything.
+
+Only touched controls are stored; the rest stay at the plug-in's defaults, so
+the settings file does not fill up with values that were never chosen.
+
+Two rules keep a wrong value from reaching the plug-in silently. A name is
+checked against `plugin.parameters` before it is written, because pedalboard's
+plug-in object accepts *any* attribute — an unknown name would look like it
+took effect and change nothing. And an unknown or out-of-range name is skipped
+rather than raised: settings are inherited from the previous episode, whose
+plug-in may have been a different one, and the right behaviour there is to run
+the plug-in on its own defaults, not to fail the whole run.
+
+Listing the controls loads the plug-in, which takes seconds, so it is a request
+of its own (`/api/plugin-params`) and not part of the plug-in list — that one
+has hundreds of entries. The result is cached by path: a plug-in does not
+change while the program runs.
+
 ### Why analysis runs on raw audio
 
 A compressor does two things, both of which degrade the decision. It raises the

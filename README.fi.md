@@ -179,6 +179,14 @@ Ulkoiset VST3- ja AU-liitännäiset etsitään automaattisesti käyttöjärjeste
 * **Linux:** `/usr/lib/vst3`, `/usr/local/lib/vst3`, `~/.vst3`, `~/.local/lib/vst3`
 * **Windows:** `%CommonProgramFiles%\VST3`, `%LOCALAPPDATA%\Programs\Common\VST3`
 
+Kun liitännäinen on valittu, sen omat säätimet ilmestyvät kentän alle — samat
+parametrit jotka liitännäinen tarjoaa isäntäohjelmalle, liitännäisen omissa
+yksiköissä (dB, %, päällä/pois). Asetuksiin tallentuvat vain ne säätimet joita
+on liikutettu, muut jäävät liitännäisen omiin oletuksiin. **Liitännäisen
+oletukset** nollaa ne kaikki. Säätimet kuuluvat siihen liitännäiseen josta ne
+luettiin: toisen liitännäisen valinta nollaa ne, koska sama nimi toisessa
+liitännäisessä osuisi väärään säätimeen.
+
 ## Säätimet
 
 **Rytmi ja profiili**: Valitse valmis leikkaustyyli tai säädä käsin:
