@@ -310,6 +310,18 @@ class AppState:
             wanted = str(raw["room_track"])
             a.room_track = wanted if wanted in keys else ""
 
+    def mix_freshness(self) -> dict:
+        """Montako mikkitiedostoa vastaa nykyisiä asetuksia.
+
+        Kesken ajon ei lasketa: luvut muuttuisivat kyselyn alla, eikä
+        edistymispalkki tarvitse niitä.
+        """
+        if self.timeline is None or self.mix_progress.get("running"):
+            return {"fresh": 0, "expected": 0}
+        roles = resolve_roles(self.timeline, self.settings.tracks)
+        fresh, total = mix.freshness(self.timeline, roles, self.settings.audio)
+        return {"fresh": fresh, "expected": total}
+
     def adopt_mix(self) -> None:
         """Ottaa levyllä jo olevan käsitellyn äänen tämän istunnon käyttöön.
 
@@ -339,8 +351,13 @@ class AppState:
                 self.mix_result.room.append((key, path))
                 self.mix_result.skipped += 1
 
-    def run_mix(self) -> None:
-        """Käsittelee äänet taustalla. Kestää minuutteja, ei kuulu silmukkaan."""
+    def run_mix(self, force: bool = False) -> None:
+        """Käsittelee äänet taustalla. Kestää minuutteja, ei kuulu silmukkaan.
+
+        ``force`` käsittelee myös ajan tasalla olevat uudestaan. Käyttäjä on
+        varmistanut sen erikseen: painike kertoo kun työ on tehty, eikä
+        minuuttien ajoa aloiteta vahingossa.
+        """
         assert self.timeline is not None
         roles = resolve_roles(self.timeline, self.settings.tracks)
         self.mix_progress.update(
@@ -382,6 +399,7 @@ class AppState:
                 grid=grid,
                 program_start=program_start,
                 progress=report,
+                force=force,
             )
             with self.lock:
                 self.mix_result = result
@@ -453,6 +471,10 @@ class AppState:
             # näytölle, ja tarvitsee siihen tiedon siitä mikä tunnus se on.
             "wide_label": WIDE_LABEL,
             "preview": build_preview(grid, decision),
+            # Tuoreus mukaan säätökierrokselle, jotta painike vanhenee samalla
+            # hetkellä kuin tulos: asetuksen muutos tekee valmiista työstä
+            # vanhentunutta, ja se on nähtävä kysymättä erikseen.
+            "mix_fresh": self.mix_freshness(),
             "ms": round(elapsed, 1),
             "_grid": (grid, program_start, program_end, decision),
         }
@@ -572,6 +594,7 @@ def _state_json(state: AppState) -> dict:
             # mitään tehtävää.
             "processed": state.mix_result.processed,
             "program_trim": state.mix_result.program_trim,
+            **state.mix_freshness(),
             "gains": state.mix_result.gains,
             "errors": list(state.mix_result.errors.values()),
         },
@@ -869,12 +892,13 @@ def create_app(state: AppState) -> FastAPI:
             raise HTTPException(409, state.load_error or t("export.not_loaded"))
         if state.mix_progress.get("running"):
             return {"ok": True, "running": True}
+        force = bool((payload or {}).get("force"))
         with state.lock:
             if payload:
                 state.apply(payload)
             state.settings.audio.enabled = True
             project.save(state.xml_path, state.settings)
-        threading.Thread(target=state.run_mix, daemon=True).start()
+        threading.Thread(target=state.run_mix, args=(force,), daemon=True).start()
         return {"ok": True, "running": True}
 
     @app.post("/api/reveal")

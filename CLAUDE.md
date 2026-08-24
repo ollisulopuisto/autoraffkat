@@ -136,6 +136,15 @@ or out unnoticed; a test fails if it does. An unknown stamp counts as stale.
 `adopt` uses the same test as `process`, or the export would use a file that
 processing has just decided to redo.
 
+The button carries the state, because the work is minutes long and invisible.
+`mix.freshness` counts how many files match the settings right now — `stat`
+calls and stamp reads, cheap enough for the settings round, which is where it
+runs so the button goes stale at the same moment the result does. All fresh
+means the button says so and asks for confirmation before re-rendering
+(`force`); some stale means it invites a run and the note says how many were
+made with different settings. Only the button is swapped in place: redrawing
+the audio panel would replace a slider mid-drag.
+
 The processed files stay on disk between sessions, but `MixResult` does not.
 `mix.adopt` reads what is already there — `stat` only — and it runs on load and
 again at export. Without it, exporting without pressing the button referenced

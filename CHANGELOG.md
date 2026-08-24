@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.24.56] - 2026-08-24
+
+### Added
+- **The Button Says What Has Been Done**: after a run the panel reset to "Process audio", which looks exactly like a panel where nothing has happened. There are three states and they were all rendered the same: nothing processed, everything processed, and processed-but-the-settings-have-changed-since. The button now reads "Audio processed (n files)" when every file matches the current settings, and pressing it asks for confirmation before starting a run that costs minutes. When only some files are stale — because a control moved after the last run — it invites processing again and the note says how many and why. Freshness is recomputed on every settings round, so the button goes stale at the same moment the result does; only the button is swapped, never the whole panel, because redrawing it would pull a slider out from under a drag.
+- **Deliberate Re-rendering**: `/api/mix` takes `force`, which processes files that are already up to date. Reachable only through the confirmation, because it is minutes of work that the fingerprint would otherwise correctly skip.
+
 ## [v26.08.24.55] - 2026-08-24
 
 ### Performance

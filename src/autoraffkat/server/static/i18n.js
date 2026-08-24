@@ -127,6 +127,11 @@ const STRINGS = {
     'audio.roomDbUnit': ' dB puhetta hiljempaa',
     'audio.run': 'Käsittele ääni',
     'audio.running': 'Käsitellään…',
+    /* Tehty työ näkyy painikkeesta. Ilman tätä painike palasi aina tekstiin
+       «Käsittele ääni», eikä valmiiseen ajoon voinut luottaa katsomalla. */
+    'audio.runDone': 'Ääni käsitelty ({n} tiedostoa)',
+    'audio.runAgain': 'Käsittele uudelleen — vahvista',
+    'app.cancel': 'Peruuta',
     'audio.left': ' · noin {time} jäljellä',
     /* Vaiheen nimi kertoo miksi palkki liikkuu hitaasti: liitännäinen on
        ylivoimaisesti kallein vaihe eikä kerro itsestään mitään. */
@@ -143,6 +148,7 @@ const STRINGS = {
     'audio.readyGain': ' · nosto {low}…{high} dB',
     'audio.readyProgram': ' · summan trimmi {db} dB',
     'audio.readyTail': '. Vienti käyttää niitä.',
+    'audio.readyStale': '. {n} on tehty eri asetuksilla — käsittele uudelleen.',
     'audio.idle': 'Alkuperäisiin tiedostoihin ei kosketa; käsitelty ääni '
       + 'kirjoitetaan [mix]-kopioiksi niiden viereen.',
     /* Ajo joka ei tehnyt mitään näyttää muuten täsmälleen rikkinäiseltä
@@ -290,6 +296,9 @@ const STRINGS = {
     'audio.roomDbUnit': ' dB below speech',
     'audio.run': 'Process audio',
     'audio.running': 'Processing…',
+    'audio.runDone': 'Audio processed ({n} files)',
+    'audio.runAgain': 'Process again — confirm',
+    'app.cancel': 'Cancel',
     'audio.left': ' · about {time} left',
     'audio.stage.read': 'reading',
     'audio.stage.plugin': 'plug-in',
@@ -304,6 +313,7 @@ const STRINGS = {
     'audio.readyGain': ' · lift {low}…{high} dB',
     'audio.readyProgram': ' · program trim {db} dB',
     'audio.readyTail': '. The export will use them.',
+    'audio.readyStale': '. {n} of them were made with different settings — process again.',
     'audio.idle': 'The originals are never touched; processed audio is written '
       + 'as [mix] copies beside them.',
     'audio.nothingToDo': 'Every file was already up to date — nothing to do.',

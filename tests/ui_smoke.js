@@ -26,6 +26,11 @@ const [staticDir, statePath, latestPath] = process.argv.slice(2);
    jota ei ole. */
 const created = [];
 
+/* Tunnukselliset elementit talteen, jotta $() löytää juuri sen elementin
+   jonka koodi loi. Ilman tätä getElementById palautti aina uuden tyhjän
+   divin, ja paikallaan vaihtaminen näytti onnistuvan tekemättä mitään. */
+const registry = new Map();
+
 function makeElement(tag) {
   const el = {
     _handlers: {},
@@ -39,7 +44,10 @@ function makeElement(tag) {
              getPropertyValue(name) { return this[name] || ''; } },
     attributes: {},
     _text: '',
+    _id: '',
     innerHTML: '',
+    get id() { return this._id; },
+    set id(value) { this._id = String(value); registry.set(this._id, this); },
     get textContent() { return this._text; },
     set textContent(value) { this._text = String(value); this.children = []; },
     classList: {
@@ -49,8 +57,25 @@ function makeElement(tag) {
       toggle(n, on) { if (on === undefined ? !this._set.has(n) : on) this._set.add(n); else this._set.delete(n); },
       contains(n) { return this._set.has(n); },
     },
-    append(...nodes) { nodes.forEach((n) => this.children.push(n)); },
-    appendChild(node) { this.children.push(node); return node; },
+    append(...nodes) {
+      nodes.forEach((n) => { if (n && typeof n === 'object') n._parent = this;
+                             this.children.push(n); });
+    },
+    appendChild(node) {
+      if (node && typeof node === 'object') node._parent = this;
+      this.children.push(node);
+      return node;
+    },
+    /* Paikallaan vaihtaminen on oikea DOM-toiminto ja app.js käyttää sitä,
+       jotta säätimiä ei piirretä uudestaan kesken raahauksen. */
+    replaceWith(node) {
+      const parent = this._parent;
+      if (!parent) return;
+      const at = parent.children.indexOf(this);
+      if (at >= 0) parent.children[at] = node;
+      node._parent = parent;
+      if (this._id) registry.set(this._id, node);
+    },
     remove() {},
     setAttribute(name, value) { this.attributes[name] = value; },
     getAttribute(name) { return this.attributes[name]; },
@@ -120,7 +145,6 @@ function fireAll(report) {
   created.length = 0;
 }
 
-const registry = new Map();
 const document = {
   createElement: (tag) => makeElement(tag),
   createTextNode: (text) => ({ nodeType: 3, textContent: String(text) }),
@@ -377,6 +401,33 @@ async function asyncPaths() {
     fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
     if (first) throw first;
   });
+  /* Valmis käsittely on oma tilansa, ja sen takana on vahvistus. Ilman tätä
+     haaraa painikkeen kolmesta tilasta ajettaisiin vain yksi — ja juuri se
+     jota käyttäjä ei näe työn jälkeen. */
+  const processed = JSON.parse(JSON.stringify(context.__state));
+  processed.audio.enabled = true;
+  processed.mix = { progress: {}, ready: 4, fresh: 4, expected: 4, gains: {},
+                    errors: [], program_trim: -1.8 };
+  context.__state = processed;
+  vm.runInContext('state = __state;', context);
+  step('renderAudio (kaikki ajan tasalla)', () => context.renderAudio());
+  step('valmis-painikkeen käsittelijät', () => {
+    let first = null;
+    fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
+    if (first) throw first;
+  });
+  step('vahvistus ja peruutus', () => {
+    context.mixConfirm = true;
+    context.swapMixButton();
+    let first = null;
+    fireAll((where, err) => { if (!first) first = new Error(`${where}: ${err.message}`); });
+    if (first) throw first;
+  });
+  /* Osa vanhentunut: painike kutsuu taas painamaan ja teksti kertoo miksi. */
+  context.__state.mix.fresh = 2;
+  vm.runInContext('state = __state;', context);
+  step('renderAudio (osa vanhentunut)', () => context.renderAudio());
+  step('runMix(force)', () => context.runMix(true));
   step('banner', () => { context.banner('viesti'); context.banner('virhe', true);
                          context.banner(''); });
   step('redrawAll', () => context.redrawAll());

@@ -646,6 +646,23 @@ def _run_one(
     return info.gain_db
 
 
+def freshness(timeline, roles, settings: AudioSettings) -> tuple[int, int]:
+    """(ajan tasalla, kaikkiaan) — mitä painike kertoo käyttäjälle.
+
+    Käyttöliittymän on erotettava kolme tilaa, jotka näyttivät ennen samalta:
+    ei käsitelty, käsitelty, ja käsitelty mutta asetukset ovat sen jälkeen
+    muuttuneet. Ilman tätä painike palasi joka kerta tekstiin «Käsittele
+    ääni», eikä valmiiseen työhön voinut luottaa katsomalla.
+
+    Pelkkiä ``stat``-kutsuja ja pieniä merkintätiedostoja, kuten ``adopt``:
+    tämä saa olla kyselyn tiellä, äänen lukeminen ei.
+    """
+    if timeline is None or not settings.enabled:
+        return 0, 0
+    jobs = _jobs(timeline, roles, settings)
+    return sum(1 for job in jobs if is_fresh(job, settings)), len(jobs)
+
+
 def adopt(timeline, roles, settings: AudioSettings) -> MixResult:
     """Ottaa käyttöön ne käsitellyt tiedostot jotka ovat jo levyllä.
 
@@ -737,11 +754,16 @@ def process(
     grid=None,
     program_start: float = 0.0,
     progress=None,
+    force: bool = False,
 ) -> MixResult:
     """Käsittelee mikit ja tilaäänen. Hidas — ei kuulu säätösilmukkaan.
 
     Liitännäinen ladataan kerran ja sen tila nollataan tiedostojen välissä:
     lataus maksaa, mutta edellisen tiedoston häntä ei saa vuotaa seuraavaan.
+
+    ``force`` ohittaa tuoreuden ja käsittelee kaiken uudestaan. Se on
+    käyttäjän tahallinen valinta eikä oletus: ajo maksaa minuutteja, joten
+    käyttöliittymä kysyy sen erikseen.
     """
     result = MixResult()
     if not settings.enabled:
@@ -756,7 +778,7 @@ def process(
     for job in jobs:
         if not os.path.exists(job["source"]):
             result.errors[job["key"]] = t("audio.source_missing", path=job["source"])
-        elif is_fresh(job, settings):
+        elif not force and is_fresh(job, settings):
             _log(f"ohitetaan {job['name']}: ajan tasalla")
             result.skipped += 1
             _record(result, job)

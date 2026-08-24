@@ -387,3 +387,10 @@ button.small:hover { opacity: 1; }
 .langs { display: inline-flex; gap: 4px; }
 .langs .lang { font-size: 11px; padding: 4px 8px; letter-spacing: .04em; }
 .langs .lang:disabled { opacity: .45; }
+
+/* Käsittelypainike kertoo tilansa. Valmis on hillitty eikä kutsu painamaan;
+   vahvistus erottuu, koska sen takana on minuuttien ajo. */
+.mix-run { display: inline-flex; gap: 6px; align-items: center; }
+.mix-run button.done { opacity: .75; cursor: default; }
+.mix-run button.done::before { content: "✓ "; color: var(--ok, #4c9); }
+.mix-run button.warn { border-color: var(--warn); color: var(--warn); }

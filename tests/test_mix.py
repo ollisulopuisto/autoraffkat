@@ -322,6 +322,84 @@ def test_program_trim_measures_the_sum_not_the_stem(tmp_path):
     assert mix.program_trim(turns[:1], settings) == 0.0
 
 
+def test_freshness_counts_what_matches_the_settings(fixture_dir, monkeypatch, tmp_path):
+    """Painike erottaa kolme tilaa, jotka näyttivät ennen samalta.
+
+    Ei käsitelty, käsitelty, ja käsitelty mutta asetukset ovat sen jälkeen
+    muuttuneet. Ilman tätä lukua painike palasi aina tekstiin «Käsittele
+    ääni», eikä minuuttien ajoa voinut välttää katsomalla.
+    """
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    roles = resolve_roles(tl, tracks)
+    settings = AudioSettings(enabled=True)
+    jobs = mix._jobs(tl, roles, settings)
+    stubs = [pathlib.Path(job["target"]) for job in jobs]
+    try:
+        assert mix.freshness(tl, roles, settings) == (0, len(jobs))
+
+        for stub, job in zip(stubs, jobs):
+            stub.write_bytes(b"x")
+            mix.write_stamp(job, settings)
+        assert mix.freshness(tl, roles, settings) == (len(jobs), len(jobs))
+
+        # Asetuksen muutos vanhentaa valmiin työn saman tien.
+        louder = AudioSettings(enabled=True, target_lufs=-9.0)
+        assert mix.freshness(tl, roles, louder) == (0, len(jobs))
+
+        # Pois kytkettynä ei ole mitään mitä odottaa.
+        assert mix.freshness(tl, roles, AudioSettings(enabled=False)) == (0, 0)
+    finally:
+        for stub in stubs:
+            stub.unlink(missing_ok=True)
+
+
+def test_force_processes_what_is_already_current(fixture_dir, monkeypatch, tmp_path):
+    """Uudelleenkäsittely on käyttäjän tahallinen valinta, ei oletus."""
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    monkeypatch.setattr(mix, "stamp_dir", lambda: tmp_path)
+    monkeypatch.setattr(mix.chain, "load_pool", lambda *a, **k: None)
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    roles = resolve_roles(tl, tracks)
+    settings = AudioSettings(enabled=True, program_target=False)
+    jobs = mix._jobs(tl, roles, settings)
+    stubs = [pathlib.Path(job["target"]) for job in jobs]
+    try:
+        for stub, job in zip(stubs, jobs):
+            stub.write_bytes(b"x")
+            mix.write_stamp(job, settings)
+
+        # Ilman lippua ei tehdä mitään: kaikki on ajan tasalla.
+        quiet = mix.process(tl, roles, settings)
+        assert quiet.processed == 0 and quiet.skipped == len(jobs)
+
+        # Lipun kanssa jokainen menee käsittelyyn — tässä pysäytettynä
+        # tiedoston lukuun, mikä riittää osoittamaan että ohitus jäi pois.
+        forced = mix.process(tl, roles, settings, force=True)
+        assert forced.skipped == 0
+        assert forced.processed + len(forced.errors) == len(jobs)
+    finally:
+        for stub in stubs:
+            stub.unlink(missing_ok=True)
+
+
 def test_readable_formats_pass_through(tmp_path):
     """WAV kelpaa sellaisenaan; purkuun ei mennä turhaan."""
     source = tmp_path / "a.wav"

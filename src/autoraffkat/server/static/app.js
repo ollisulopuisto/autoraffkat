@@ -121,6 +121,9 @@ let pending = null;             // ajastin
 let inflight = null;            // AbortController
 let progressTimer = null;
 let mixTimer = null;
+// Onko uudelleenkäsittely varmistettavana. Moduulitasolla, koska painike
+// vaihdetaan paikallaan eikä tila saa kadota vaihdon mukana.
+let mixConfirm = false;
 let pluginList = null;          // haetaan kerran, samat koko koneella
 let pluginParams = {};          // polku -> säätimet, tai 'loading' / 'error'
 
@@ -961,17 +964,11 @@ function renderAudio() {
     });
   }
 
-  const busy = !!(info.progress && info.progress.running);
-  const run = document.createElement('button');
-  run.className = 'ghost';
-  run.id = 'mix-run';
-  run.textContent = T('audio.run');
-  run.addEventListener('click', runMix);
-  if (busy) setBusy(run, true, T('audio.running'));
-  host.append(run);
+  host.append(mixButton(info));
 
   host.append(resetButton('audio', T('app.reset.audio')));
 
+  const busy = !!(info.progress && info.progress.running);
   const note = document.createElement('p');
   note.className = 'muted small';
   if (busy) {
@@ -1000,13 +997,75 @@ function renderAudio() {
     const trim = info.program_trim
       ? T('audio.readyProgram', { db: info.program_trim.toFixed(1) })
       : '';
+    /* Vanhentuneet erikseen: «4 valmiina» ja «4 valmiina, 2 niistä eri
+       asetuksilla» ovat eri tilanteita, ja jälkimmäinen on se jossa
+       painiketta kannattaa painaa. */
+    const stale = Math.max(0, (info.expected || 0) - (info.fresh || 0));
     note.textContent = T('audio.ready', { n: info.ready })
       + (info.room ? T('audio.readyRoom', { n: info.room }) : '') + lift + trim
-      + T('audio.readyTail');
+      + (stale ? T('audio.readyStale', { n: stale }) : T('audio.readyTail'));
   } else {
     note.textContent = T('audio.idle');
   }
   host.append(note);
+}
+
+/* Käsittelypainike, joka muistaa mitä on jo tehty.
+
+   Kolme tilaa, jotka näyttivät ennen samalta. Ajossa: palkki ja «Käsitellään».
+   Jotain tekemättä: «Käsittele ääni». Kaikki ajan tasalla: painike kertoo sen
+   eikä kutsu painamaan — ja jos silti painetaan, se kysyy ensin. Ajo maksaa
+   minuutteja, eikä sitä saa aloittaa vahingossa siksi että painike näytti
+   samalta kuin ennen työtä.
+
+   Oma funktionsa siksi, että `send()` vaihtaa tämän yksin: koko paneelin
+   piirtäminen uudestaan kesken liu'un vaihtaisi raahattavan säätimen alta. */
+function mixButton(info) {
+  const busy = !!(info.progress && info.progress.running);
+  const expected = info.expected || 0;
+  const done = expected > 0 && (info.fresh || 0) >= expected;
+
+  const wrap = document.createElement('span');
+  wrap.id = 'mix-run';
+  wrap.className = 'mix-run';
+
+  const run = document.createElement('button');
+  run.className = 'ghost';
+  if (busy) {
+    run.textContent = T('audio.run');
+    setBusy(run, true, T('audio.running'));
+    wrap.append(run);
+    return wrap;
+  }
+  if (done && !mixConfirm) {
+    run.textContent = T('audio.runDone', { n: expected });
+    run.classList.add('done');
+    run.addEventListener('click', () => { mixConfirm = true; swapMixButton(); });
+    wrap.append(run);
+    return wrap;
+  }
+  if (done && mixConfirm) {
+    run.textContent = T('audio.runAgain');
+    run.classList.add('warn');
+    run.addEventListener('click', () => { mixConfirm = false; runMix(true); });
+    const cancel = document.createElement('button');
+    cancel.className = 'ghost';
+    cancel.textContent = T('app.cancel');
+    cancel.addEventListener('click', () => { mixConfirm = false; swapMixButton(); });
+    wrap.append(run, cancel);
+    return wrap;
+  }
+  run.textContent = T('audio.run');
+  run.addEventListener('click', () => runMix(false));
+  wrap.append(run);
+  return wrap;
+}
+
+/* Vaihtaa pelkän painikkeen paikallaan. Ks. mixButton: paneelia ei piirretä
+   uudestaan, koska säätimiä saatetaan juuri raahata. */
+function swapMixButton() {
+  const old = $('mix-run');
+  if (old && state && state.mix) old.replaceWith(mixButton(state.mix));
 }
 
 /* Edistymispalkki. Osuus on painotettu tiedostokoolla ja vaiheella, joten se
@@ -1194,12 +1253,12 @@ function fmtLeft(seconds) {
 }
 
 /* Käsittelyn käynnistys ja edistymisen seuranta. */
-async function runMix() {
+async function runMix(force) {
   try {
     const response = await fetch('/api/mix', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload()),
+      body: JSON.stringify({ ...payload(), force: !!force }),
     });
     const data = await response.json();
     if (!response.ok) {
@@ -1396,6 +1455,16 @@ async function send() {
     if (data.output_path && data.output_path !== state.output_path) {
       state.output_path = data.output_path;
       renderHeader();
+    }
+    /* Asetuksen muutos vanhentaa valmiin työn. Vain painike vaihdetaan:
+       koko paneelin piirtäminen veisi raahattavan säätimen alta. */
+    if (data.mix_fresh && state.mix
+        && (state.mix.fresh !== data.mix_fresh.fresh
+            || state.mix.expected !== data.mix_fresh.expected)) {
+      state.mix.fresh = data.mix_fresh.fresh;
+      state.mix.expected = data.mix_fresh.expected;
+      mixConfirm = false;
+      swapMixButton();
     }
     if (data.ok) {
       banner('');
