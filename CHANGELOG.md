@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.67] - 2026-08-25
+
+### Changed
+- **The Channel Strip Bites in Small Amounts, Several Times**: one compressor pulling twelve decibels sounds like a compressor; three pulling four sound like nothing. Every stage now has a hard ceiling on its gain reduction (`MAX_GR_DB`), and there are three of them — a multiband stage first, so a plosive at 100 Hz cannot drag the sibilance down with it, then two gentle broadband stages. Owsinski puts a single box at "less (usually way less) than 3dB" and calls six decibels "extreme processing" worth splitting; five is the hard ceiling here, and typical reduction sits well below it. All bands share one ratio and one limit, which is his explicit precaution — differing amounts per band alter the tone with the programme and read as unnatural.
+- **The Ceiling Is True Peak, With Headroom**: limiting sample peaks to −1.0 dBFS measured −0.42 dBTP, because the peaks that clip a converter fall *between* samples. Detection is now 4× oversampled and the ceiling is −1.5 dBTP, which survives AAC encoding — the handbook wants true peaks under −1, and −2 for Spotify.
+- **An Over-Compression Alarm**: `peak_to_short_term` reports peak-to-short-term loudness. Owsinski's one numeric rule for this: below about 6 LU means more compression than was needed. The current chain measures 12 LU on a stem and 15 on the programme.
+
+### Fixed
+- **Compressor Thresholds Follow the Target**: they were absolute, so raising the delivery target from −20 to −14 LUFS drove the signal 6 dB deeper into them and removed 4.5 dB more crest. The target now changes the level, not the amount of compression.
+
 ## [v26.08.25.66] - 2026-08-25
 
 ### Fixed

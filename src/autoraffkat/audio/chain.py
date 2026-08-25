@@ -46,6 +46,16 @@ from ..i18n import t
 # ja se on määritelmällisesti harmonista säröä. Mitattuna sinillä 110 Hz /
 # -6 dBFS: 2 ms -> THD -30,9 dB, 10 ms -> -32,9 dB, 40 ms -> -36,1 dB.
 # Viisitoista millisekuntia on jaksoa pidempi kaikilla puheäänillä.
+# Kompressorien kynnykset on viritetty tällä äänekkyydellä. Signaali
+# normalisoidaan tavoitteeseen ennen kompressoreita, joten absoluuttinen
+# kynnys tarkoittaa eri määrää tiivistystä eri tavoitteilla — ja kun oletus
+# vaihtui -20:stä YouTuben -14:ään, sama kynnys söi 4,5 dB enemmän
+# dynamiikkaa: crest 20,2 dB -> 15,7 dB, ja se kuuluu säröisenä.
+#
+# Kynnykset siirtyvät siksi tavoitteen mukana. Tavoite muuttaa tason,
+# ei tiivistyksen määrää.
+THRESHOLD_REFERENCE_LUFS = -20.0
+
 PEAK_ATTACK_MS = 15.0
 PEAK_RELEASE_MS = 80.0
 PEAK_RATIO = 3.0
@@ -79,7 +89,12 @@ DEESS_SMOOTH_MS = 3.0
 #
 # Nyt katto hoidetaan ennakoivalla rajoittimella, joka koskee vain huippuihin.
 # `peak_guard` jää viimeiseksi varmistukseksi, jonka ei pitäisi koskaan laueta.
-CEILING_DB = -1.0
+# Katto on **true peak**, ei näytehuippu, ja siihen jätetään varaa.
+# Näytehuippujen rajaaminen -1 dBFS:ään antoi mitattuna -0,42 dBTP: väliin
+# jäävät huiput ylittävät näytteet, ja lossy-koodaus nostaa niitä vielä.
+# Puolentoista desibelin varaa kestää AAC-muunnoksen ilman leikkautumista.
+CEILING_DB = -1.5
+LIMITER_OVERSAMPLE = 4
 LIMITER_LOOKAHEAD_MS = 5.0
 LIMITER_RELEASE_MS = 120.0
 
@@ -577,7 +592,13 @@ def _one_pole(x: np.ndarray, rate: int, ms: float) -> np.ndarray:
     from scipy import signal as _sig
 
     coeff = float(np.exp(-1.0 / max(1.0, ms * rate / 1000.0)))
-    return _sig.lfilter([1.0 - coeff], [1.0, -coeff], x)
+    b, a = [1.0 - coeff], [1.0, -coeff]
+    # Alkutila ensimmäisestä näytteestä: nollasta lähtevä suodin häivyttäisi
+    # tiedoston alun sisään, ja rajoittimen vahvistuskäyrällä se tarkoittaisi
+    # että jokainen tiedosto alkaa vaimennettuna.
+    zi = _sig.lfilter_zi(b, a) * float(np.asarray(x).reshape(-1)[0])
+    out, _ = _sig.lfilter(b, a, x, zi=zi)
+    return out
 
 
 def deess(
@@ -633,13 +654,26 @@ def limiter(
     veti koko tiedoston alas kovimman yksittäisen näytteen mukaan, mitattuna
     9–12 dB, ja teki puhujien tasapainosta sattumanvaraisen.
     """
+    from scipy import signal as _sig
     from scipy.ndimage import minimum_filter1d
 
     if audio.size == 0:
         return audio, 0.0
     ceiling = 10.0 ** (ceiling_db / 20.0)
-    peak = np.abs(audio).max(axis=0)
-    needed = np.minimum(1.0, ceiling / np.maximum(peak, 1e-9))
+
+    # Havainnointi ylinäytteistettynä: näytteiden **väliin** jäävä huippu on
+    # se joka leikkaa D/A-muuntimessa ja lossy-koodauksessa, eikä se näy
+    # näytteitä katsomalla. Vahvistus lasketaan ylinäytteistetystä ja
+    # tiivistetään takaisin ottamalla kunkin ryhmän pienin.
+    up = LIMITER_OVERSAMPLE
+    dense = _sig.resample_poly(audio, up, 1, axis=-1)
+    dense_peak = np.abs(dense).max(axis=0)
+    dense_gain = np.minimum(1.0, ceiling / np.maximum(dense_peak, 1e-9))
+    usable = (dense_gain.shape[0] // up) * up
+    needed = dense_gain[:usable].reshape(-1, up).min(axis=1)
+    if needed.shape[0] < audio.shape[1]:
+        needed = np.pad(needed, (0, audio.shape[1] - needed.shape[0]), mode="edge")
+    needed = needed[: audio.shape[1]]
     if needed.min() >= 1.0:
         return audio, 0.0
 
@@ -650,6 +684,132 @@ def limiter(
     # huippu sallii, muuten katto ylittyy juuri siellä missä sitä tarvitaan.
     gain = np.minimum(smooth, ahead)
     return audio * gain, float(20.0 * np.log10(max(gain.min(), 1e-9)))
+
+
+def compress(
+    audio: np.ndarray,
+    rate: int,
+    threshold_db: float,
+    ratio: float,
+    max_gr_db: float,
+    attack_ms: float,
+    release_ms: float,
+) -> np.ndarray:
+    """Yksi kompressorivaihe, jonka vaimennuksella on **katto**.
+
+    ``max_gr_db`` on koko idea. Yksi kompressori joka vetää kaksitoista
+    desibeliä kuulostaa kompressorilta; kolme jotka vetävät neljä kuulostaa
+    tasaiselta. Rajaton vaihe myös reagoi yksittäiseen napsahdukseen koko
+    lauseen voimalla, ja juuri se kuullaan pumppauksena.
+
+    Hyökkäys tulee tason tasoituksesta ja palautus vahvistuksen
+    tasoituksesta: ``minimum`` niiden välillä antaa nopean laskun ja hitaan
+    paluun ilman näytteittäistä silmukkaa, jota ei sadalle miljoonalle
+    näytteelle voi Pythonissa ajaa.
+    """
+    if audio.size == 0:
+        return audio
+    level = _one_pole(np.abs(audio).max(axis=0), rate, attack_ms)
+    over = np.maximum(0.0, 20.0 * np.log10(level + 1e-9) - threshold_db)
+    wanted = -np.minimum(over * (1.0 - 1.0 / max(ratio, 1.0001)), max_gr_db)
+    instant = 10.0 ** (wanted / 20.0)
+    gain = np.minimum(_one_pole(instant, rate, release_ms), instant)
+    return audio * gain
+
+
+# Kaistat. Alaraja pitää puhalluksen ja jyrinän erillään rungosta, yläraja
+# sihinän erillään siitä: ilman jakoa yksi plosiivi vetää koko puheen alas ja
+# yksi s-äänne tekee saman. Rajat ovat puheen omat, eivät musiikin.
+BANDS_HZ = (250.0, 4000.0)
+
+# Kuinka paljon kukin vaihe saa enintään vaimentaa.
+#
+# Owsinski: yhdessä laatikossa «less (usually way less) than 3dB of
+# compression», ja kuuden desibelin vaimennus on jo «extreme processing»,
+# joka kannattaa jakaa useaan vaiheeseen. Viisi on siis yläraja eikä
+# tavoite: tyypillinen vaimennus jää selvästi sen alle, ja kolme vaihetta
+# yhteensä pysyy sielläkin missä yksi rajaton olisi ollut kaukana yli.
+MAX_GR_DB = 5.0
+
+
+def split_bands(audio: np.ndarray, rate: int, edges=BANDS_HZ) -> list:
+    """Jako kaistoihin, jotka summautuvat takaisin täsmälleen alkuperäiseksi.
+
+    Ylempi kaista lasketaan vähentämällä alempi kokonaisuudesta, jolloin
+    rekonstruktio on tarkka eikä jakoon jää vaihe-eroa — tavallinen
+    kaistanpäästösuodinpankki vuotaa juuri risteyskohdissa.
+    """
+    from scipy import signal as _sig
+
+    bands, rest = [], audio
+    for edge in edges:
+        sos = _sig.butter(4, min(edge, rate / 2 * 0.95) / (rate / 2), output="sos")
+        low = _sig.sosfilt(sos, rest, axis=-1)
+        bands.append(low)
+        rest = rest - low
+    bands.append(rest)
+    return bands
+
+
+def multiband(
+    audio: np.ndarray,
+    rate: int,
+    threshold_db: float,
+    ratio: float,
+    max_gr_db: float = MAX_GR_DB,
+    attack_ms: float = PEAK_ATTACK_MS,
+    release_ms: float = PEAK_RELEASE_MS,
+) -> np.ndarray:
+    """Kompressio kaistoittain, jokainen omalla vaimennuskatollaan.
+
+    Leveäkaistainen kompressori antaa matalien taajuuksien ohjata kaikkea:
+    yksi p-äänne 100 hertsissä vetää sihinän ja rungon mukanaan, ja se
+    kuullaan säröisenä vaikka mikään ei leikkaannu. Kaistoittain jokainen
+    hoitaa oman ongelmansa eikä kuule toisten.
+    """
+    parts = split_bands(audio, rate, BANDS_HZ)
+    # Sama suhde ja sama vaimennuskatto joka kaistalle. Ensin ne olivat
+    # eri suuruisia — matalalle enemmän, ylös vähemmän — mikä on juuri se
+    # mitä Owsinski varoittaa tekemästä: «Use the same compression ratio
+    # across all bands, as differing ratios can create an unnatural sound.
+    # Apply roughly the same amount of gain reduction to each band to avoid
+    # altering the overall mix balance too much.» Eri määrä kaistoittain
+    # muuttaa äänen sävyä ohjelman mukana, ja sen kuulee epäluonnollisena.
+    out = np.zeros_like(audio)
+    for part in parts:
+        out = out + compress(
+            part, rate, threshold_db, ratio, max_gr_db, attack_ms, release_ms
+        )
+    return out
+
+
+# Ylipakkauksen mittari. Owsinski: «If the maximum short-term loudness is
+# less than about 6LU below the true peak level, that could be an indication
+# that you're compressing more than you need to.» Se on kirjan ainoa
+# numeerinen raja tälle, ja se on mitattavissa — joten se mitataan.
+PSR_FLOOR_LU = 6.0
+
+
+def peak_to_short_term(audio: np.ndarray, rate: int) -> float:
+    """True peak miinus suurin lyhyen aikavälin äänekkyys, LU.
+
+    Alle kuuden tarkoittaa että tiivistys on mennyt pidemmälle kuin oli
+    tarpeen. Palauttaa ``nan`` jos ei ole mitattavaa.
+    """
+    from scipy import signal as _sig
+
+    mono = np.asarray(audio).mean(axis=0) if audio.ndim > 1 else np.asarray(audio)
+    if mono.size < rate * 3:
+        return float("nan")
+    peak = 20.0 * np.log10(np.abs(_sig.resample_poly(mono, 4, 1)).max() + 1e-12)
+    window = int(3 * rate)
+    step = max(1, int(0.5 * rate))
+    best = -np.inf
+    for start in range(0, len(mono) - window + 1, step):
+        block = mono[start : start + window]
+        level = -0.691 + 10.0 * np.log10(float(np.mean(block**2)) + 1e-20)
+        best = max(best, level)
+    return float(peak - best) if np.isfinite(best) else float("nan")
 
 
 def peak_guard(audio: np.ndarray, ceiling_db: float = CEILING_DB) -> tuple:
@@ -783,20 +943,43 @@ def process(
         # Rinnakkaiskompressio. Tiivistetty haara nostaa hiljaiset kohdat,
         # kuiva haara pitää transientit — sarjassa ajettuna sama tiivistys
         # veisi molemmat.
-        compressed = _board(
-            pedalboard.Compressor(
-                threshold_db=settings.peak_threshold_db,
-                ratio=PEAK_RATIO,
-                attack_ms=PEAK_ATTACK_MS,
-                release_ms=PEAK_RELEASE_MS,
-            ),
-            pedalboard.Compressor(
-                threshold_db=settings.leveler_threshold_db,
-                ratio=LEVEL_RATIO,
-                attack_ms=LEVEL_ATTACK_MS,
-                release_ms=LEVEL_RELEASE_MS,
-            ),
-        )(audio, rate, reset=True)
+        # Kynnykset seuraavat tavoitetta, ks. THRESHOLD_REFERENCE_LUFS.
+        offset = (
+            0.0
+            if target_lufs is None
+            else float(target_lufs) - THRESHOLD_REFERENCE_LUFS
+        )
+        # Kolme rajattua vaihetta yhden rajattoman sijaan. Ensin kaistoittain,
+        # jottei plosiivi ohjaa sihinää eikä toisin päin; sitten kaksi lempeää
+        # leveäkaistaista, jotka tasaavat kokonaisuuden. Jokainen enintään
+        # MAX_GR_DB, joten yhteensäkin vaimennus on maltillinen ja tasainen.
+        compressed = multiband(
+            audio,
+            rate,
+            settings.peak_threshold_db + offset,
+            PEAK_RATIO,
+            MAX_GR_DB,
+            PEAK_ATTACK_MS,
+            PEAK_RELEASE_MS,
+        )
+        compressed = compress(
+            compressed,
+            rate,
+            settings.leveler_threshold_db + offset,
+            LEVEL_RATIO,
+            MAX_GR_DB,
+            LEVEL_ATTACK_MS,
+            LEVEL_RELEASE_MS,
+        )
+        compressed = compress(
+            compressed,
+            rate,
+            settings.leveler_threshold_db + offset + 4.0,
+            LEVEL_RATIO,
+            MAX_GR_DB,
+            LEVEL_ATTACK_MS * 4,
+            LEVEL_RELEASE_MS * 2,
+        )
         audio = audio * (1.0 - PARALLEL_MIX) + compressed * PARALLEL_MIX
 
         # 6. Taso mitataan uudestaan, koska kompressointi siirtää sitä.

@@ -204,6 +204,19 @@ means the button says so and asks for confirmation before re-rendering
 made with different settings. Only the button is swapped in place: redrawing
 the audio panel would replace a slider mid-drag.
 
+`target_lufs` is the **programme's** level, not a stem's. YouTube normalises
+the finished video; `program_target` converts that to a stem target with the
+measured trim, so −14 becomes −15.8 per stem and the sum lands near −13.
+Applying −14 to a mono speech stem directly leaves about 14 dB of crest and
+sounds crushed; the same figure as a programme target leaves 17.5.
+
+Compression comes in small amounts several times. Every stage caps its own
+gain reduction, and the first is multiband so a plosive cannot pull the
+sibilance down with it — with one ratio and one limit across all bands,
+because differing amounts per band move the tone with the programme. The
+ceiling is true peak with headroom: limiting sample peaks to −1 dBFS measured
+−0.42 dBTP, since the peaks that clip a converter fall between samples.
+
 The program trim goes into the **target**, never into the gain. The chain
 normalises to the target as its last act, so a trim added to the gain is
 removed again exactly — measured, stems landed on −14.1 instead of −15.8 and

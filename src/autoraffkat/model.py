@@ -226,7 +226,15 @@ class AudioSettings:
     # Tavoite koskee ohjelmaa eikä yhtä stemiä, ks. ``program_target``: kaksi
     # tavoitteeseen normalisoitua mikkiä summautuu sen yli, tällä aineistolla
     # mitattuna 1,7 dB. Lopullinen taso asetetaan silti Final Cutissa.
-    # Oletus on YouTuben lukema, koska sinne tämä menee. Nimetyt vaihtoehdot
+    # Tämä on **ohjelman** taso, ei stemin. YouTube normalisoi valmiin
+    # videon -14:ään, ja `program_target` muuntaa sen stemin tavoitteeksi
+    # mitatulla trimmillä: kahdella puhujalla -1,8 dB, jolloin stemit
+    # asettuvat -15,8:aan ja summa -13:een. Ero on olennainen — -14 LUFS
+    # suoraan mono-puhestemille jättää noin 14 dB crestiä ja kuulostaa
+    # ahdetulta, kun sama ohjelmatasona jättää 17,5 dB.
+    #
+    # (Vertailun vuoksi: Applen podcast-standardi on -16, mutta se koskee
+    # ääntä ilman kuvaa. Tämä menee YouTubeen.) Nimetyt vaihtoehdot
     # ovat ``LOUDNESS_TARGETS``; säädin jää silti vapaaksi, koska jakelu ei
     # ole aina jompikumpi näistä.
     target_lufs: float = -14.0
