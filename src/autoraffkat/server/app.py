@@ -801,9 +801,18 @@ def create_app(state: AppState) -> FastAPI:
         payload: dict = {}
         for line in (child.stdout or "").splitlines():
             try:
-                payload = json.loads(line)
+                message = json.loads(line)
             except json.JSONDecodeError:
                 print(line, flush=True)
+                continue
+            if message.get("kind") == "opening":
+                # Väliviesti, ei tulos: kertoo vain saiko lapsi nostettua
+                # ikkunan eteen. Ilman tätä se olisi jäänyt tulokseksi ja
+                # oikea tulos olisi näyttänyt puuttuvan.
+                if not message.get("foreground"):
+                    print("liitännäisen ikkuna ei noussut eteen", flush=True)
+                continue
+            payload = message
         if payload.get("kind") != "done":
             tail = (child.stderr or "").strip().splitlines()
             raise HTTPException(

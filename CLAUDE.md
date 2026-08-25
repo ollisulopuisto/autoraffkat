@@ -94,6 +94,14 @@ Calibrate on how often the artefact really occurs — lip smacks are a few a
 minute — and keep the ceiling in `declick`, which raises the threshold until
 the findings fit and corrects nothing if they never do.
 
+A plug-in window from a plain Python process opens behind everything. The
+window is created — measured 536×392 at (0, 37), on screen, thirteenth from
+the front — but macOS does not treat the process as a GUI application, so it
+never comes forward and the button looks broken. `editor.py` sets
+`NSApplicationActivationPolicyRegular` and activates, once before opening and
+once after the plug-in has drawn. The title is pedalboard's ("Pedalboard"),
+not the plug-in's.
+
 Not everything that changes the result is a parameter. dxRevive publishes
 four automatable parameters and the **model selector is not one of them** —
 Studio 2 lives in the plug-in's own state, reachable only through its own

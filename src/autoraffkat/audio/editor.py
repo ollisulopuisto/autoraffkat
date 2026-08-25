@@ -30,7 +30,47 @@ from __future__ import annotations
 import base64
 import json
 import sys
+import threading
 import traceback
+
+
+def _become_an_app() -> bool:
+    """Tekee prosessista sellaisen, jonka ikkunan voi nähdä.
+
+    Ilman tätä ikkuna kyllä syntyy — mitattuna 536×392 kohdassa (0, 37) —
+    mutta jää selaimen taakse eikä nouse koskaan eteen, koska pelkkä
+    Python-prosessi ei ole macOS:lle käyttöliittymäsovellus. Käyttäjälle se
+    näyttää siltä että painike ei tee mitään, ja se on tässä projektissa
+    tuttu vikaluokka: tapahtui, ei näkynyt, ei kerrottu.
+
+    ``NSApplicationActivationPolicyRegular`` antaa prosessille Dock-kuvakkeen
+    ja oikeuden nousta eteen. pyobjc tulee pywebviewin mukana, mutta sitä ei
+    ole pyydetty tässä erikseen, joten puuttuminen ei ole virhe: ikkuna
+    aukeaa silloinkin, se on vain etsittävä itse.
+    """
+    try:
+        from AppKit import NSApplication, NSApplicationActivationPolicyRegular
+    except Exception:
+        return False
+    app = NSApplication.sharedApplication()
+    app.setActivationPolicy_(NSApplicationActivationPolicyRegular)
+    app.activateIgnoringOtherApps_(True)
+
+    def raise_it() -> None:
+        # Toinen aktivointi sen jälkeen kun ikkuna on oikeasti olemassa:
+        # ensimmäinen tapahtuu ennen kuin liitännäinen on piirtänyt mitään.
+        # ``show_editor`` ajaa tällä välin viestisilmukkaa, joten kutsu menee
+        # perille.
+        import time
+
+        time.sleep(1.0)
+        try:
+            NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        except Exception:
+            pass
+
+    threading.Thread(target=raise_it, daemon=True).start()
+    return True
 
 
 def main() -> int:
@@ -50,6 +90,9 @@ def main() -> int:
         if plugin is None:
             emit({"kind": "failed", "error": "no plugin"})
             return 1
+        # Ikkuna eteen ennen kuin se avataan. Avaus estää pääsäikeen, joten
+        # tämän jälkeen ei ehdi tehdä mitään.
+        emit({"kind": "opening", "foreground": _become_an_app()})
         plugin.show_editor()
         emit(
             {

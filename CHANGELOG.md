@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.73] - 2026-08-25
+
+### Fixed
+- **The Plug-in's Window Opened Behind Everything**: the button reported the window was open and nothing appeared. The window was there all along — measured at 536×392 in the top-left corner, on screen, thirteenth from the front — but a plain Python process is not a GUI application to macOS, so it has no Dock icon and never comes forward. To the user that is indistinguishable from a button that does nothing, which is this project's recurring failure: it happened, it did not show, nothing said so. The child now sets `NSApplicationActivationPolicyRegular` and activates itself, once before opening and once a second later, when the plug-in has actually drawn something. pyobjc arrives with pywebview and is not required here: without it the window still opens, it just has to be found.
+- The window's title is pedalboard's, not the plug-in's, so the panel now says which title to look for.
+
 ## [v26.08.25.72] - 2026-08-25
 
 ### Added
