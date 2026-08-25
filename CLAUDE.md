@@ -427,6 +427,15 @@ target. Nothing is removed: every control is still there, one disclosure
 away, and now carries its measurement (`why.<key>` in `i18n.js`) beside the
 number.
 
+A row with two actions must not highlight as one. Switching a setting on and
+looking inside it are different intentions, and a hover covering the whole
+row — checkbox included — promises a single target where there are two. A
+checkbox at the far left is read as the label's own checkbox, which makes
+clicking the name look like it toggles. Opening is a button holding the name,
+value and chevron, and only that highlights; the switch sits after it beside
+the chevron. The switch is never inside the button: that would be one click
+doing both things, and a control inside a `<button>` is invalid.
+
 A preset's own numbers are its definition, not controls layered on it. The
 rhythm preset's four sliders were always visible, and moving one switched the
 preset to Custom in passing — the choice changed as a side effect. They now

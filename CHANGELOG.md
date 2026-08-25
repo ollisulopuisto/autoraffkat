@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.77] - 2026-08-25
+
+### Fixed
+- **The Row Hover Lied About What It Would Do**: a row carries two different actions — switch it on, or look inside — and the hover highlighted the whole row, including the checkbox. It promised one target where there were two. The checkbox sitting at the far left made it worse: a checkbox before a label reads as *that label's* checkbox, so clicking the name looked like it would toggle.
+  - Opening is now a **button** containing the name, the value and the chevron, and only that button highlights. The switch comes after it, next to the chevron: two controls side by side at the right edge, with the label clearly outside both.
+  - The button handles the keyboard itself. The hand-rolled `keydown` was doubling the space bar and breaking Enter.
+  - A test asserts the switch is not inside the button — nesting it would mean one click doing both things, and a control inside a `<button>` is invalid anyway. Verified by breaking it.
+
 ## [v26.08.25.76] - 2026-08-25
 
 ### Changed

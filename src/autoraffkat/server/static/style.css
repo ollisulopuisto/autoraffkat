@@ -420,19 +420,44 @@ button.small:hover { opacity: 1; }
 .arow { border-top: 1px solid var(--line); }
 .arow:first-of-type { border-top: 0; }
 
+/* Rivin pää: avauspainike ja sen perässä kytkin.
+
+   Korostus koskee vain painiketta. Koko rivin korostaminen valehteli
+   kohteesta silloin kun rivillä on kaksi säädintä, ja rasti vasemmassa
+   reunassa luki otsikon omaksi rastikseen. */
 .arow-head {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px;
+}
+
+.arow-open {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 10px;
-  padding: 10px 4px;
-  cursor: pointer;
+  width: 100%;
+  padding: 10px 8px;
+  margin: 0;
+  border: 0;
   border-radius: 6px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
 }
-.arow-head:hover { background: rgba(255, 255, 255, .03); }
-.arow-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-.arow-head input[type="checkbox"] { margin: 0; }
-.arow-nogap { width: 13px; }
+.arow-open:hover { background: rgba(255, 255, 255, .045); }
+.arow-open:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.arow-toggle {
+  margin: 0 4px 0 0;
+  width: 15px; height: 15px;
+  cursor: pointer;
+}
+.arow-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
 .arow-name { min-width: 0; }
 .arow-name b { display: block; font-size: 13px; font-weight: 500; }
@@ -458,7 +483,7 @@ button.small:hover { opacity: 1; }
 }
 .arow.deviates .arow-dev { display: block; }
 
-.arow-body { display: none; padding: 2px 4px 14px 26px; }
+.arow-body { display: none; padding: 2px 4px 14px 12px; }
 .arow.open .arow-body { display: block; }
 
 .why-knob { padding: 2px 0 6px; }

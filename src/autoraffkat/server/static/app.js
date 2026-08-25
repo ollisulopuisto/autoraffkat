@@ -866,20 +866,20 @@ function settingRow(spec) {
   const head = document.createElement('div');
   head.className = 'arow-head';
 
-  if (spec.toggle) {
-    /* Kytkin on oma katkaisijansa: sen klikkaus ei saa avata riviä, koska
-       päälle laittaminen ja sisään katsominen ovat eri aikomuksia. */
-    const box = document.createElement('input');
-    box.type = 'checkbox';
-    box.checked = !!spec.toggle.checked;
-    box.setAttribute('aria-label', spec.label);
-    box.addEventListener('click', (event) => event.stopPropagation());
-    box.addEventListener('change', () => spec.toggle.onChange(box.checked));
-    head.append(box);
-  } else {
-    head.append(Object.assign(document.createElement('span'),
-      { className: 'arow-nogap' }));
-  }
+  /* Kaksi eri tekoa samalla rivillä, ja niiden on näytettävä siltä.
+
+     Ensin ne olivat rivin ääripäissä — rasti vasemmalla, nuoli oikealla — ja
+     koko rivi korostui osoittimen alla. Korostus valehteli: se lupasi yhtä
+     kohdetta siinä missä niitä oli kaksi, ja rasti vasemmalla luki rivin
+     otsikon rastiksi, jolloin klikkaus otsikkoon näytti kytkevän.
+
+     Nyt avaaminen on **painike**, joka sisältää nimen, arvon ja nuolen, ja
+     vain se korostuu. Kytkin on painikkeen jälkeen, eli nuolen vieressä:
+     kaksi säädintä vierekkäin oikeassa reunassa, otsikko selvästi
+     kummankaan ulkopuolella. */
+  const opener = document.createElement('button');
+  opener.type = 'button';
+  opener.className = 'arow-open';
 
   const name = document.createElement('div');
   name.className = 'arow-name';
@@ -896,7 +896,8 @@ function settingRow(spec) {
   value.className = 'arow-value';
   value.textContent = spec.value || '';
 
-  head.append(name, value);
+  opener.append(name, value);
+  head.append(opener);
 
   const keys = spec.keys || [];
   const mark = () => {
@@ -908,7 +909,21 @@ function settingRow(spec) {
   };
   mark();
 
+  /* Kytkin viimeisenä, nuolen vieressä. Se on oma katkaisijansa eikä avaa
+     riviä: päälle laittaminen ja sisään katsominen ovat eri aikomuksia. */
+  const addToggle = () => {
+    if (!spec.toggle) return;
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.className = 'arow-toggle';
+    box.checked = !!spec.toggle.checked;
+    box.setAttribute('aria-label', spec.label);
+    box.addEventListener('change', () => spec.toggle.onChange(box.checked));
+    head.append(box);
+  };
+
   if (!spec.body) {
+    addToggle();
     row.append(head);
     return { row, mark };
   }
@@ -916,9 +931,8 @@ function settingRow(spec) {
   const chev = document.createElement('span');
   chev.className = 'arow-chev';
   chev.textContent = '\u276F';
-  head.append(chev);
-  head.tabIndex = 0;
-  head.setAttribute('role', 'button');
+  opener.append(chev);
+  addToggle();
 
   const body = document.createElement('div');
   body.className = 'arow-body';
@@ -926,23 +940,22 @@ function settingRow(spec) {
   const open = () => {
     if (!filled) { spec.body(body, mark); filled = true; }
     row.classList.add('open');
-    head.setAttribute('aria-expanded', 'true');
+    opener.setAttribute('aria-expanded', 'true');
   };
   const toggle = () => {
     if (OPEN_ROWS.has(spec.key)) {
       OPEN_ROWS.delete(spec.key);
       row.classList.remove('open');
-      head.setAttribute('aria-expanded', 'false');
+      opener.setAttribute('aria-expanded', 'false');
     } else {
       OPEN_ROWS.add(spec.key);
       open();
     }
   };
-  head.addEventListener('click', toggle);
-  head.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); }
-  });
-  head.setAttribute('aria-expanded', 'false');
+  /* Painike hoitaa näppäimistön itse — oma keydown vain kaksinkertaistaisi
+     välilyönnin ja rikkoisi Enterin. */
+  opener.addEventListener('click', toggle);
+  opener.setAttribute('aria-expanded', 'false');
   if (OPEN_ROWS.has(spec.key)) open();
 
   row.append(head, body);

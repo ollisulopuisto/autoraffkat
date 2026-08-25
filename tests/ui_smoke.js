@@ -510,6 +510,25 @@ run('poikkeamamerkki', () => {
   `, context);
 });
 
+/* Kytkin ei saa olla avauspainikkeen sisällä.
+
+   Sisällä se tarkoittaisi kahta asiaa kerralla: klikkaus kytkimeen avaisi
+   myös rivin, ja korostus lupaisi taas yhtä kohdetta kahden sijaan. Se on
+   myös kelvotonta HTML:ää — painikkeen sisällä ei ole säätimiä. */
+{
+  const openers = created.filter((el) => el.className === 'arow-open');
+  if (!openers.length) {
+    console.error('avauspainikkeita ei löytynyt');
+    process.exit(1);
+  }
+  const nested = openers.filter((el) => (el.children || [])
+    .some((c) => c.type === 'checkbox'));
+  if (nested.length) {
+    console.error(`${nested.length} avauspainiketta sisältää kytkimen`);
+    process.exit(1);
+  }
+}
+
 /* Ääni-paneelin rivit rakenteena, ei vain «ei kaatunut».
 
    Poikkeamamerkki on koko avautuvan rivin ehto: suljettu rivi ei saa
