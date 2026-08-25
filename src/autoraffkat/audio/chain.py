@@ -158,9 +158,24 @@ def plugins() -> list[dict]:
     return [{"name": name, "path": path} for name, path in sorted(found.items())]
 
 
-def load_plugin(path: str, params: dict | None = None):
-    """Lataa liitännäisen ja asettaa sen säätimet. Virhe on luettava, ei
-    pedalboardin oma."""
+def load_plugin(path: str, params: dict | None = None, state: str | None = None):
+    """Lataa liitännäisen ja asettaa sen tilan ja säätimet.
+
+    ``state`` on liitännäisen oma tila base64:nä, talletettuna sen omasta
+    ikkunasta (``audio/editor.py``). Se tarvitaan siksi, että kaikki mikä
+    vaikuttaa lopputulokseen ei ole parametri: dxRevivella mallin valinta
+    — Studio 2 ja muut — ei ole yksikään sen neljästä parametrista, vaan
+    elää tilassa. Ilman tilaa ajetaan aina liitännäisen oletusmallia.
+
+    Tila asetetaan **ennen** parametreja, jotta talletettu Mix ei jyrää
+    asetuksissa olevaa: parametri on se, jota käyttöliittymän liukusäädin
+    liikuttaa, ja sen on voitettava.
+
+    Kelvoton tila ei kaada mitään. Se on läpinäkymätön tavujono jonka vain
+    liitännäinen osaa lukea, ja liitännäisen vaihtuessa vanha tila on
+    roskaa — mutta parametrit toimivat silti, joten väärä tila sivuutetaan
+    eikä siitä tehdä virhettä.
+    """
     import pedalboard
 
     if not path:
@@ -173,8 +188,46 @@ def load_plugin(path: str, params: dict | None = None):
         raise ChainError(
             t("audio.plugin_failed", name=os.path.basename(path), error=exc)
         ) from exc
+    apply_state(plugin, state)
     apply_parameters(plugin, params)
     return plugin
+
+
+def apply_state(plugin, state: str | None) -> bool:
+    """Asettaa talletetun tilan. Palauttaa onnistuiko."""
+    import base64
+
+    if not state:
+        return False
+    try:
+        plugin.raw_state = base64.b64decode(state)
+        return True
+    except Exception:
+        # Tila on toisesta liitännäisestä tai eri versiosta. Parametrit
+        # riittävät, joten jatketaan ilman.
+        return False
+
+
+def read_parameters(plugin) -> dict:
+    """Liitännäisen nykyiset säädettävät arvot nimen mukaan.
+
+    Käyttäjä on voinut kääntää säätimiä liitännäisen omassa ikkunassa, ja
+    käyttöliittymän liukusäätimien on seurattava — muuten sama arvo lukee
+    kahdessa paikassa eri lukemaa.
+    """
+    out: dict = {}
+    for name, param in getattr(plugin, "parameters", {}).items():
+        try:
+            value = getattr(plugin, name)
+        except Exception:
+            continue
+        if isinstance(value, bool):
+            out[name] = value
+        elif isinstance(value, (int, float)):
+            out[name] = float(value)
+        elif isinstance(value, str):
+            out[name] = value
+    return out
 
 
 # Liitännäinen on 97 % käsittelyn ajasta ja käyttää **yhtä** ydintä: mitattu
@@ -239,7 +292,7 @@ class PluginPool:
     kannata maksaa jokaisesta palasta uudestaan.
     """
 
-    def __init__(self, path: str, params: dict | None, workers: int):
+    def __init__(self, path: str, params: dict | None, workers: int, state=None):
         from concurrent.futures import ThreadPoolExecutor
 
         self.path = path
@@ -252,7 +305,9 @@ class PluginPool:
         # reloaded on the main thread». Käsittely työsäikeestä on sallittua,
         # lataus ei — ja ero on helppo sekoittaa, koska virhe puhuu
         # `reset`istä.
-        self.instances = [load_plugin(path, params) for _ in range(self.workers)]
+        self.instances = [
+            load_plugin(path, params, state) for _ in range(self.workers)
+        ]
         self._pool = ThreadPoolExecutor(
             max_workers=self.workers, thread_name_prefix="plugin"
         )
@@ -269,7 +324,7 @@ class PluginPool:
         self._pool.shutdown(wait=True)
 
 
-def load_pool(path: str, params: dict | None = None, count: int = 1):
+def load_pool(path: str, params: dict | None = None, count: int = 1, state=None):
     """Säiekohtainen liitännäisvaranto, tai ``None`` jos polkua ei ole.
 
     Tarkistaa polun heti pääsäikeessä, jotta virheellinen polku kerrotaan
@@ -277,7 +332,7 @@ def load_pool(path: str, params: dict | None = None, count: int = 1):
     """
     if not path:
         return None
-    return PluginPool(path, params, count)
+    return PluginPool(path, params, count, state)
 
 
 def apply_plugin(plugin, audio: np.ndarray, rate: int) -> np.ndarray:

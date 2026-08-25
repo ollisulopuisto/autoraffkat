@@ -117,17 +117,19 @@ FINGERPRINT_FIELDS = (
     "program_target",
     "plugin_workers",
     "debleed",
+    "plugin_state",
 )
 
 # Kasvatetaan kun ketju itse muuttuu niin että vanha tulos ei enää vastaa
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 4: liitännäisen oma tila on osa lopputulosta.
 # 3: ristivuodon vähennys ajetaan ennen liitännäistä.
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 3
+FINGERPRINT_VERSION = 4
 
 
 def stamp_dir() -> Path:
@@ -945,7 +947,10 @@ def process(
     try:
         workers = chain.worker_count(settings.plugin_workers)
         plugin = chain.load_pool(
-            settings.plugin_path, settings.plugin_params, workers
+            settings.plugin_path,
+            settings.plugin_params,
+            workers,
+            settings.plugin_state,
         )
         if plugin is not None and workers > 1:
             _log(f"liitännäinen {workers} rinnakkaisena palana")

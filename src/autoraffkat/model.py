@@ -264,6 +264,11 @@ class AudioSettings:
     # myöhemmin on kampasuodin, kun raidat soivat yhdessä. Vaimennus ei tätä
     # korjaa — mitattuna ääretönkin vaimennus siirsi aaltoilua 0,2 dB, koska
     # maskin aukot ovat juuri puheenvuorojen vaihdoissa. Ks. audio/debleed.py.
+    # Liitännäisen oma tila base64:nä, talletettuna sen omasta ikkunasta.
+    # Kaikki mikä vaikuttaa lopputulokseen ei ole parametri: dxRevivella
+    # mallin valinta ei ole yksikään sen neljästä parametrista. Ks.
+    # audio/editor.py.
+    plugin_state: str = ""
     debleed: bool = True
     duck: bool = False
     # Kuinka paljon hiljemmalle, 0 = ei mitään. Yhdeksän desibeliä on

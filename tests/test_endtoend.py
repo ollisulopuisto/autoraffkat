@@ -626,6 +626,28 @@ def test_defaults_are_available_for_resetting(scratch_xml):
     assert data["audio"]["duck_db"] == -9.0
 
 
+def test_changing_the_plugin_drops_its_saved_state(scratch_xml):
+    """Tila on liitännäiskohtainen, joten se ei saa jäädä roikkumaan.
+
+    Se on läpinäkymätön tavujono, jonka vain sen kirjoittanut liitännäinen
+    osaa lukea. Toiselle liitännäiselle jätettynä se on parhaassa
+    tapauksessa hyödytön ja pahimmassa se asettaa jotain — eikä kumpaakaan
+    näkisi mistään.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    state.settings.audio.plugin_path = "/oli/joskus.vst3"
+    state.settings.audio.plugin_state = "dGlsYQ=="
+    state.settings.audio.plugin_params = {"mix": 46.3}
+    client.post(
+        "/api/settings",
+        json={"tracks": {}, "globals": {}, "audio": {"enabled": True, "plugin_path": ""}},
+    )
+    assert state.settings.audio.plugin_state == ""
+    assert state.settings.audio.plugin_params == {}
+
+
 def test_declick_sensitivity_round_trips(scratch_xml):
     """Naksujen herkkyys riippuu puhujasta, joten se on säädettävissä."""
     state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))

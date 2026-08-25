@@ -4,7 +4,9 @@ Painopiste on niissä kolmessa asiassa jotka voivat rikkoa leikkauksen:
 pituus, siirtymä ja taso.
 """
 
+import base64
 import time
+
 import numpy as np
 import pytest
 
@@ -132,6 +134,63 @@ def test_declick_removes_a_click_but_not_a_plosive():
     assert np.abs(kept[0, window]).max() == pytest.approx(
         float(np.abs(plosive[0, window]).max()), rel=1e-6
     )
+
+
+def test_a_saved_state_is_applied_but_parameters_still_win():
+    """Tila ennen parametreja, ja parametri voittaa.
+
+    Tila sisältää liitännäisen kaiken — myös sen mitä parametrit eivät
+    julkaise, kuten mallin valinnan, joka on koko syy tälle. Mutta se
+    sisältää myös talletetut parametriarvot, ja jos ne jyräisivät
+    asetukset, käyttöliittymän liukusäädin lakkaisi vaikuttamasta ilman
+    että mikään kertoisi siitä.
+    """
+
+    class Fake:
+        parameters = {"mix": object()}
+
+        def __init__(self):
+            self.applied = []
+            self.mix = 50.0
+
+        @property
+        def raw_state(self):
+            return b"tila"
+
+        @raw_state.setter
+        def raw_state(self, value):
+            self.applied.append(value)
+            self.mix = 99.0  # tila tuo mukanaan oman arvonsa
+
+    plugin = Fake()
+    assert chain.apply_state(plugin, base64.b64encode(b"tila").decode())
+    assert plugin.applied == [b"tila"]
+    chain.apply_parameters(plugin, {"mix": 46.3})
+    assert plugin.mix == pytest.approx(46.3), "tila jyräsi asetetun säätimen"
+
+
+def test_a_state_from_another_plugin_is_ignored_not_fatal():
+    """Tila on läpinäkymätön eikä siirry liitännäisestä toiseen.
+
+    Liitännäisen vaihduttua vanha tila on roskaa, mutta parametrit toimivat
+    silti — joten kelvoton tila sivuutetaan eikä siitä tehdä virhettä, joka
+    estäisi käsittelyn kokonaan.
+    """
+
+    class Grumpy:
+        parameters: dict = {}
+
+        @property
+        def raw_state(self):
+            return b""
+
+        @raw_state.setter
+        def raw_state(self, value):
+            raise RuntimeError("not my state")
+
+    assert chain.apply_state(Grumpy(), base64.b64encode(b"vieras").decode()) is False
+    assert chain.apply_state(Grumpy(), "") is False
+    assert chain.apply_state(Grumpy(), "ei ole base64!!") is False
 
 
 def test_declick_does_not_shred_ordinary_speech():

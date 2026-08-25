@@ -1230,6 +1230,38 @@ function renderPluginParams(host, audio) {
   const head = document.createElement('h3');
   head.textContent = T('audio.pluginParams');
   host.append(head);
+
+  /* Liitännäisen oma ikkuna. Tämä ei ole mukavuus vaan ainoa tie osaan
+     asetuksista: dxRevive julkaisee neljä parametria, eikä mallin valinta
+     ole yksikään niistä. Ilman tätä ajetaan aina oletusmallia. */
+  const editor = document.createElement('button');
+  editor.type = 'button';
+  editor.className = 'ghost';
+  editor.textContent = T('audio.pluginEditor');
+  editor.addEventListener('click', async () => {
+    editor.disabled = true;
+    editor.textContent = T('audio.pluginEditorOpen');
+    try {
+      const response = await fetch('/api/plugin-editor', { method: 'POST' });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error((data && data.detail) || '');
+      /* Säätimet ovat voineet muuttua liitännäisen omassa ikkunassa, joten
+         koko tila korvataan eikä vain merkitä talletetuksi. Välimuisti
+         tyhjennetään samalla: liitännäisen lukemat ovat voineet muuttua. */
+      state = data;
+      pluginParams = {};
+      renderAudio();
+      return;
+    } catch (err) {
+      editor.textContent = (err && err.message) || T('audio.pluginEditorFailed');
+    }
+    editor.disabled = false;
+  });
+  host.append(editor);
+  if (audio.plugin_state) {
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'muted small', textContent: T('audio.pluginStateSaved') }));
+  }
   if (cached === 'error') {
     host.append(Object.assign(document.createElement('p'),
       { className: 'warn', textContent: T('audio.pluginFailed') }));

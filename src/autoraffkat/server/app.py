@@ -51,6 +51,12 @@ from ..preview import build as build_preview
 STATIC_DIR = get_resource_path("server/static")
 
 
+# Liitännäisen ikkuna on auki niin kauan kuin käyttäjä katselee sitä.
+# Tunti on tarpeeksi pitkä, ettei se katkea kesken työn, ja tarpeeksi
+# lyhyt, ettei unohtunut ikkuna jää roikkumaan ikuisesti.
+EDITOR_TIMEOUT = 3600.0
+
+
 def _plugin_params(raw) -> dict:
     """Liitännäisen säätimet selaimesta: nimi -> arvo.
 
@@ -314,6 +320,9 @@ class AppState:
             # ne osuvat väärään säätimeen.
             if wanted != a.plugin_path:
                 a.plugin_params = {}
+                # Tila on läpinäkymätön ja liitännäiskohtainen: toisen
+                # liitännäisen tavut eivät ole tälle mitään.
+                a.plugin_state = ""
             a.plugin_path = wanted
         if "plugin_params" in raw:
             a.plugin_params = _plugin_params(raw["plugin_params"])
@@ -758,6 +767,57 @@ def create_app(state: AppState) -> FastAPI:
         except ChainError as exc:
             raise HTTPException(400, str(exc)) from exc
         return {"params": specs, "total": total}
+
+    @app.post("/api/plugin-editor")
+    def plugin_editor():
+        """Avaa liitännäisen oman ikkunan ja tallettaa sen jättämän tilan.
+
+        Lapsiprosessissa, koska ``show_editor`` on kutsuttava pääsäikeestä
+        ja se **estää** sen kunnes ikkuna suljetaan — palvelimen pääsäie
+        ajaa tapahtumasilmukkaa. Sama syy kuin käsittelyllä, ks.
+        ``audio/editor.py``.
+
+        Tämä on ainoa tie liitännäisen malliin: dxRevive julkaisee neljä
+        parametria, eikä mallin valinta ole yksikään niistä.
+        """
+        audio = state.settings.audio
+        if not audio.plugin_path:
+            raise HTTPException(400, t("audio.plugin_missing", path=""))
+        spec = {
+            "plugin_path": audio.plugin_path,
+            "params": audio.plugin_params,
+            "state": audio.plugin_state or None,
+        }
+        try:
+            child = subprocess.run(
+                [sys.executable, "-m", "autoraffkat.audio.editor"],
+                input=json.dumps(spec),
+                capture_output=True,
+                text=True,
+                timeout=EDITOR_TIMEOUT,
+            )
+        except subprocess.TimeoutExpired as exc:
+            raise HTTPException(400, t("audio.editor_timeout")) from exc
+        payload: dict = {}
+        for line in (child.stdout or "").splitlines():
+            try:
+                payload = json.loads(line)
+            except json.JSONDecodeError:
+                print(line, flush=True)
+        if payload.get("kind") != "done":
+            tail = (child.stderr or "").strip().splitlines()
+            raise HTTPException(
+                400,
+                payload.get("error")
+                or (tail[-1] if tail else t("audio.editor_failed")),
+            )
+        with state.lock:
+            audio.plugin_state = payload.get("state", "")
+            merged = dict(audio.plugin_params)
+            merged.update(_plugin_params(payload.get("params") or {}))
+            audio.plugin_params = merged
+        project.save(state.xml_path, state.settings)
+        return _state_json(state)
 
     @app.get("/api/state")
     def get_state():

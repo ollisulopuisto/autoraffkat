@@ -147,6 +147,15 @@ CATALOG: dict[str, dict[str, str]] = {
         "({speakers}).",
         "en": "Ducking was skipped: no microphone got a mask ({speakers}).",
     },
+    "audio.editor_timeout": {
+        "fi": "Liitännäisen ikkuna oli auki liian kauan. Sulje se ja "
+        "yritä uudestaan.",
+        "en": "The plug-in's window was open too long. Close it and try again.",
+    },
+    "audio.editor_failed": {
+        "fi": "Liitännäisen ikkunaa ei saatu auki.",
+        "en": "The plug-in's window could not be opened.",
+    },
     "audio.debleed_no_grid": {
         "fi": "Ristivuodon vähennys jäi pois: puhujaruudukkoa ei ollut. "
         "Se tarvitsee vähintään kaksi mikkiä ja valmiin analyysin.",

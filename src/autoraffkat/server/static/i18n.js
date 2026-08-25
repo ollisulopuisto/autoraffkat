@@ -94,6 +94,12 @@ const STRINGS = {
     'audio.enable': 'Käsittele mikit',
     'audio.plugin': 'Liitännäinen',
     'audio.pluginHint': 'esim. dxRevive — tyhjä = ei liitännäistä',
+    'audio.pluginEditor': 'Avaa liitännäisen oma ikkuna',
+    'audio.pluginEditorOpen': 'Ikkuna auki — sulje se kun olet valmis',
+    'audio.pluginEditorFailed': 'Ikkunaa ei saatu auki',
+    'audio.pluginStateSaved': 'Liitännäisen oma tila on talletettu tähän '
+      + 'jaksoon — myös se mitä sen parametrit eivät kerro, kuten mallin '
+      + 'valinta.',
     'audio.pluginParams': 'Liitännäisen säätimet',
     'audio.pluginLoading': 'luetaan liitännäistä…',
     'audio.pluginNoParams': 'Tässä liitännäisessä ei ole säädettävää.',
@@ -273,6 +279,12 @@ const STRINGS = {
     'audio.enable': 'Process microphones',
     'audio.plugin': 'Plug-in',
     'audio.pluginHint': 'e.g. dxRevive — empty = no plug-in',
+    'audio.pluginEditor': "Open the plug-in's own window",
+    'audio.pluginEditorOpen': 'Window open — close it when you are done',
+    'audio.pluginEditorFailed': 'The window could not be opened',
+    'audio.pluginStateSaved': "The plug-in's own state is saved with this "
+      + 'episode — including what its parameters do not expose, such as '
+      + 'the model.',
     'audio.pluginParams': 'Plug-in controls',
     'audio.pluginLoading': 'reading the plug-in…',
     'audio.pluginNoParams': 'This plug-in has nothing to adjust.',

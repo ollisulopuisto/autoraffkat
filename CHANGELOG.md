@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.72] - 2026-08-25
+
+### Added
+- **The Plug-in's Own Window (`audio/editor.py`)**: a button in the audio panel opens the plug-in's real interface, and whatever state you leave it in is saved with the episode.
+  - This is not a convenience. **Not everything that changes the result is a parameter.** dxRevive publishes four automatable parameters — bypass, input gain, output gain, Mix — and the *model selector is not one of them*. Studio 2 and its siblings live in the plug-in's own state, reachable only through its own interface. Without this we always ran whatever model the plug-in happens to default to, and could not even report which one.
+  - It runs in a **child process**. `show_editor` carries the same rule as loading — main thread only — and it *blocks* until the window is closed. The server's main thread is the event loop and cannot be held for as long as someone looks at a plug-in. Same reason, same shape as `audio/worker.py`.
+  - The state is applied **before** parameters, so a saved Mix cannot override the slider in the panel. A state from a different plug-in is opaque and useless, so it is ignored rather than made into an error, and changing `plugin_path` drops it along with the parameters.
+  - `plugin_state` is in `FINGERPRINT_FIELDS` and `FINGERPRINT_VERSION` is 4: a different model is a different result, and the button must not call those files fresh.
+
 ## [v26.08.25.71] - 2026-08-25
 
 ### Added
