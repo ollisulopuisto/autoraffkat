@@ -134,6 +134,56 @@ def test_declick_removes_a_click_but_not_a_plosive():
     )
 
 
+def test_declick_does_not_shred_ordinary_speech():
+    """Vartio vastakkaiselle virheelle: detektori joka laukeaa kaikesta.
+
+    Kun vertailukohta korjattiin maksimista keskiarvoon, kerroin jäi
+    maksimin kertoimeksi. Mitattuna oikealla puheella: 1,8–2,2 % kaikista
+    näytteistä korjattiin, 550–640 korjausta sekunnissa, ja signaali muuttui
+    −10…−15 dB itseensä nähden. Se meni läpi kaikista testeistä, koska
+    yksikään ei kysynyt *montako* naksua löytyi — vain että istutettu naksu
+    lähti. Molemmat virheet ovat nyt katettuja.
+    """
+    rng = np.random.default_rng(7)
+    seconds = 4.0
+    n = int(RATE * seconds)
+    # Puheenkaltaista: harmoninen perusta, sihisevä yläpää, tauot välissä.
+    t = np.arange(n) / RATE
+    voice = sum(np.sin(2 * np.pi * 110 * k * t) / k for k in range(1, 12))
+    voice += 0.3 * rng.normal(size=n) * (np.abs(voice) > 0.5)
+    gate = (np.sin(2 * np.pi * 1.5 * t) > -0.3).astype(float)
+    audio = (0.2 * voice * gate).astype(np.float32).reshape(1, -1)
+
+    cleaned = chain.declick(audio, RATE)
+    touched = np.flatnonzero(cleaned[0] != audio[0])
+    groups = 0 if touched.size == 0 else 1 + int((np.diff(touched) > 1).sum())
+    assert groups / seconds <= chain.DECLICK_MAX_PER_SECOND, (
+        f"{groups / seconds:.0f} korjausta sekunnissa — naksuja on muutama "
+        "minuutissa, joten tämä on signaalia"
+    )
+    change = 10 * np.log10(
+        ((cleaned[0] - audio[0]) ** 2).mean() / (audio[0] ** 2).mean() + 1e-30
+    )
+    assert change < -25.0, f"muutos {change:.1f} dB signaaliin nähden on säröä"
+
+
+def test_declick_gives_up_rather_than_correcting_everything():
+    """Katto pitää, vaikka materiaali olisi pelkkää transienttia.
+
+    Kynnystä nostetaan kunnes löydökset mahtuvat kattoon, ja jos ne eivät
+    mahdu, mitään ei korjata. Vaihtoehto on että tunnistin päättää koko
+    tiedoston olevan naksua — ja se on tapa rikkoa ääni hiljaa.
+    """
+    rng = np.random.default_rng(11)
+    seconds = 2.0
+    n = int(RATE * seconds)
+    audio = (0.1 * rng.normal(size=n)).astype(np.float32).reshape(1, -1)
+    cleaned = chain.declick(audio, RATE, sensitivity=1.0)
+    touched = np.flatnonzero(cleaned[0] != audio[0])
+    groups = 0 if touched.size == 0 else 1 + int((np.diff(touched) > 1).sum())
+    assert groups / seconds <= chain.DECLICK_MAX_PER_SECOND
+
+
 def test_declick_would_be_dead_with_a_maximum_reference():
     """Vartio automixerista peritylle virheelle.
 

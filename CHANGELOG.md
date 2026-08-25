@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.70] - 2026-08-25
+
+### Fixed
+- **The De-clicker Was a Distortion Generator**: it corrected **1.8–2.2 % of every sample — 550–640 corrections per second** — and altered the signal by −10 to −15 dB relative to itself. A lip smack happens a few times a minute. The cause was half a fix: when the reference was corrected from a local maximum to a local mean, the multiplier stayed the maximum's (3.5), and against a mean it fires on ordinary speech. Measured on real podcast material, the threshold that finds clicks at the rate clicks actually occur is around 25× the local mean. Default sensitivity now makes 0.2–0.6 corrections per second and touches 0.03 % of samples.
+  - A **ceiling** backs the threshold up: more findings than `DECLICK_MAX_PER_SECOND` and the threshold doubles until they fit; if they never fit, nothing is corrected. A detector that finds a click every other millisecond has found the signal, not clicks.
+  - Overshoots within 2 ms are **one** event. Without that, a single 2 ms click counts as thirty separate findings — its half-cycles — so the ceiling tripped on one click and the interpolation repaired only the peaks of the wave and left the rest.
+  - The plosive guard compares against a **local** mean. A whole-file mean made the guard a function of file length: in an hour-long recording full of pauses the mean sinks and the guard stops guarding exactly where the detector fires most.
+  - Two tests now cover both directions. The old suite only asked whether a planted click was removed, never *how many* were found, so a detector that corrected everything passed it.
+- **`FINGERPRINT_VERSION` 2**: files made with the old detector are not up to date under any setting, and without this the button would have said the opposite.
+
 ## [v26.08.25.69] - 2026-08-25
 
 ### Fixed

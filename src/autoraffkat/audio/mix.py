@@ -121,7 +121,11 @@ FINGERPRINT_FIELDS = (
 # Kasvatetaan kun ketju itse muuttuu niin että vanha tulos ei enää vastaa
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
-FINGERPRINT_VERSION = 1
+#
+# 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
+#    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
+#    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
+FINGERPRINT_VERSION = 2
 
 
 def stamp_dir() -> Path:

@@ -84,6 +84,16 @@ drops from 19.2 dB to 15.2, and the same voice arriving twice a few
 milliseconds apart is a comb filter. It is audible only when both tracks
 play together, which is to say only after the export.
 
+A de-clicker's threshold is a rate, not a multiplier. Correcting the
+reference from a local maximum to a local mean without changing the
+multiplier turned a no-op into a distortion generator: measured on real
+speech, 2 % of all samples, 550–640 corrections per second, the signal
+altered −10 dB relative to itself. It passed every test, because the tests
+asked whether a planted click was removed and never how many were found.
+Calibrate on how often the artefact really occurs — lip smacks are a few a
+minute — and keep the ceiling in `declick`, which raises the threshold until
+the findings fit and corrects nothing if they never do.
+
 ## Sensitivity and gain are not the same thing
 
 Sensitivity is a threshold above the noise floor, so gain does not move it —

@@ -535,6 +535,22 @@ def lag_samples(
     return (int(np.argmax(correlation)) - (a.size - 1)) * step
 
 
+# Naksunpoiston kynnys, kerroin paikalliseen keskiarvoon. Kalibroitu
+# oikeasta materiaalista: kertoimella 3,5 löydöksiä oli 316–666 sekunnissa,
+# kertoimella 25 noin yksi. Huulinaksuja on muutama minuutissa.
+DECLICK_FACTOR_MAX = 40.0  # herkkyys 0.0
+DECLICK_FACTOR_MIN = 10.0  # herkkyys 1.0
+# Tätä tiheämpi löydös on signaalia, ei naksuja.
+DECLICK_MAX_PER_SECOND = 5.0
+# Montako kertaa kynnys kaksinkertaistetaan ennen kuin luovutetaan.
+DECLICK_ESCALATIONS = 6
+# Tätä lähempänä toisiaan olevat ylitykset ovat samaa naksua. Ilman tätä
+# yksi 2 ms:n naksu on kolmisenkymmentä erillistä löydöstä — sen puolijaksot
+# — jolloin katto laukeaa yhdestä naksusta ja interpolointi korjaa vain
+# aallon huiput ja jättää loput paikalleen.
+DECLICK_MERGE_MS = 2.0
+
+
 def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarray:
     """Poistaa huulinaksut ja maiskaukset.
 
@@ -547,7 +563,26 @@ def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarra
     oma kommentti puhui keskiarvosta. Naksu on määritelmän mukaan oman
     ympäristönsä maksimi, joten ehto ``|x| > max * 3,5`` ei voi täyttyä
     koskaan: käsittely oli aina nolla-operaatio. Keskiarvo on se mitä
-    tarkoitettiin, ja sillä ehto myös laukeaa.
+    tarkoitettiin — mutta **kerroin 3,5 oli maksimin kerroin**, ja
+    keskiarvoon sovellettuna se laukeaa kaikesta. Mitattuna oikealla
+    puheella: 1,8–2,2 % kaikista näytteistä, 550–640 korjausta sekunnissa,
+    ja signaali muuttui −10…−15 dB itseensä nähden. Se ei ole naksunpoisto
+    vaan säröngeneraattori, ja juuri siltä se kuulostaa.
+
+    Huulinaksuja on muutama minuutissa. Kerroin on siksi kalibroitu siitä,
+    montako löydöstä sekunnissa syntyy oikeasta materiaalista
+    (``DECLICK_FACTOR_*``), ja sen päällä on **katto**: jos löydöksiä tulee
+    silti enemmän kuin ``DECLICK_MAX_PER_SECOND``, kynnystä nostetaan kunnes
+    ne loppuvat, ja jos ne eivät lopu, mitään ei korjata. Detektori joka
+    löytää naksun joka toisesta millisekunnista ei ole löytänyt naksuja vaan
+    signaalin, ja hiljaa väärässä oleva korjaus on tässä projektissa
+    kalliimpi kuin tekemättä jätetty.
+
+    Plosiivisuoja vertaa myös **paikalliseen** keskiarvoon. Koko tiedoston
+    keskiarvo teki suojasta tiedoston pituuden funktion: tunnin nauhassa,
+    jossa on paljon taukoja, keskiarvo painuu alas ja suoja lakkaa
+    suojaamasta juuri hiljaisissa kohdissa, joissa detektori laukeaa
+    herkimmin.
     """
     from scipy import signal as sp
     from scipy.ndimage import uniform_filter1d
@@ -559,13 +594,31 @@ def declick(audio: np.ndarray, rate: int, sensitivity: float = 0.5) -> np.ndarra
         low = sp.sosfiltfilt(sp.butter(4, 1000, "lp", fs=rate, output="sos"), data)
         window = max(1, int(0.05 * rate))
         local = uniform_filter1d(np.abs(high), size=window)
-        factor = 5.0 - 3.0 * sensitivity
-        clicks = np.abs(high) > local * factor
-        clicks &= ~(np.abs(low) > np.mean(np.abs(low)) * 3.0)
-        if not clicks.any():
+        local_low = uniform_filter1d(np.abs(low), size=window)
+        factor = DECLICK_FACTOR_MAX - (
+            DECLICK_FACTOR_MAX - DECLICK_FACTOR_MIN
+        ) * float(np.clip(sensitivity, 0.0, 1.0))
+        seconds = max(data.size / rate, 1e-9)
+        allowed = DECLICK_MAX_PER_SECOND * seconds
+        gap = max(1, int(DECLICK_MERGE_MS * rate / 1000.0))
+        index = np.empty(0, dtype=np.intp)
+        for _ in range(DECLICK_ESCALATIONS):
+            clicks = np.abs(high) > local * factor
+            clicks &= ~(np.abs(low) > local_low * 3.0)
+            index = np.flatnonzero(clicks)
+            if index.size == 0:
+                break
+            found = 1 + int((np.diff(index) > gap).sum())
+            if found <= allowed:
+                break
+            factor *= 2.0
+        else:
+            # Kynnys ei riittänyt millään: tämä ei ole naksuinen tiedosto
+            # vaan detektori väärässä. Ei kosketa.
             continue
-        index = np.flatnonzero(clicks)
-        for cluster in np.split(index, np.flatnonzero(np.diff(index) > 1) + 1):
+        if index.size == 0:
+            continue
+        for cluster in np.split(index, np.flatnonzero(np.diff(index) > gap) + 1):
             start = max(0, int(cluster[0]) - 10)
             end = min(data.size, int(cluster[-1]) + 10)
             if end - start >= int(0.01 * rate):  # yli 10 ms ei ole naksu
