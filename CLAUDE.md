@@ -94,6 +94,17 @@ Calibrate on how often the artefact really occurs — lip smacks are a few a
 minute — and keep the ceiling in `declick`, which raises the threshold until
 the findings fit and corrects nothing if they never do.
 
+The plug-in slot is flavour, not a replacement mechanism. There is one
+slot, it runs first, and it never stands in for a stage of the chain. The
+reason it exists at all is that a speech-restoration model is the one thing
+here we have no opinion about and cannot ship; everything after it —
+de-essing, the three bounded compressors, the true-peak ceiling, the
+normalisation order — was measured, and those numbers are the tool. Letting
+a second plug-in in would quietly undo them: someone loads a limiter in
+front of ours and the ceiling guarantee stops being true with nothing to say
+so. A user who wants their own chain should cut here and master in their
+DAW. This is an automation tool, not a worse DAW.
+
 A plug-in window from a plain Python process opens behind everything. The
 window is created — measured 536×392 at (0, 37), on screen, thirteenth from
 the front — but macOS does not treat the process as a GUI application, so it
