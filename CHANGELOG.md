@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.69] - 2026-08-25
+
+### Fixed
+- **The Export's Name Did Not Reach Final Cut**: the file name carries the settings tag and a version number — `…-cut broadcast audio v8.fcpxml` — but Final Cut does not show file names. It shows `<project name>`, which was the project name setting and therefore identical for every export. Successive imports were indistinguishable in the browser, with nothing to say which was newer or which file it came from, which is the same problem the file numbering exists to solve. The shown name now carries the distinguishing part: `Rough cut · broadcast audio v8`.
+
 ## [v26.08.25.68] - 2026-08-25
 
 ### Fixed

@@ -118,6 +118,26 @@ def _output_base(xml_path: str, tag: str) -> str:
     return f"{base} {tag}" if tag else base
 
 
+def fcp_project_name(name: str, out_path: str) -> str:
+    """Nimi jonka Final Cut näyttää selaimessaan.
+
+    Tiedostonimi kantaa tagin ja numeron, mutta Final Cut ei näytä
+    tiedostonimeä — se näyttää ``<project name>``:n. Ilman erottelua kaikki
+    peräkkäiset tuonnit ovat selaimessa saman nimisiä, eikä niistä näe kumpi
+    on uudempi tai mistä tiedostosta kumpikin tuli. Se on sama ongelma jonka
+    takia viennin tiedostonimi ylipäätään numeroidaan.
+
+    Nimeen liitetään siis se osa tiedoston nimestä joka erottaa sen muista:
+    tagi ja numero, esimerkiksi «broadcast audio v8».
+    """
+    stem = os.path.splitext(os.path.basename(out_path))[0]
+    marker = ""
+    at = stem.find(OUTPUT_SUFFIX)
+    if at >= 0:
+        marker = stem[at + len(OUTPUT_SUFFIX) :].strip()
+    return f"{name} · {marker}" if marker else name
+
+
 def next_output_path(xml_path: str, tag: str = "") -> str:
     """Ensimmäinen vapaa viennin polku.
 

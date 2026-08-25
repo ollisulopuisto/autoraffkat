@@ -852,6 +852,12 @@ def create_app(state: AppState) -> FastAPI:
             out_path = project.next_output_path(
                 state.xml_path, project.name_tag(state.settings)
             )
+            # Final Cut näyttää projektin nimen, ei tiedostonimeä, joten
+            # erotteleva osa on liitettävä siihen tai tuonnit ovat
+            # selaimessa erottamattomia.
+            shown_name = project.fcp_project_name(
+                state.settings.globals.project_name, out_path
+            )
             if os.path.abspath(out_path) == os.path.abspath(state.xml_path):
                 raise HTTPException(400, t("export.would_overwrite"))
             if os.path.dirname(out_path).endswith(project.BUNDLE_EXT):
@@ -884,7 +890,7 @@ def create_app(state: AppState) -> FastAPI:
                         mic_tracks,
                         program_start,
                         program_end,
-                        state.settings.globals.project_name,
+                        shown_name,
                         replacements=replacements,
                         room=room,
                         settings=state.settings,
@@ -898,7 +904,7 @@ def create_app(state: AppState) -> FastAPI:
                         state.timeline.frame_duration,
                         program_start,
                         program_end,
-                        state.settings.globals.project_name,
+                        shown_name,
                         replacements=replacements,
                         room=room,
                         settings=state.settings,

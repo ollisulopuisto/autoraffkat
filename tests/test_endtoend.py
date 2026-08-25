@@ -144,7 +144,12 @@ def test_server_round_trip(scratch_xml):
     exported = client.post("/api/export", json=payload).json()
     assert exported["ok"]
     written = ET.parse(exported["path"]).getroot()
-    assert written.find(".//project").get("name") == "Testi"
+    # Nimi kantaa myös sen mikä erottaa tämän viennin muista: Final Cut
+    # näyttää projektin nimen eikä tiedostonimeä, joten ilman tätä peräkkäiset
+    # tuonnit ovat selaimessa erottamattomia.
+    shown = written.find(".//project").get("name")
+    assert shown.startswith("Testi")
+    assert shown != "Testi", "vientiä ei voi erottaa muista Final Cutissa"
     assert len(written.findall(".//spine/asset-clip")) == exported["cuts"]
 
     # Asetukset jäivät XML:n viereen seuraavaa jaksoa varten.

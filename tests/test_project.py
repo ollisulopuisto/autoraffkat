@@ -191,3 +191,29 @@ def test_each_style_is_numbered_on_its_own(tmp_path):
     assert project.next_output_path(str(xml), "mellow") == str(
         tmp_path / "jakso-cut mellow.fcpxml"
     )
+
+
+def test_the_shown_name_distinguishes_exports():
+    """Final Cut näyttää projektin nimen, ei tiedostonimeä.
+
+    Tiedostonimi numeroidaan jotta valmiin leikkauksen päälle ei kirjoiteta,
+    mutta selaimessa se ei näy — ja ilman erottelua kaikki tuonnit ovat
+    samannimisiä eikä niistä näe kumpi on uudempi tai mistä tiedostosta
+    kumpikin tuli.
+    """
+    from autoraffkat.project import fcp_project_name
+
+    # Ensimmäinen vienti ilman tagia: nimi sellaisenaan, ei turhaa koristetta.
+    assert fcp_project_name("Rough cut", "/x/jakso-cut.fcpxml") == "Rough cut"
+    # Tagi ja numero erottavat.
+    assert (
+        fcp_project_name("Rough cut", "/x/jakso-cut broadcast audio v8.fcpxml")
+        == "Rough cut · broadcast audio v8"
+    )
+    assert fcp_project_name("Rough cut", "/x/jakso-cut v3.fcpxml") == "Rough cut · v3"
+    # Peräkkäiset viennit eroavat toisistaan, mikä on koko pointti.
+    names = {
+        fcp_project_name("Rough cut", f"/x/jakso-cut broadcast v{n}.fcpxml")
+        for n in range(2, 6)
+    }
+    assert len(names) == 4

@@ -285,6 +285,11 @@ back as a source. The reason is not tidiness: the previous export is usually
 already imported into Final Cut and edited by hand, and that work has no other
 source to be rebuilt from.
 
+Final Cut shows `<project name>`, never the file name — so the distinguishing
+part of the file name has to be in it too (`project.fcp_project_name`), or
+every import looks the same in the browser and the numbering that keeps the
+files apart buys nothing where it is actually read.
+
 The name also carries the settings (`project.name_tag`): the rhythm preset
 always, deviating controls after it, `audio` when the microphones were
 processed. `_OUTPUT_RE` therefore accepts a tag between the suffix and the
