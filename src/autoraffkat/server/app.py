@@ -413,7 +413,7 @@ class AppState:
                 try:
                     message = json.loads(line)
                 except json.JSONDecodeError:
-                    _log_mix(line)  # lapsen oma loki menee sellaisenaan läpi
+                    print(line, flush=True)  # lapsen oma loki, jo etuliitteellä
                     continue
                 kind = message.pop("kind", "")
                 if kind == "progress":

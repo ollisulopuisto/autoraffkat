@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.66] - 2026-08-25
+
+### Fixed
+- **The Program Trim Was Being Undone**: it was added to the gain, and the chain normalises to the target *after* that, so the normalisation removed it exactly. The stems measured −14.1 LUFS where they should have measured −15.8, and nothing said otherwise — the number looked right, just for the wrong reason. The trim now goes into the target, where normalisation preserves it because it is the thing normalisation aims at. A test asserts the trim actually moves the level.
+- **Doubled `[ääni]` in the log**: the child's own lines were passed through the parent's logger, which added its prefix a second time.
+
 ## [v26.08.25.65] - 2026-08-25
 
 ### Fixed

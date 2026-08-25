@@ -582,13 +582,22 @@ def _run_one(
     if job.get("mono") and audio.shape[0] > 1:
         audio = audio.mean(axis=0, keepdims=True)
 
+    # Ohjelmatrimmi kuuluu **tavoitteeseen**, ei vahvistukseen. Ketju
+    # normalisoi lopuksi tavoitteeseen, joten vahvistukseen lisätty trimmi
+    # kumoutuu siinä kokonaan — mitattuna stemit osuivat -14,1:een kun niiden
+    # piti osua -15,8:aan. Tavoitteessa se säilyy, koska normalisointi ajaa
+    # juuri siihen lukemaan.
+    target = job.get("target_lufs")
+    if target is not None and trim_db:
+        target = float(target) + trim_db
+
     audio, info = chain.process(
         audio,
         rate,
         settings,
-        job.get("gain_db", 0.0) + trim_db,
+        job.get("gain_db", 0.0),
         job.get("speech", True),
-        job.get("target_lufs"),
+        target,
         plugin,
         stage=lambda name, frac: report(name, READ_SHARE + CHAIN_SHARE * frac),
     )

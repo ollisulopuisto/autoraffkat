@@ -729,3 +729,31 @@ def test_a_child_that_dies_is_reported(scratch_xml, monkeypatch):
     )
     state.run_mix()
     assert "mix" in state.mix_result.errors
+
+
+def test_the_program_trim_moves_the_level_it_is_supposed_to_move():
+    """Trimmi kuuluu tavoitteeseen, ei vahvistukseen.
+
+    Ketju normalisoi lopuksi tavoitteeseen. Vahvistukseen lisätty trimmi
+    kumoutuu siinä, ja niin kävikin: stemit osuivat -14,1:een kun niiden piti
+    osua -15,8:aan, eikä mikään kertonut — luku näytti vain oikealta.
+    """
+    import numpy as np
+    import pyloudnorm as pyln
+
+    from autoraffkat.audio import chain
+
+    rate = 48000
+    rng = np.random.default_rng(5)
+    x = (0.05 * rng.normal(0, 1, rate * 8)).astype(np.float32).reshape(1, -1)
+    settings = AudioSettings(target_lufs=-14.0)
+    meter = pyln.Meter(rate)
+
+    plain, _ = chain.process(x.copy(), rate, settings, 0.0, True, -14.0, None)
+    trimmed, _ = chain.process(x.copy(), rate, settings, 0.0, True, -14.0 - 2.0, None)
+
+    plain_lufs = meter.integrated_loudness(plain[0].astype(np.float64))
+    trimmed_lufs = meter.integrated_loudness(trimmed[0].astype(np.float64))
+    assert plain_lufs - trimmed_lufs == pytest.approx(2.0, abs=0.5), (
+        f"trimmi ei siirtänyt tasoa: {plain_lufs:.2f} vs {trimmed_lufs:.2f}"
+    )

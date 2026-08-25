@@ -204,6 +204,11 @@ means the button says so and asks for confirmation before re-rendering
 made with different settings. Only the button is swapped in place: redrawing
 the audio panel would replace a slider mid-drag.
 
+The program trim goes into the **target**, never into the gain. The chain
+normalises to the target as its last act, so a trim added to the gain is
+removed again exactly — measured, stems landed on −14.1 instead of −15.8 and
+the reading looked correct.
+
 The processed files stay on disk between sessions, but `MixResult` does not.
 `mix.adopt` reads what is already there — `stat` only — and it runs on load and
 again at export. Without it, exporting without pressing the button referenced
