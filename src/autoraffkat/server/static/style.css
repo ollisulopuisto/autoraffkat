@@ -142,6 +142,20 @@ main {
 }
 @media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
 
+/* Kisko: kaksi paneelia, jotka leveällä ruudulla asettuvat rinnakkain.
+
+   Kaksi saraketta jätti kuvan puolelle metrin tyhjää ja ahtoi kaiken muun
+   yhteen pitkään kiskoon, jolloin ääni jäi taitteen alle eikä sitä
+   löytänyt. Kolmas sarake syntyy jakamalla kisko, ei lisäämällä
+   `main`iin saraketta — silloin keskikokoinen ruutu pysyy ennallaan. */
+.rail { display: grid; gap: 0; align-content: start; }
+
+@media (min-width: 1500px) {
+  main { grid-template-columns: minmax(0, 1fr) minmax(700px, .95fr); }
+  .rail { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+  .rail > .panel { margin-bottom: 0; }
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);

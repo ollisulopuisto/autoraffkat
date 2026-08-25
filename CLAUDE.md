@@ -427,6 +427,11 @@ target. Nothing is removed: every control is still there, one disclosure
 away, and now carries its measurement (`why.<key>` in `i18n.js`) beside the
 number.
 
+A preset's own numbers are its definition, not controls layered on it. The
+rhythm preset's four sliders were always visible, and moving one switched the
+preset to Custom in passing — the choice changed as a side effect. They now
+appear only under Custom, carrying the values the preset had.
+
 A closed row must show that something inside it changed, and name it.
 Disclosure that hides a setting the user already moved is worse than no
 disclosure — the knob vanishes and cannot be found. Same principle as

@@ -472,6 +472,31 @@ if (fired < MIN_HANDLERS) {
   process.exit(1);
 }
 
+/* Esiasetuksen säätimet näkyvät vasta mukautetussa.
+
+   Esiasetus on valinta, ja sen alla olevat neljä lukua ovat sen määritelmä.
+   Jos ne palaavat näkyviin muissa esiasetuksissa, valinta muuttuu taas
+   sivutuotteena — mikä on juuri se ero jonka tämä rivitys poisti. */
+run('esiasetuksen säätimet', () => {
+  const count = (rhythm) => {
+    let n = 0;
+    vm.runInContext(`state.globals.rhythm = '${rhythm}'; renderGlobals();`, context);
+    const host = vm.runInContext("document.getElementById('global-list')", context);
+    for (const child of host.children || []) {
+      if (child.className === 'knob') n += 1;
+    }
+    return n;
+  };
+  const preset = count('broadcast');
+  const custom = count('custom');
+  if (preset !== 0) {
+    throw new Error(`esiasetuksessa näkyi ${preset} säädintä, pitäisi olla 0`);
+  }
+  if (custom < 3) {
+    throw new Error(`mukautetussa näkyi ${custom} säädintä, odotettiin 3+`);
+  }
+});
+
 /* Siirretään yksi säädin pois mitatusta oletuksesta, jotta merkin voi
    todeta. Ilman tätä fixture on identtinen oletusten kanssa eikä testi
    kertoisi merkistä mitään suuntaan tai toiseen. */

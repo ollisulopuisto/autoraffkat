@@ -678,9 +678,15 @@ function renderGlobals() {
     });
   }
 
+  /* Esiasetuksen säätimet näkyvät vasta kun «mukautettu» on valittu.
+     Esiasetus **on** valinta: sen alla oleva neljä lukua ovat sen määritelmä,
+     eivät jotain mitä sen päälle säädetään. Aiemmin ne olivat aina näkyvissä,
+     ja niiden liikuttaminen vaihtoi esiasetuksen mukautetuksi ohimennen —
+     eli valinta muuttui sivutuotteena eikä valintana. */
   const host = $('global-list');
   host.textContent = '';
-  GLOBAL_KNOBS().forEach((spec) => {
+  const custom = (state.globals.rhythm || 'broadcast') === 'custom';
+  (custom ? GLOBAL_KNOBS() : []).forEach((spec) => {
     host.append(knob(spec, state.globals[spec.key], (v) => {
       state.globals[spec.key] = v;
       if (state.globals.rhythm && PRESET_VALUES[state.globals.rhythm]) {
@@ -698,11 +704,63 @@ function renderGlobals() {
   });
 
 
-  /* Pitkä puheenvuoro. «Laajan kesto» koskee vain paluusääntöä, joten se
-     piilotetaan kun laajaan jäädään — muuten säädin lupaa vaikutusta jota
-     sillä ei ole. */
-  const longtake = $('longtake-params');
-  longtake.textContent = '';
+  /* Pitkä puheenvuoro ja päällekkäispuhe riveinä: kumpikin on yksi sääntö
+     ja pari ajoitusta, eikä sääntöä tarvitse lukea rivi riviltä nähdäkseen
+     mikä on valittuna — se on rivin arvona. */
+  const rows = $('cut-rows');
+  rows.textContent = '';
+
+  const longChosen = LONGTAKE_RULES()
+    .find(([value]) => value === state.globals.long_take_rule);
+  rows.append(settingRow({
+    key: 'longtake',
+    label: T('app.longtake'),
+    hint: T('longtake.rowHint'),
+    value: state.globals.wide_every
+      ? (longChosen ? longChosen[1] : '') : T('audio.off'),
+    body: (body) => { longTakeBody(body); },
+  }).row);
+
+  const overlapChosen = OVERLAP_RULES()
+    .find(([value]) => value === state.globals.overlap_rule);
+  rows.append(settingRow({
+    key: 'overlap',
+    label: T('app.overlap'),
+    hint: T('overlap.rowHint'),
+    value: overlapChosen ? overlapChosen[1] : '',
+    body: (body) => { overlapBody(body); },
+  }).row);
+
+  renderAudio();
+
+  host.append(resetButton('globals', T('app.reset')));
+
+  const title = $('project-title');
+  title.value = state.globals.project_name;
+  title.oninput = () => { state.globals.project_name = title.value; schedule(); };
+
+  /* Säätimet tiedostonimeen. Nimi näkyy heti alla olevalla polkurivillä,
+     joten valinnan vaikutus on luettavissa ilman vientiä. Rasti rakennetaan
+     tässä eikä HTML:ssä, jotta savutesti pääsee laukaisemaan sen. */
+  const tags = $('name-tags');
+  tags.textContent = '';
+  const tagLabel = document.createElement('label');
+  tagLabel.className = 'check';
+  const tagBox = document.createElement('input');
+  tagBox.type = 'checkbox';
+  tagBox.checked = state.globals.name_tags !== false;
+  tagBox.addEventListener('change', () => {
+    state.globals.name_tags = tagBox.checked;
+    schedule(0);
+  });
+  tagLabel.append(tagBox, Object.assign(document.createElement('span'),
+    { textContent: T('app.nameTags') }));
+  tags.append(tagLabel);
+}
+
+/* «Laajan kesto» koskee vain paluusääntöä, joten se piilotetaan kun laajaan
+   jäädään — muuten säädin lupaa vaikutusta jota sillä ei ole. */
+function longTakeBody(longtake) {
   LONGTAKE_KNOBS().forEach((spec) => {
     if (spec.key === 'wide_hold' && state.globals.long_take_rule === 'stay') return;
     longtake.append(knob(spec, state.globals[spec.key], (v) => {
@@ -716,8 +774,9 @@ function renderGlobals() {
     }));
   });
 
-  const longRules = $('longtake-rules');
-  longRules.textContent = '';
+  const longRules = document.createElement('div');
+  longRules.className = 'rules';
+  longtake.append(longRules);
   LONGTAKE_RULES().forEach(([value, title, hint]) => {
     const label = document.createElement('label');
     const radio = document.createElement('input');
@@ -735,8 +794,12 @@ function renderGlobals() {
     longRules.append(label);
   });
 
-  const rules = $('overlap-rules');
-  rules.textContent = '';
+}
+
+function overlapBody(host) {
+  const rules = document.createElement('div');
+  rules.className = 'rules';
+  host.append(rules);
   OVERLAP_RULES().forEach(([value, title, hint]) => {
     const label = document.createElement('label');
     const radio = document.createElement('input');
@@ -752,40 +815,12 @@ function renderGlobals() {
     rules.append(label);
   });
 
-  const params = $('overlap-params');
-  params.textContent = '';
   OVERLAP_KNOBS().forEach((spec) => {
-    params.append(knob(spec, state.globals[spec.key], (v) => {
+    host.append(knob(spec, state.globals[spec.key], (v) => {
       state.globals[spec.key] = v;
       schedule();
     }));
   });
-
-  renderAudio();
-
-  host.append(resetButton('globals', T('app.reset')));
-
-  const title = $('project-title');
-  title.value = state.globals.project_name;
-  title.oninput = () => { state.globals.project_name = title.value; schedule(); };
-
-  /* Säätimet tiedostonimeen. Nimi näkyy heti alla olevalla polkurivillä,
-     joten valinnan vaikutus on luettavissa ilman vientiä. Rasti rakennetaan
-     tässä eikä HTML:ssä, jotta savutesti pääsee laukaisemaan sen. */
-  const tags = $('name-tags');
-  tags.textContent = '';
-  const label = document.createElement('label');
-  label.className = 'check';
-  const box = document.createElement('input');
-  box.type = 'checkbox';
-  box.checked = state.globals.name_tags !== false;
-  box.addEventListener('change', () => {
-    state.globals.name_tags = box.checked;
-    schedule(0);
-  });
-  label.append(box, Object.assign(document.createElement('span'),
-    { textContent: T('app.nameTags') }));
-  tags.append(label);
 }
 
 /* Äänenkäsittely. Käsittely itsessään on hidas ja tapahtuu erillisestä
@@ -825,7 +860,7 @@ function movedKeys(keys) {
   return keys.filter((k) => (k in base) && !nearDefault(audio[k], base[k]));
 }
 
-function audioRow(spec) {
+function settingRow(spec) {
   const row = document.createElement('div');
   row.className = 'arow';
   const head = document.createElement('div');
@@ -984,7 +1019,7 @@ function renderAudio() {
   /* Palautusliitännäinen. Ketjun ensimmäinen vaihe ja ainoa paikka josta
      meillä ei ole mielipidettä: kohinanpoistoa ja restaurointia omassa
      ketjussa ei ole, eikä mallia voi toimittaa mukana. */
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'plugin',
     label: T('audio.pluginRow'),
     hint: T('audio.pluginRowHint'),
@@ -1035,7 +1070,7 @@ function renderAudio() {
   /* Ristivuodon vähennys. Ei säätimiä eikä pidä olla: suodin estimoidaan
      aineistosta ja tulos mitataan, ja kelpaamaton hylätään syyn kanssa.
      Säädin olisi tässä pelkkä tapa rikkoa se. */
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'debleed',
     label: T('audio.debleedRow'),
     hint: T('audio.debleedRowHint'),
@@ -1054,7 +1089,7 @@ function renderAudio() {
      loput seitsemän ovat mitattuja ajoituksia. Ohjaus tulee samasta
      puheentunnistuksesta kuin esikatselupalkin värit. */
   const duckKeys = DUCK_KNOBS().map((k) => k.key);
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'duck',
     label: T('audio.duckRow'),
     hint: T('audio.duckRowHint'),
@@ -1076,7 +1111,7 @@ function renderAudio() {
   /* Naksunpoisto. Kynnys on kalibroitu siitä montako löydöstä sekunnissa
      syntyy, ei tuntumasta — ks. audio/chain.py. */
   const declickKeys = DECLICK_KNOBS().map((k) => k.key);
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'declick',
     label: T('audio.declickRow'),
     hint: T('audio.declickRowHint'),
@@ -1097,7 +1132,7 @@ function renderAudio() {
   const named = Object.entries(targets)
     .find(([, v]) => Math.abs(v - audio.target_lufs) < 0.05);
   const loudKeys = AUDIO_KNOBS().map((k) => k.key);
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'loudness',
     label: T('audio.loudnessRow'),
     hint: T('audio.loudnessRowHint'),
@@ -1158,7 +1193,7 @@ function renderAudio() {
   /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana
      ovat vain raidat joissa on ääntä. */
   const roomTrack = state.tracks.find((t) => t.key === audio.room_track);
-  host.append(audioRow({
+  host.append(settingRow({
     key: 'room',
     label: T('audio.room'),
     hint: T('audio.roomRowHint'),

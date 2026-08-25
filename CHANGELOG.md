@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.76] - 2026-08-25
+
+### Changed
+- **A Preset's Sliders Appear Only Once "Custom" Is Chosen**: the rhythm preset's four numbers were always visible, and moving one switched the preset to Custom in passing. That made the choice change as a *side effect* rather than as a choice. A preset **is** the decision; those four numbers are its definition, not something adjusted on top of it. Pick Custom and they appear, carrying the values the preset had.
+- **Long Turn and Overlapping Speech Are Rows Too**: each is one rule and a couple of timings, and the chosen rule now reads off the collapsed row instead of having to be found among the radio buttons. The settings rail went from one long scroll to eight collapsed rows.
+- **Three Columns on a Wide Screen**: two columns left a metre of empty space beside the patch bay and crammed everything else into one rail, so the audio section fell below the fold and could not be found — which is exactly what happened. The rail now splits into two columns above 1500 px, giving bay / cut / audio. Below that it is unchanged, and it stacks as before on narrow screens. The third column comes from splitting the rail rather than adding a column to `main`, so the medium case is untouched.
+
+### Fixed
+- The smoke test now asserts that a preset hides its sliders and Custom shows them. Verified by breaking it: the guard reports `esiasetuksessa näkyi 4 säädintä, pitäisi olla 0`.
+
 ## [v26.08.25.75] - 2026-08-25
 
 ### Fixed
