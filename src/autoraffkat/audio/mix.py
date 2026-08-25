@@ -116,16 +116,18 @@ FINGERPRINT_FIELDS = (
     "room_db",
     "program_target",
     "plugin_workers",
+    "debleed",
 )
 
 # Kasvatetaan kun ketju itse muuttuu niin että vanha tulos ei enää vastaa
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 3: ristivuodon vähennys ajetaan ennen liitännäistä.
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 2
+FINGERPRINT_VERSION = 3
 
 
 def stamp_dir() -> Path:
@@ -351,6 +353,9 @@ class MixResult:
     # yksittäinen stemi mittaa tavoitteen alle.
     program_trim: float = 0.0
     skipped: int = 0
+    # Huomautukset raidoittain: tehtiin kyllä, mutta jokin osa jäi tekemättä
+    # ja siihen on syy. Erillään virheistä, koska tiedosto on silti kelvollinen.
+    notes: dict[str, list] = field(default_factory=dict)
 
     @property
     def ok(self) -> bool:
@@ -549,9 +554,62 @@ def program_trim(jobs: list[dict], settings: AudioSettings) -> float:
 
 # Tiedoston työ vaiheittain: luku ja kirjoitus ovat gigatavun tiedostolla
 # oikeaa aikaa, ketju on loput. Ketjun sisäinen jako on ``chain.STAGES_*``.
-READ_SHARE = 0.08
-CHAIN_SHARE = 0.84
-WRITE_SHARE = 0.08
+READ_SHARE = 0.07
+DEBLEED_SHARE = 0.05
+CHAIN_SHARE = 0.81
+WRITE_SHARE = 0.07
+
+
+def _debleed(job, settings, audio, rate, program_start, solos, partners, result):
+    """Vähentää muiden mikkien vuodon ``audio``:sta paikan päällä.
+
+    Yksi lähde kerrallaan ja aina tuoreimmasta tuloksesta: kun kolmas
+    puhuja vuotaa kahteen muuhun, ensimmäisen vähennyksen jälkeen jäljellä
+    oleva ei ole enää sama signaali kuin alussa.
+
+    Epäonnistuminen ei ole hiljainen. Jos vähennystä ei tehty, syy menee
+    lokiin ja tulokseen — asetus päällä ja lopputuloksessa ei mitään on
+    juuri se vika joka tässä projektissa on jo kerran jäänyt huomaamatta.
+    """
+    from pedalboard.io import AudioFile
+
+    from . import debleed as db
+
+    mine = (solos or {}).get(job.get("speaker"))
+    if mine is None:
+        return
+    frames = audio.shape[1]
+    solo_target = _mask_samples(job["item"], mine, program_start, rate, frames)
+    target = audio[0].astype(np.float64)
+    for partner in partners:
+        theirs = (solos or {}).get(partner.get("speaker"))
+        if theirs is None:
+            continue
+        try:
+            with AudioFile(ensure_readable(partner["source"])) as handle:
+                if handle.samplerate != rate:
+                    _log(f"    vuoto {partner['speaker']}: eri näytetaajuus, ohitetaan")
+                    continue
+                other = handle.read(handle.frames)
+        except (OSError, RuntimeError) as exc:
+            _log(f"    vuoto {partner['speaker']}: {exc}")
+            continue
+        source = _aligned(
+            job["item"], partner["item"], np.asarray(other).mean(axis=0), rate, frames
+        )
+        solo_source = _mask_samples(partner["item"], theirs, program_start, rate, frames)
+        target, info = db.remove(target, source, rate, solo_source, solo_target)
+        if info["reason"]:
+            note = t(f"audio.debleed_{info['reason']}", name=partner["speaker"])
+            _log(f"    vuoto {partner['speaker']}: {note}")
+            if result is not None:
+                result.notes.setdefault(job["key"], []).append(note)
+        else:
+            _log(
+                f"    vuoto {partner['speaker']}: -{info['reduction_db']:.1f} dB, "
+                f"oma puhe {info['kept']:.4f}"
+            )
+    audio[0] = target.astype(audio.dtype, copy=False)
 
 
 def _run_one(
@@ -562,6 +620,9 @@ def _run_one(
     program_start: float = 0.0,
     stage=None,
     trim_db: float = 0.0,
+    solos: dict | None = None,
+    partners: list | None = None,
+    result=None,
 ) -> float:
     """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston.
 
@@ -586,6 +647,14 @@ def _run_one(
     if job.get("mono") and audio.shape[0] > 1:
         audio = audio.mean(axis=0, keepdims=True)
 
+    # Ristivuoto pois ennen liitännäistä. Järjestys ei ole makuasia:
+    # liitännäinen on generatiivinen eikä säilytä raitojen välistä
+    # lineaarista suhdetta, ja sen jälkeen vuotoa ei enää voi vähentää
+    # millään suotimella.
+    if settings.debleed and job.get("speech", True) and partners:
+        _debleed(job, settings, audio, rate, program_start, solos, partners, result)
+    report("debleed", READ_SHARE + DEBLEED_SHARE)
+
     # Ohjelmatrimmi kuuluu **tavoitteeseen**, ei vahvistukseen. Ketju
     # normalisoi lopuksi tavoitteeseen, joten vahvistukseen lisätty trimmi
     # kumoutuu siinä kokonaan — mitattuna stemit osuivat -14,1:een kun niiden
@@ -603,7 +672,9 @@ def _run_one(
         job.get("speech", True),
         target,
         plugin,
-        stage=lambda name, frac: report(name, READ_SHARE + CHAIN_SHARE * frac),
+        stage=lambda name, frac: report(
+            name, READ_SHARE + DEBLEED_SHARE + CHAIN_SHARE * frac
+        ),
     )
 
     # Vaimennus viimeisenä: sitä ennen mitattu taso koskee puhetta, ei
@@ -618,7 +689,7 @@ def _run_one(
             settings.duck_fade,
             settings.duck_release,
         )
-    report("duck", READ_SHARE + CHAIN_SHARE)
+    report("duck", READ_SHARE + DEBLEED_SHARE + CHAIN_SHARE)
 
     limit = int(rate * MAX_LAG_MS / 1000)
     if abs(info.lag) > limit:
@@ -655,7 +726,7 @@ def _run_one(
         )
     os.replace(tmp, job["target"])
     write_stamp(job, settings)
-    report("write", READ_SHARE + CHAIN_SHARE + WRITE_SHARE)
+    report("write", READ_SHARE + DEBLEED_SHARE + CHAIN_SHARE + WRITE_SHARE)
     return info.gain_db
 
 
@@ -760,6 +831,73 @@ def duck_masks(grid, settings: AudioSettings) -> dict:
     return out
 
 
+def solo_masks(grid) -> dict:
+    """Puhujakohtaiset «vain minä äänessä» -maskit ruudukossa.
+
+    Ristivuodon estimointi tarvitsee juuri nämä: jaksot joissa kohdemikin
+    oma puhuja on vaiti ja lähde puhuu ovat ainoa paikka jossa kohteessa
+    kuuluva ääni on **pelkkää** vuotoa. Muualta estimoitu suodin vähentäisi
+    kohteen omaa puhetta, koska sekin korreloi lähteen kanssa aina kun
+    puhujat menevät päällekkäin.
+    """
+    if grid is None or len(grid.speakers) < 2:
+        return {}
+    active = np.stack([lane.on for lane in grid.speakers])
+    out = {}
+    for i, lane in enumerate(grid.speakers):
+        others = np.zeros_like(active[i])
+        for j in range(len(grid.speakers)):
+            if j != i:
+                others |= active[j]
+        out[lane.name] = active[i] & ~others
+    return out
+
+
+def _mask_samples(item, mask, program_start: float, rate: int, frames: int):
+    """Ruudukon maski tiedoston näytteiksi. Sama muunnos kuin ``closed_ranges``."""
+    out = np.zeros(frames, dtype=bool)
+    for first, last in closed_ranges(item, mask, program_start, rate):
+        low, high = max(0, first), min(frames, last)
+        if high > low:
+            out[low:high] = True
+    return out
+
+
+def _aligned(target_item, source_item, source_audio, rate: int, frames: int):
+    """Lähdemikin ääni kohdetiedoston näytepaikoille.
+
+    Tiedostot ovat eri pituisia ja alkavat aikajanalla eri kohdista, joten
+    vuotoa ei voi vähentää ennen kuin ne ovat samassa aikapohjassa. Kuvaus
+    on esiintymän sisällä lineaarinen ja näytetaajuus sama, joten se on
+    kokonaisluvun siirto — ei uudelleennäytteistystä, joka siirtäisi
+    vaihetta ja pilaisi juuri sen mitä tässä yritetään mitata.
+    """
+    out = np.zeros(frames, dtype=np.float64)
+    source = np.asarray(source_audio, dtype=np.float64).reshape(-1)
+    for pt in target_item.placements:
+        base_t = float(pt.start - target_item.asset_start - pt.offset)
+        for ps in source_item.placements:
+            base_s = float(ps.start - source_item.asset_start - ps.offset)
+            low = max(float(pt.offset), float(ps.offset))
+            high = min(float(pt.end), float(ps.end))
+            if high <= low:
+                continue
+            t0 = int(round((base_t + low) * rate))
+            t1 = int(round((base_t + high) * rate))
+            shift = int(round((base_s - base_t) * rate))
+            t0, t1 = max(0, t0), min(frames, t1)
+            s0, s1 = t0 + shift, t1 + shift
+            if s1 <= 0 or s0 >= source.size or t1 <= t0:
+                continue
+            cut = max(0, -s0)
+            s0, t0 = s0 + cut, t0 + cut
+            cut = max(0, s1 - source.size)
+            s1, t1 = s1 - cut, t1 - cut
+            if t1 > t0:
+                out[t0:t1] = source[s0:s1]
+    return out
+
+
 def process(
     timeline,
     roles,
@@ -815,6 +953,10 @@ def process(
         result.errors["plugin"] = str(exc)
         return result
 
+    solos = solo_masks(grid) if settings.debleed else {}
+    if settings.debleed and not solos:
+        result.errors["debleed"] = t("audio.debleed_no_grid")
+        _log(result.errors["debleed"])
     masks = duck_masks(grid, settings)
     if settings.duck:
         # Maskit avaimetaan puhujan nimellä ja työt hakevat samalla nimellä.
@@ -844,7 +986,7 @@ def process(
     try:
         return _run_todo(
             result, todo, jobs, settings, plugin, masks, program_start,
-            progress, trim, started, total_weight,
+            progress, trim, started, total_weight, solos,
         )
     finally:
         if hasattr(plugin, "close"):
@@ -853,7 +995,7 @@ def process(
 
 def _run_todo(
     result, todo, jobs, settings, plugin, masks, program_start,
-    progress, trim, started, total_weight,
+    progress, trim, started, total_weight, solos=None,
 ):
     """Tiedostot yksi kerrallaan. Erillään, jotta liitännäisvaranto suljetaan
     myös silloin kun jokin kaatuu kesken."""
@@ -895,8 +1037,20 @@ def _run_todo(
                 }
             )
         try:
+            # Kumppanit ovat *kaikki* mikkityöt, eivät vain tehtävälistan:
+            # vuoto tulee toisesta mikistä riippumatta siitä onko se jo
+            # käsitelty. Lähteeksi luetaan aina raaka tiedosto.
+            partners = [
+                other
+                for other in jobs
+                if other.get("speech")
+                and other.get("speaker")
+                and other["speaker"] != job.get("speaker")
+                and os.path.exists(other["source"])
+            ]
             result.gains[job["key"]] = _run_one(
-                job, settings, plugin, masks, program_start, stage, trim
+                job, settings, plugin, masks, program_start, stage, trim,
+                solos, partners, result,
             )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)

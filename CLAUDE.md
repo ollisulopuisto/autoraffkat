@@ -94,6 +94,29 @@ Calibrate on how often the artefact really occurs — lip smacks are a few a
 minute — and keep the ceiling in `declick`, which raises the threshold until
 the findings fit and corrects nothing if they never do.
 
+Bleed is linear, so subtract it — do not gate it. The same voice in two
+microphones a few milliseconds apart is a comb filter, and it is what a
+summed pair sounds like when it sounds metallic. Ducking cannot reach it:
+measured on a real episode, the masks fired correctly and closed the
+microphone on 64 % of the frames where only the other person spoke, and
+*infinite* attenuation still moved the ripple only 6.22 dB → 6.01, because
+the gaps fall on the turn-taking boundaries where the bleed is loudest — and
+overlapping speech needs both microphones open regardless. `audio/debleed.py`
+estimates the leakage path as an FIR filter over the passages where only the
+source speaks and subtracts it everywhere: coherence 0.1069 → 0.0098 after
+the chain, own speech kept at r = 0.9993. It runs on the raw audio **before**
+the plug-in, because a generative plug-in does not preserve the linear
+relation between tracks and after it no filter can remove the bleed. And it
+measures its own output: a filter that eats the target's own speech is
+refused with a reason, because that mistake is only audible after the export.
+
+Independent per-microphone normalisation lifts bleed. Two microphones
+normalised to the same LUFS get different gains — measured +25.6 dB and
++22.5 dB on one episode — and the 3.1 dB difference lands on the quieter
+microphone's bleed of the louder speaker, worsening the comb by exactly that
+much. A gentle level rider per track with the loudness set on the programme
+avoids it; our chain does not, which is part of why de-bleeding is needed.
+
 ## Sensitivity and gain are not the same thing
 
 Sensitivity is a threshold above the noise floor, so gain does not move it —

@@ -260,6 +260,11 @@ class AudioSettings:
     # Toisen mikin vaimennus kun puhuja on hiljaa. Ohjaus tulee samasta
     # puheentunnistuksesta kuin kuvan leikkaus, mutta omilla ajoillaan: kuva
     # odottaa vahvistusaikaa ennen leikkausta, portin on avauduttava heti.
+    # Ristivuodon vähennys: sama ääni toisessa mikissä muutama millisekunti
+    # myöhemmin on kampasuodin, kun raidat soivat yhdessä. Vaimennus ei tätä
+    # korjaa — mitattuna ääretönkin vaimennus siirsi aaltoilua 0,2 dB, koska
+    # maskin aukot ovat juuri puheenvuorojen vaihdoissa. Ks. audio/debleed.py.
+    debleed: bool = True
     duck: bool = False
     # Kuinka paljon hiljemmalle, 0 = ei mitään. Yhdeksän desibeliä on
     # tahallisen matala: vuoto on jo valmiiksi ~13 dB puheen alla, joten

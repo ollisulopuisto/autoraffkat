@@ -116,6 +116,11 @@ const STRINGS = {
     'audio.programTarget': 'Tavoitetaso koskee summaa, ei yksittäistä mikkiä',
     'audio.declick': 'Maiskausten poisto',
     'audio.declickSensitivity': 'Naksujen herkkyys',
+    'audio.debleed': 'Vähennä toisen puhujan vuoto mikeistä',
+    'audio.debleedHelp': 'Sama ääni kahdessa mikissä muutaman millisekunnin '
+      + 'päässä toisistaan kuuluu metallisena kaikuna, kun raidat soivat '
+      + 'yhdessä. Vuotopolku mitataan niistä kohdista joissa vain toinen '
+      + 'puhuu, ja vähennetään pois.',
     'audio.duck': 'Vaimenna toinen mikki puheen ulkopuolella',
     'audio.duckDb': 'Vaimennus',
     'audio.duckNone': 'ei vaimennusta',
@@ -290,6 +295,11 @@ const STRINGS = {
     'audio.programTarget': 'The target applies to the sum, not to one microphone',
     'audio.declick': 'Remove mouth clicks',
     'audio.declickSensitivity': 'Click sensitivity',
+    'audio.debleed': "Remove the other speaker's bleed from the microphones",
+    'audio.debleedHelp': 'The same voice in two microphones a few '
+      + 'milliseconds apart sounds like a metallic reverb when the tracks '
+      + 'play together. The leakage path is measured where only one person '
+      + 'speaks, and subtracted.',
     'audio.duck': 'Duck the other microphone outside speech',
     'audio.duckDb': 'Depth',
     'audio.duckNone': 'no ducking',

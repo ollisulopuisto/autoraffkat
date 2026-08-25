@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.71] - 2026-08-25
+
+### Added
+- **Bleed Removal (`audio/debleed.py`)**: two microphones in one room hear both speakers, and in the export both tracks play — so the other person's voice arrives twice, a few milliseconds apart. That is a comb filter, and it sounds like a metallic reverb. Measured on a real episode: Nyman's voice sits 7.7 dB below the direct sound in Wancke's track at a 5 ms delay.
+  - **Ducking cannot fix this, and a deeper duck does not help.** Measured: the masks fire correctly and close Wancke's microphone on 64 % of the frames where only Nyman speaks — yet *infinite* attenuation moved the sum's ripple from 6.22 dB to 6.01 dB. The gaps are at the turn-taking boundaries, which is where the bleed is loudest. A gate can also do nothing about overlapping speech, where both microphones must stay open.
+  - The bleed is **linear** — one source, one room, a fixed delay and early reflections — so it is an FIR filter from one microphone to the other, and it can be estimated and subtracted. The filter is solved by least squares over the passages where **only the source speaks**, and subtracted everywhere, overlapping speech included.
+  - Measured coherence, 200–6000 Hz, where only the source speaks: raw 0.1734 → 0.0095; after the full chain 0.1069 → 0.0098. The target's own speech survived at r = 0.9993.
+  - It runs on the **raw** audio before the plug-in. The plug-in is generative and does not preserve the linear relation between tracks; after it, no filter can remove the bleed.
+  - **The result is checked, not assumed.** A wrong estimate eats the target's own speech, and that is only audible after the export. `remove` measures its own output and refuses a filter that reduces the target's own speech below `MIN_SPEECH_KEPT`, that had less than `MIN_SOLO_SECONDS` to learn from, or that achieves nothing. Every refusal names its reason in the log and in the result.
+- **`FINGERPRINT_VERSION` 3**, and a `debleed` toggle in the audio panel.
+
 ## [v26.08.25.70] - 2026-08-25
 
 ### Fixed

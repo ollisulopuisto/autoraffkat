@@ -131,7 +131,9 @@ def test_progress_reports_stages_and_a_rising_fraction(fixture_dir, monkeypatch)
         result = mix.process(
             tl,
             resolve_roles(tl, tracks),
-            AudioSettings(enabled=True, plugin_path=""),
+            # Ristivuoto pois: tässä mitataan palkkia, ja ilman ruudukkoa
+            # vähennys olisi oikeutetusti virhe.
+            AudioSettings(enabled=True, plugin_path="", debleed=False),
             progress=seen.append,
         )
     finally:
@@ -363,6 +365,39 @@ def test_freshness_counts_what_matches_the_settings(fixture_dir, monkeypatch, tm
             stub.unlink(missing_ok=True)
 
 
+def test_debleed_without_a_grid_is_an_error_not_a_silence(fixture_dir, monkeypatch):
+    """Asetus päällä ja lopputuloksessa ei mitään on tämän projektin vika.
+
+    Ristivuodon vähennys tarvitsee puhujaruudukon: ilman sitä ei tiedetä
+    missä kohdin vain toinen puhuu, eikä suodinta voi estimoida. Se on
+    normaali välitila — analyysi kesken — mutta se on kerrottava, koska
+    tiedosto valmistuu silti ja kuulostaa siltä että vähennys tehtiin.
+    """
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.fcpxml.read import read_fcpxml
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    monkeypatch.setattr(mix.chain, "load_pool", lambda *a, **k: None)
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    tracks = {
+        t.key: TrackConfig(role=ROLE_MIC, speaker=t.key.split()[0].capitalize())
+        for t in tl.tracks
+        if not t.has_video
+    }
+    try:
+        result = mix.process(
+            tl,
+            resolve_roles(tl, tracks),
+            AudioSettings(enabled=True, plugin_path="", debleed=True),
+        )
+    finally:
+        for item in tl.media:
+            target = pathlib.Path(mix.sibling(item.path, mix.MIX_SUFFIX))
+            if target.exists():
+                target.unlink()
+    assert "debleed" in result.errors
+
+
 def test_force_processes_what_is_already_current(fixture_dir, monkeypatch, tmp_path):
     """Uudelleenkäsittely on käyttäjän tahallinen valinta, ei oletus."""
     from autoraffkat.analysis import resolve_roles
@@ -378,7 +413,7 @@ def test_force_processes_what_is_already_current(fixture_dir, monkeypatch, tmp_p
         if not t.has_video
     }
     roles = resolve_roles(tl, tracks)
-    settings = AudioSettings(enabled=True, program_target=False)
+    settings = AudioSettings(enabled=True, program_target=False, debleed=False)
     jobs = mix._jobs(tl, roles, settings)
     stubs = [pathlib.Path(job["target"]) for job in jobs]
     try:

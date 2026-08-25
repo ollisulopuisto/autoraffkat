@@ -940,6 +940,22 @@ function renderAudio() {
     });
   }
 
+  /* Ristivuodon vähennys. Ei säätimiä: suodin estimoidaan aineistosta ja
+     hylätään itse jos se ei kelpaa, joten säädettävää ei ole. */
+  const bleedBox = document.createElement('input');
+  bleedBox.type = 'checkbox';
+  bleedBox.checked = !!audio.debleed;
+  bleedBox.addEventListener('change', () => {
+    audio.debleed = bleedBox.checked;
+    schedule(0);
+  });
+  const bleedLabel = document.createElement('label');
+  bleedLabel.className = 'check';
+  bleedLabel.title = T('audio.debleedHelp');
+  bleedLabel.append(bleedBox, Object.assign(document.createElement('span'),
+    { textContent: T('audio.debleed') }));
+  host.append(bleedLabel);
+
   /* Toisen mikin vaimennus. Ohjaus tulee samasta puheentunnistuksesta kuin
      esikatselupalkin värit, joten palkki kertoo suoraan milloin kumpikin
      mikki on auki. */

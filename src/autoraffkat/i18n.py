@@ -147,6 +147,33 @@ CATALOG: dict[str, dict[str, str]] = {
         "({speakers}).",
         "en": "Ducking was skipped: no microphone got a mask ({speakers}).",
     },
+    "audio.debleed_no_grid": {
+        "fi": "Ristivuodon vähennys jäi pois: puhujaruudukkoa ei ollut. "
+        "Se tarvitsee vähintään kaksi mikkiä ja valmiin analyysin.",
+        "en": "Bleed removal was skipped: there was no speaker grid. "
+        "It needs at least two microphones and a finished analysis.",
+    },
+    "audio.debleed_too_little": {
+        "fi": "{name}in vuotoa ei vähennetty: liian vähän jaksoja joissa "
+        "vain hän puhuu.",
+        "en": "{name}'s bleed was not removed: too little material where "
+        "they speak alone.",
+    },
+    "audio.debleed_no_path": {
+        "fi": "{name}in vuotoa ei vähennetty: vuotopolkua ei saatu ratkaistua.",
+        "en": "{name}'s bleed was not removed: the leakage path could not "
+        "be solved.",
+    },
+    "audio.debleed_ate_speech": {
+        "fi": "{name}in vuotoa ei vähennetty: vähennys olisi osunut tämän "
+        "mikin omaan puheeseen.",
+        "en": "{name}'s bleed was not removed: the subtraction would have "
+        "eaten this microphone's own speech.",
+    },
+    "audio.debleed_no_gain": {
+        "fi": "{name}in vuotoa ei vähennetty: vähennettävää ei ollut.",
+        "en": "{name}'s bleed was not removed: there was nothing to remove.",
+    },
     "export.audio_running": {
         "fi": "Äänen käsittely on kesken, joten {missing}/{total} "
         "mikkitiedostoa viedään käsittelemättömänä. Vie uudestaan kun "
