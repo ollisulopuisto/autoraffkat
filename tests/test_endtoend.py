@@ -92,12 +92,25 @@ def test_overlap_goes_wide(fixture_dir):
 
 
 @needs_ffmpeg
-def test_envelope_cache_makes_the_second_pass_free(fixture_dir):
+def test_envelope_cache_makes_the_second_pass_free(fixture_dir, monkeypatch):
+    """Toinen ajo ei pura ääntä lainkaan.
+
+    Ennen tämä mittasi seinäkelloa ja vaati alle 0,4 sekuntia. Se on
+    nopeuden mittaus, ei välimuistin: kone jonka toinen ydin tekee jotain
+    muuta kaataa sen vaikka välimuisti toimisi täydellisesti — niin kävi
+    kesken käsittelyajon. Nyt purku kielletään, jolloin ohitus näkyy
+    virheenä eikä hitautena.
+    """
+    from autoraffkat.audio import envelope
+
     timeline = read_fcpxml(str(fixture_dir / "sync.fcpxml"))
     analyze(timeline)  # lämmitys levylle
-    started = time.perf_counter()
+
+    def refuse(*args, **kwargs):
+        raise AssertionError("verhokäyrä laskettiin uudestaan: välimuisti ohitettiin")
+
+    monkeypatch.setattr(envelope, "_decode_rms", refuse)
     analyze(timeline)
-    assert (time.perf_counter() - started) < 0.4
 
 
 @needs_ffmpeg

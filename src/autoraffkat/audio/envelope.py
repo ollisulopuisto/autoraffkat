@@ -165,7 +165,15 @@ def envelope_for(path: str, progress=None, use_cache: bool = True) -> np.ndarray
     if use_cache:
         tmp = cache_path.with_suffix(".npy.tmp")
         try:
-            np.save(tmp, db)
+            # Kahva, ei polkua. ``np.save`` lisää polkuun ``.npy``:n jos se ei
+            # jo pääty siihen, joten polulla annettuna tämä kirjoitti
+            # tiedostoon ``<avain>.npy.tmp.npy`` ja nimesi sitten uudelleen
+            # tiedoston jota ei ollut. Se nostaa FileNotFoundErrorin, joka on
+            # OSError, jonka tämä except nielaisi — ja välimuisti ei toiminut
+            # kertaakaan. Levylle jäi 1212 orpoa tiedostoa ja jokainen lataus
+            # purki äänen uudestaan.
+            with open(tmp, "wb") as handle:
+                np.save(handle, db)
             tmp.replace(cache_path)
         except OSError:
             tmp.unlink(missing_ok=True)

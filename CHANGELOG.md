@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.68] - 2026-08-25
+
+### Fixed
+- **The Envelope Cache Had Never Worked**: `np.save` appends `.npy` to a path that does not already end in it, so writing the temporary file `<key>.npy.tmp` actually produced `<key>.npy.tmp.npy`. The rename that followed then looked for a file that did not exist, raised `FileNotFoundError` — which is an `OSError` — and the `except OSError` swallowed it. Nothing failed, nothing was logged, and every load re-decoded every audio file with ffmpeg. There were 1212 orphaned files in the cache directory going back to 21 August, and they have been removed. Writing through an open handle instead: analysing this project's ten files falls from **56.5 s to 0.0 s** on the second pass.
+- **The Test That Should Have Caught It Measured the Wrong Thing**: it asserted the second analysis pass took under 0.4 seconds — a proxy for "the cache was used" that the tiny test fixture satisfied whether or not the cache worked, and that fails on a busy machine whether or not it is broken. It now forbids decoding outright, so a miss is an error rather than a slowdown.
+
 ## [v26.08.25.67] - 2026-08-25
 
 ### Changed

@@ -9,7 +9,12 @@ Finnish. Keep it that way.
 
 ## Two layers, don't mix them
 
-`audio/envelope.py` is slow (ffmpeg, seconds) and cached to disk. `decide.py`
+`audio/envelope.py` is slow (ffmpeg, seconds) and cached to disk. Write the
+cache through an open file handle: `np.save` appends `.npy` to a *path* that
+lacks it, so saving to `<key>.npy.tmp` wrote `<key>.npy.tmp.npy` and the
+rename then failed silently into `except OSError`. The cache never worked and
+nothing said so — test the property, never the speed, because a fixture small
+enough to be fast hides a cache that is missing every time. `decide.py`
 is fast (numpy, milliseconds) and runs on every adjustment. No file reading may
 leak into `decide.py` or into `analysis.build_grid` which it calls — that
 breaks the interface response time, which is the single most important
