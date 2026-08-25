@@ -129,6 +129,13 @@ const STRINGS = {
     'audio.off': 'pois',
     'audio.rowChanged': '{names} · muutettu oletuksesta',
     'audio.rowReset': 'Palauta mitatut oletukset',
+    /* Rivin nimi on lyhyt: se on nimi, ei lause. Valintaruudun teksti sai
+       olla kokonainen käsky, koska ruudun vieressä ei ollut muuta — rivillä
+       on kuvaus omalla rivillään ja arvo perässä. */
+    'audio.pluginRow': 'Palautusliitännäinen',
+    'audio.debleedRow': 'Vuodon poisto',
+    'audio.duckRow': 'Vaimennus',
+    'audio.declickRow': 'Naksunpoisto',
     'audio.pluginRowHint': 'Ketjun ensimmäinen vaihe.',
     'audio.pluginNone': 'ei valittu',
     'audio.debleedRowHint': 'Toisen puhujan ääni pois tästä mikistä.',
@@ -375,6 +382,10 @@ const STRINGS = {
     'audio.off': 'off',
     'audio.rowChanged': '{names} · changed from the default',
     'audio.rowReset': 'Restore the measured defaults',
+    'audio.pluginRow': 'Restoration plug-in',
+    'audio.debleedRow': 'Bleed removal',
+    'audio.duckRow': 'Ducking',
+    'audio.declickRow': 'De-click',
     'audio.pluginRowHint': 'The first stage of the chain.',
     'audio.pluginNone': 'none',
     'audio.debleedRowHint': "The other speaker's voice out of this microphone.",

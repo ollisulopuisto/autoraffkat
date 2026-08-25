@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.75] - 2026-08-25
+
+### Fixed
+- **The New Rows Read Like the Old Checkboxes**: they inherited the checkbox labels, which were whole sentences — "Vaimenna toinen mikki puheen ulkopuolella" as a row name beside its own description and its own value. A checkbox needs a sentence because nothing else is next to it; a row does not. The rows are now named: Palautusliitännäinen, Vuodon poisto, Vaimennus, Naksunpoisto.
+- `unit.db` already begins with a space, so the row value read `-9  dB`.
+
 ## [v26.08.25.74] - 2026-08-25
 
 ### Changed

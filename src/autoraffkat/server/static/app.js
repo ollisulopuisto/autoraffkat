@@ -986,7 +986,7 @@ function renderAudio() {
      ketjussa ei ole, eikä mallia voi toimittaa mukana. */
   host.append(audioRow({
     key: 'plugin',
-    label: T('audio.plugin'),
+    label: T('audio.pluginRow'),
     hint: T('audio.pluginRowHint'),
     value: audio.plugin_path ? pluginName(audio.plugin_path) : T('audio.pluginNone'),
     keys: ['plugin_workers'],
@@ -1037,7 +1037,7 @@ function renderAudio() {
      Säädin olisi tässä pelkkä tapa rikkoa se. */
   host.append(audioRow({
     key: 'debleed',
-    label: T('audio.debleed'),
+    label: T('audio.debleedRow'),
     hint: T('audio.debleedRowHint'),
     value: audio.debleed ? T('audio.on') : T('audio.off'),
     toggle: {
@@ -1056,9 +1056,9 @@ function renderAudio() {
   const duckKeys = DUCK_KNOBS().map((k) => k.key);
   host.append(audioRow({
     key: 'duck',
-    label: T('audio.duck'),
+    label: T('audio.duckRow'),
     hint: T('audio.duckRowHint'),
-    value: audio.duck ? `${audio.duck_db} ${T('unit.db')}` : T('audio.off'),
+    value: audio.duck ? `${audio.duck_db}${T('unit.db')}` : T('audio.off'),
     keys: duckKeys,
     toggle: {
       checked: audio.duck,
@@ -1078,7 +1078,7 @@ function renderAudio() {
   const declickKeys = DECLICK_KNOBS().map((k) => k.key);
   host.append(audioRow({
     key: 'declick',
-    label: T('audio.declick'),
+    label: T('audio.declickRow'),
     hint: T('audio.declickRowHint'),
     value: audio.declick ? String(audio.declick_sensitivity) : T('audio.off'),
     keys: declickKeys,
@@ -1102,7 +1102,7 @@ function renderAudio() {
     label: T('audio.loudnessRow'),
     hint: T('audio.loudnessRowHint'),
     value: named ? `${T(`audio.target.${named[0]}`)} ${audio.target_lufs}`
-                 : `${audio.target_lufs} ${T('unit.lufs')}`,
+                 : `${audio.target_lufs}${T('unit.lufs')}`,
     keys: loudKeys.concat(['program_target']),
     body: (body, mark) => {
       if (Object.keys(targets).length) {
