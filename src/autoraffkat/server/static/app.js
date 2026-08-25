@@ -791,6 +791,171 @@ function renderGlobals() {
 /* Äänenkäsittely. Käsittely itsessään on hidas ja tapahtuu erillisestä
    painikkeesta: säätimien liikuttelu ei saa käynnistää minuutteja kestävää
    ajoa. Valmiit tiedostot jäävät levylle, joten vienti käyttää niitä. */
+/* Avautuva rivi ääni-paneelissa.
+
+   Paneeli näytti 26 liukusäädintä, joista kahdeksan kuului yhdelle
+   ominaisuudelle. Melkein jokaisella on mitattu oletus — ja mittaus on
+   kirjoitettu koodiin, mutta käyttäjä näki vain säätimen. Sääntö
+   ensinäkymälle: jos oletukselle voi kirjoittaa mittauksen, säädin ei kuulu
+   sinne. Se erottaa mitatun numeron siitä harvasta jossa maku oikeasti
+   vaihtelee — vaimennuksen syvyys, liitännäisen Mix, jakelualustan taso.
+
+   **Poikkeama ei saa kadota sulkemisen taakse.** Jos rivi sulkeutuu ja
+   unohtaa että joku on jo siirtänyt sen sisällä olevaa säädintä, säädin
+   katoaa eikä sitä löydä mistään. Suljettu rivi kantaa siksi merkin ja
+   nimeää mikä on muuttunut. Sama periaate on projektissa jo olemassa:
+   `project.name_tag` kirjoittaa vientitiedoston nimeen esiasetuksen ja sen
+   perään poikkeavat säätimet.
+
+   Runko täytetään vasta avattaessa, ja avaus ei piirrä koko paneelia
+   uudestaan — se vaihtaisi raahattavan säätimen käden alta. Sama syy kuin
+   `swapMixButton`illa. */
+const OPEN_ROWS = new Set();
+
+function nearDefault(value, base) {
+  if (typeof base === 'number' && typeof value === 'number') {
+    return Math.abs(value - base) < 1e-6;
+  }
+  return value === base;
+}
+
+function movedKeys(keys) {
+  const base = state.audio_defaults || {};
+  const audio = state.audio || {};
+  return keys.filter((k) => (k in base) && !nearDefault(audio[k], base[k]));
+}
+
+function audioRow(spec) {
+  const row = document.createElement('div');
+  row.className = 'arow';
+  const head = document.createElement('div');
+  head.className = 'arow-head';
+
+  if (spec.toggle) {
+    /* Kytkin on oma katkaisijansa: sen klikkaus ei saa avata riviä, koska
+       päälle laittaminen ja sisään katsominen ovat eri aikomuksia. */
+    const box = document.createElement('input');
+    box.type = 'checkbox';
+    box.checked = !!spec.toggle.checked;
+    box.setAttribute('aria-label', spec.label);
+    box.addEventListener('click', (event) => event.stopPropagation());
+    box.addEventListener('change', () => spec.toggle.onChange(box.checked));
+    head.append(box);
+  } else {
+    head.append(Object.assign(document.createElement('span'),
+      { className: 'arow-nogap' }));
+  }
+
+  const name = document.createElement('div');
+  name.className = 'arow-name';
+  name.append(Object.assign(document.createElement('b'), { textContent: spec.label }));
+  if (spec.hint) {
+    name.append(Object.assign(document.createElement('small'),
+      { textContent: spec.hint }));
+  }
+  const dev = document.createElement('span');
+  dev.className = 'arow-dev';
+  name.append(dev);
+
+  const value = document.createElement('div');
+  value.className = 'arow-value';
+  value.textContent = spec.value || '';
+
+  head.append(name, value);
+
+  const keys = spec.keys || [];
+  const mark = () => {
+    const moved = movedKeys(keys);
+    row.classList.toggle('deviates', moved.length > 0);
+    dev.textContent = moved.length
+      ? T('audio.rowChanged', { names: moved.map((k) => T(`knobName.${k}`)).join(', ') })
+      : '';
+  };
+  mark();
+
+  if (!spec.body) {
+    row.append(head);
+    return { row, mark };
+  }
+
+  const chev = document.createElement('span');
+  chev.className = 'arow-chev';
+  chev.textContent = '\u276F';
+  head.append(chev);
+  head.tabIndex = 0;
+  head.setAttribute('role', 'button');
+
+  const body = document.createElement('div');
+  body.className = 'arow-body';
+  let filled = false;
+  const open = () => {
+    if (!filled) { spec.body(body, mark); filled = true; }
+    row.classList.add('open');
+    head.setAttribute('aria-expanded', 'true');
+  };
+  const toggle = () => {
+    if (OPEN_ROWS.has(spec.key)) {
+      OPEN_ROWS.delete(spec.key);
+      row.classList.remove('open');
+      head.setAttribute('aria-expanded', 'false');
+    } else {
+      OPEN_ROWS.add(spec.key);
+      open();
+    }
+  };
+  head.addEventListener('click', toggle);
+  head.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggle(); }
+  });
+  head.setAttribute('aria-expanded', 'false');
+  if (OPEN_ROWS.has(spec.key)) open();
+
+  row.append(head, body);
+  return { row, mark };
+}
+
+/* Säädin perusteluineen. Numero on mitattu, ja mittaus on luettavissa siinä
+   missä numerokin — se on koko ero vanhaan paneeliin. */
+function whyKnob(host, spec, mark) {
+  const audio = state.audio;
+  const wrap = document.createElement('div');
+  wrap.className = 'why-knob';
+  wrap.append(knob(spec, audio[spec.key], (v) => {
+    audio[spec.key] = v;
+    wrap.classList.toggle('moved', movedKeys([spec.key]).length > 0);
+    if (mark) mark();
+    schedule();
+  }));
+  const why = T(`why.${spec.key}`);
+  if (why && why !== `why.${spec.key}`) {
+    wrap.append(Object.assign(document.createElement('p'),
+      { className: 'why', textContent: why }));
+  }
+  if (movedKeys([spec.key]).length) wrap.classList.add('moved');
+  host.append(wrap);
+}
+
+/* Palauta tämän rivin mitatut oletukset. Rivikohtainen, koska koko osion
+   nollaus on liian iso ele silloin kun yksi säädin on vahingossa siirtynyt.
+
+   Palauttaa painikkeen liittämättä sitä: se kuuluu säätimien perään, mutta
+   sen `refresh` tarvitaan jo säätimiä rakennettaessa. */
+function rowReset(keys) {
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost small';
+  button.textContent = T('audio.rowReset');
+  const refresh = () => { button.disabled = movedKeys(keys).length === 0; };
+  refresh();
+  button.addEventListener('click', () => {
+    const base = state.audio_defaults || {};
+    keys.forEach((k) => { if (k in base) state.audio[k] = base[k]; });
+    renderAudio();
+    schedule(0);
+  });
+  return { button, refresh };
+}
+
 function renderAudio() {
   const host = $('audio-panel');
   host.textContent = '';
@@ -813,206 +978,219 @@ function renderAudio() {
 
   if (!audio.enabled) return;
 
-  /* Liitännäinen on ketjun ensimmäinen vaihe: kohinanpoisto ja restaurointi
-     tehdään täällä, koska omassa ketjussa ei ole kohinanvaimennusta.
-     Koneella voi olla satoja liitännäisiä, joten kenttä on kirjoitettava eikä
-     valikko — datalist ehdottaa nimeltä. */
-  const plug = document.createElement('label');
-  plug.className = 'field';
-  plug.append(Object.assign(document.createElement('span'),
-    { textContent: T('audio.plugin') }));
-  const plugInput = document.createElement('input');
-  plugInput.type = 'text';
-  plugInput.placeholder = T('audio.pluginHint');
-  plugInput.setAttribute('list', 'plugin-names');
-  plugInput.value = pluginName(audio.plugin_path);
-  plugInput.addEventListener('change', () => {
-    audio.plugin_path = pluginPath(plugInput.value);
-    plugInput.value = pluginName(audio.plugin_path);
-    /* Säätimet kuuluvat siihen liitännäiseen josta ne luettiin: toisen
-       liitännäisen nimet eivät osu mihinkään, ja jos osuvat, ne osuvat
-       väärään säätimeen. Palvelin tekee saman tarkistuksen. */
-    audio.plugin_params = {};
-    renderAudio();
-    schedule(0);
-  });
-  plug.append(plugInput);
-  host.append(plug);
-  loadPlugins();
-  if (audio.plugin_path) renderPluginParams(host, audio);
+  /* Rivit. Ensinäkymässä nimi, tila ja se yksi luku joka kertoo mitä rivi
+     tekee; loput avautuvat. Ks. `audioRow`. */
 
-  /* Liitännäinen käyttää yhtä ydintä ja on 97 % käsittelyn ajasta, joten
-     palojen määrä on ainoa säädin joka vaikuttaa kestoon. Yläraja on koneen
-     ytimet: useampi pala ei ole nopeampi, vain lyhyempi ja muistisyöpömpi.
-     Nolla on automaattinen, ykkönen tarkoittaa yhtenä palana. */
-  if (audio.plugin_path) {
-    const cores = state.cores || 8;
-    host.append(knob({
-      key: 'plugin_workers',
-      label: T('audio.workers'),
-      min: 0,
-      max: cores,
-      step: 1,
-      zero: T('audio.workersAuto', { n: state.workers_auto || 1 }),
-    }, audio.plugin_workers || 0, (v) => {
-      audio.plugin_workers = v;
-      schedule();
-    }));
-  }
+  /* Palautusliitännäinen. Ketjun ensimmäinen vaihe ja ainoa paikka josta
+     meillä ei ole mielipidettä: kohinanpoistoa ja restaurointia omassa
+     ketjussa ei ole, eikä mallia voi toimittaa mukana. */
+  host.append(audioRow({
+    key: 'plugin',
+    label: T('audio.plugin'),
+    hint: T('audio.pluginRowHint'),
+    value: audio.plugin_path ? pluginName(audio.plugin_path) : T('audio.pluginNone'),
+    keys: ['plugin_workers'],
+    body: (body, mark) => {
+      /* Koneella voi olla satoja liitännäisiä, joten kenttä on kirjoitettava
+         eikä valikko — datalist ehdottaa nimeltä. */
+      const plug = document.createElement('label');
+      plug.className = 'field';
+      plug.append(Object.assign(document.createElement('span'),
+        { textContent: T('audio.plugin') }));
+      const plugInput = document.createElement('input');
+      plugInput.type = 'text';
+      plugInput.placeholder = T('audio.pluginHint');
+      plugInput.setAttribute('list', 'plugin-names');
+      plugInput.value = pluginName(audio.plugin_path);
+      plugInput.addEventListener('change', () => {
+        audio.plugin_path = pluginPath(plugInput.value);
+        plugInput.value = pluginName(audio.plugin_path);
+        /* Säätimet kuuluvat siihen liitännäiseen josta ne luettiin: toisen
+           liitännäisen nimet eivät osu mihinkään, ja jos osuvat, ne osuvat
+           väärään säätimeen. Palvelin tekee saman tarkistuksen. */
+        audio.plugin_params = {};
+        renderAudio();
+        schedule(0);
+      });
+      plug.append(plugInput);
+      body.append(plug);
+      loadPlugins();
+      if (!audio.plugin_path) return;
+      renderPluginParams(body, audio);
+      /* Liitännäinen käyttää yhtä ydintä ja on 97 % käsittelyn ajasta, joten
+         palojen määrä on ainoa säädin joka vaikuttaa kestoon. Yläraja on
+         koneen ytimet: useampi pala ei ole nopeampi, vain lyhyempi ja
+         muistisyöpömpi. Nolla on automaattinen, ykkönen yhtenä palana. */
+      whyKnob(body, {
+        key: 'plugin_workers',
+        label: T('audio.workers'),
+        min: 0,
+        max: state.cores || 8,
+        step: 1,
+        zero: T('audio.workersAuto', { n: state.workers_auto || 1 }),
+      }, mark);
+    },
+  }).row);
 
-  /* Jakelualustan lukema on määrittely eikä makuasia: YouTube normalisoi
-     -14:ään, Spotify ja Apple -16:een. Valikko nimeää ne, säädin jää
-     vapaaksi, koska kaikki jakelu ei ole näitä. */
+  /* Ristivuodon vähennys. Ei säätimiä eikä pidä olla: suodin estimoidaan
+     aineistosta ja tulos mitataan, ja kelpaamaton hylätään syyn kanssa.
+     Säädin olisi tässä pelkkä tapa rikkoa se. */
+  host.append(audioRow({
+    key: 'debleed',
+    label: T('audio.debleed'),
+    hint: T('audio.debleedRowHint'),
+    value: audio.debleed ? T('audio.on') : T('audio.off'),
+    toggle: {
+      checked: audio.debleed,
+      onChange: (on) => { audio.debleed = on; renderAudio(); schedule(0); },
+    },
+    body: (body) => {
+      body.append(Object.assign(document.createElement('p'),
+        { className: 'why', textContent: T('audio.debleedHelp') }));
+    },
+  }).row);
+
+  /* Vaimennus: kahdeksan säädintä ja yksi ajatus. Yksi niistä on makuasia,
+     loput seitsemän ovat mitattuja ajoituksia. Ohjaus tulee samasta
+     puheentunnistuksesta kuin esikatselupalkin värit. */
+  const duckKeys = DUCK_KNOBS().map((k) => k.key);
+  host.append(audioRow({
+    key: 'duck',
+    label: T('audio.duck'),
+    hint: T('audio.duckRowHint'),
+    value: audio.duck ? `${audio.duck_db} ${T('unit.db')}` : T('audio.off'),
+    keys: duckKeys,
+    toggle: {
+      checked: audio.duck,
+      onChange: (on) => { audio.duck = on; renderAudio(); schedule(0); },
+    },
+    body: (body, mark) => {
+      const reset = rowReset(duckKeys);
+      DUCK_KNOBS().forEach((spec) => whyKnob(body, spec, () => {
+        mark(); reset.refresh();
+      }));
+      body.append(reset.button);
+    },
+  }).row);
+
+  /* Naksunpoisto. Kynnys on kalibroitu siitä montako löydöstä sekunnissa
+     syntyy, ei tuntumasta — ks. audio/chain.py. */
+  const declickKeys = DECLICK_KNOBS().map((k) => k.key);
+  host.append(audioRow({
+    key: 'declick',
+    label: T('audio.declick'),
+    hint: T('audio.declickRowHint'),
+    value: audio.declick ? String(audio.declick_sensitivity) : T('audio.off'),
+    keys: declickKeys,
+    toggle: {
+      checked: audio.declick,
+      onChange: (on) => { audio.declick = on; renderAudio(); schedule(); },
+    },
+    body: (body, mark) => {
+      DECLICK_KNOBS().forEach((spec) => whyKnob(body, spec, mark));
+    },
+  }).row);
+
+  /* Äänekkyys. Jakelualustan lukema on määrittely eikä makuasia, ja se on
+     ohjelman taso eikä yhden stemin. */
   const targets = state.loudness_targets || {};
-  if (Object.keys(targets).length) {
-    const field = document.createElement('label');
-    field.className = 'field';
-    field.append(Object.assign(document.createElement('span'),
-      { textContent: T('audio.targetPreset') }));
-    const select = document.createElement('select');
-    Object.entries(targets).forEach(([name, value]) => {
-      const opt = document.createElement('option');
-      opt.value = String(value);
-      opt.textContent = `${T(`audio.target.${name}`)} (${value} LUFS)`;
-      if (Math.abs(value - audio.target_lufs) < 0.05) opt.selected = true;
-      select.append(opt);
-    });
-    const custom = document.createElement('option');
-    custom.value = '';
-    custom.textContent = T('audio.targetCustom');
-    if (!Object.values(targets).some((v) => Math.abs(v - audio.target_lufs) < 0.05)) {
-      custom.selected = true;
-    }
-    select.append(custom);
-    select.addEventListener('change', () => {
-      if (!select.value) return;      // «mukautettu» ei muuta mitään
-      audio.target_lufs = Number(select.value);
-      renderAudio();
-      schedule(0);
-    });
-    field.append(select);
-    host.append(field);
-  }
-
-  AUDIO_KNOBS().forEach((spec) => {
-    host.append(knob(spec, audio[spec.key], (v) => {
-      audio[spec.key] = v;
-      schedule();
-    }));
-  });
-
-  /* Tavoitetaso koskee ohjelmaa eikä yhtä stemiä: kaksi tavoitteeseen
-     normalisoitua mikkiä summautuu sen yli. Ruutu on heti tavoitetason
-     perässä, koska se kertoo mitä tavoite tarkoittaa. */
-  const program = document.createElement('label');
-  program.className = 'check';
-  const programBox = document.createElement('input');
-  programBox.type = 'checkbox';
-  programBox.checked = !!audio.program_target;
-  programBox.addEventListener('change', () => {
-    audio.program_target = programBox.checked;
-    renderAudio();
-    schedule(0);
-  });
-  program.append(programBox, Object.assign(document.createElement('span'),
-    { textContent: T('audio.programTarget') }));
-  host.append(program);
-
-  const ess = document.createElement('label');
-  ess.className = 'check';
-  const essBox = document.createElement('input');
-  essBox.type = 'checkbox';
-  essBox.checked = !!audio.declick;
-  essBox.addEventListener('change', () => {
-    audio.declick = essBox.checked;
-    renderAudio();
-    schedule();
-  });
-  ess.append(essBox, Object.assign(document.createElement('span'),
-    { textContent: T('audio.declick') }));
-  host.append(ess);
-  if (audio.declick) {
-    DECLICK_KNOBS().forEach((spec) => {
-      host.append(knob(spec, audio[spec.key], (v) => {
-        audio[spec.key] = v;
-        schedule();
+  const named = Object.entries(targets)
+    .find(([, v]) => Math.abs(v - audio.target_lufs) < 0.05);
+  const loudKeys = AUDIO_KNOBS().map((k) => k.key);
+  host.append(audioRow({
+    key: 'loudness',
+    label: T('audio.loudnessRow'),
+    hint: T('audio.loudnessRowHint'),
+    value: named ? `${T(`audio.target.${named[0]}`)} ${audio.target_lufs}`
+                 : `${audio.target_lufs} ${T('unit.lufs')}`,
+    keys: loudKeys.concat(['program_target']),
+    body: (body, mark) => {
+      if (Object.keys(targets).length) {
+        const field = document.createElement('label');
+        field.className = 'field';
+        field.append(Object.assign(document.createElement('span'),
+          { textContent: T('audio.targetPreset') }));
+        const select = document.createElement('select');
+        Object.entries(targets).forEach(([name, value]) => {
+          const opt = document.createElement('option');
+          opt.value = String(value);
+          opt.textContent = `${T(`audio.target.${name}`)} (${value} LUFS)`;
+          if (Math.abs(value - audio.target_lufs) < 0.05) opt.selected = true;
+          select.append(opt);
+        });
+        const custom = document.createElement('option');
+        custom.value = '';
+        custom.textContent = T('audio.targetCustom');
+        if (!named) custom.selected = true;
+        select.append(custom);
+        select.addEventListener('change', () => {
+          if (!select.value) return;      // «mukautettu» ei muuta mitään
+          audio.target_lufs = Number(select.value);
+          renderAudio();
+          schedule(0);
+        });
+        field.append(select);
+        body.append(field);
+      }
+      const reset = rowReset(loudKeys);
+      AUDIO_KNOBS().forEach((spec) => whyKnob(body, spec, () => {
+        mark(); reset.refresh();
       }));
-    });
-  }
+      /* Tavoitetaso koskee ohjelmaa eikä yhtä stemiä: kaksi tavoitteeseen
+         normalisoitua mikkiä summautuu sen yli. Ruutu on tavoitteen perässä,
+         koska se kertoo mitä tavoite tarkoittaa. */
+      const program = document.createElement('label');
+      program.className = 'check';
+      const programBox = document.createElement('input');
+      programBox.type = 'checkbox';
+      programBox.checked = !!audio.program_target;
+      programBox.addEventListener('change', () => {
+        audio.program_target = programBox.checked;
+        renderAudio();
+        schedule(0);
+      });
+      program.append(programBox, Object.assign(document.createElement('span'),
+        { textContent: T('audio.programTarget') }));
+      body.append(program, reset.button);
+    },
+  }).row);
 
-  /* Ristivuodon vähennys. Ei säätimiä: suodin estimoidaan aineistosta ja
-     hylätään itse jos se ei kelpaa, joten säädettävää ei ole. */
-  const bleedBox = document.createElement('input');
-  bleedBox.type = 'checkbox';
-  bleedBox.checked = !!audio.debleed;
-  bleedBox.addEventListener('change', () => {
-    audio.debleed = bleedBox.checked;
-    schedule(0);
-  });
-  const bleedLabel = document.createElement('label');
-  bleedLabel.className = 'check';
-  bleedLabel.title = T('audio.debleedHelp');
-  bleedLabel.append(bleedBox, Object.assign(document.createElement('span'),
-    { textContent: T('audio.debleed') }));
-  host.append(bleedLabel);
-
-  /* Toisen mikin vaimennus. Ohjaus tulee samasta puheentunnistuksesta kuin
-     esikatselupalkin värit, joten palkki kertoo suoraan milloin kumpikin
-     mikki on auki. */
-  const duckBox = document.createElement('input');
-  duckBox.type = 'checkbox';
-  duckBox.checked = !!audio.duck;
-  duckBox.addEventListener('change', () => {
-    audio.duck = duckBox.checked;
-    renderAudio();
-    schedule(0);
-  });
-  const duckLabel = document.createElement('label');
-  duckLabel.className = 'check';
-  duckLabel.append(duckBox, Object.assign(document.createElement('span'),
-    { textContent: T('audio.duck') }));
-  host.append(duckLabel);
-  if (audio.duck) {
-    DUCK_KNOBS().forEach((spec) => {
-      host.append(knob(spec, audio[spec.key], (v) => {
-        audio[spec.key] = v;
-        schedule();
-      }));
-    });
-  }
-
-  /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana ovat
-     vain raidat joissa on ääntä. */
-  const field = document.createElement('label');
-  field.className = 'field';
-  field.append(Object.assign(document.createElement('span'),
-    { textContent: T('audio.room') }));
-  const select = document.createElement('select');
-  const none = document.createElement('option');
-  none.value = ''; none.textContent = T('audio.roomOff');
-  select.append(none);
-  state.tracks.filter((t) => t.has_audio && t.has_video).forEach((t) => {
-    const opt = document.createElement('option');
-    opt.value = t.key; opt.textContent = t.name;
-    if (audio.room_track === t.key) opt.selected = true;
-    select.append(opt);
-  });
-  select.addEventListener('change', () => {
-    audio.room_track = select.value;
-    renderAudio();
-    schedule(0);
-  });
-  field.append(select);
-  host.append(field);
-
-  if (audio.room_track) {
-    ROOM_KNOBS().forEach((spec) => {
-      host.append(knob(spec, audio[spec.key], (v) => {
-        audio[spec.key] = v;
-        schedule();
-      }));
-    });
-  }
+  /* Tilaääni: kameran oma mikki matalalla omalla roolillaan. Valittavana
+     ovat vain raidat joissa on ääntä. */
+  const roomTrack = state.tracks.find((t) => t.key === audio.room_track);
+  host.append(audioRow({
+    key: 'room',
+    label: T('audio.room'),
+    hint: T('audio.roomRowHint'),
+    value: roomTrack ? roomTrack.name : T('audio.roomOff'),
+    keys: ['room_db'],
+    body: (body, mark) => {
+      const field = document.createElement('label');
+      field.className = 'field';
+      field.append(Object.assign(document.createElement('span'),
+        { textContent: T('audio.room') }));
+      const select = document.createElement('select');
+      const none = document.createElement('option');
+      none.value = ''; none.textContent = T('audio.roomOff');
+      select.append(none);
+      state.tracks.filter((t) => t.has_audio && t.has_video).forEach((t) => {
+        const opt = document.createElement('option');
+        opt.value = t.key; opt.textContent = t.name;
+        if (audio.room_track === t.key) opt.selected = true;
+        select.append(opt);
+      });
+      select.addEventListener('change', () => {
+        audio.room_track = select.value;
+        renderAudio();
+        schedule(0);
+      });
+      field.append(select);
+      body.append(field);
+      if (audio.room_track) {
+        ROOM_KNOBS().forEach((spec) => whyKnob(body, spec, mark));
+      }
+    },
+  }).row);
 
   host.append(mixButton(info));
 

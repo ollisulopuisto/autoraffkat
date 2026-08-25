@@ -417,6 +417,26 @@ name first, then its video and audio cards — which is the same grouping in a
 different direction, and the connector is hidden because adjacency already says
 it.
 
+## The first screen ranks controls; it does not hide them
+
+The audio panel showed 26 sliders, eight of them for one feature. The rule:
+**if you can write down the measurement that sets a default, the slider does
+not belong on the first screen.** That separates the numbers we measured from
+the few where taste varies — ducking depth, the plug-in's Mix, the platform
+target. Nothing is removed: every control is still there, one disclosure
+away, and now carries its measurement (`why.<key>` in `i18n.js`) beside the
+number.
+
+A closed row must show that something inside it changed, and name it.
+Disclosure that hides a setting the user already moved is worse than no
+disclosure — the knob vanishes and cannot be found. Same principle as
+`project.name_tag` writing deviating controls into the export filename: the
+deviation is visible one level up. `audio_defaults` comes from
+`AudioSettings()` over `/api/state`, never a copy in JavaScript, because a
+copy drifts silently and then the marker is wrong rather than missing.
+Opening a row does not redraw the panel — that would swap a slider out from
+under the cursor mid-drag.
+
 ## The interface has a smoke test, and it is not optional
 
 `node --check` validates syntax only, so it does not notice an undefined

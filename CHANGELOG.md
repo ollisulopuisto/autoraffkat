@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.25.74] - 2026-08-25
+
+### Changed
+- **The Audio Panel Collapses to Seven Rows**: it showed 26 sliders, and eight of them belonged to one feature. Almost every one has a measured default, and the measurement is written down in the code — but the user saw only the slider. The rule for the first screen is now: **if a default's measurement can be written down, the slider does not belong there.** That separates a number we measured from the few where taste genuinely varies — ducking depth, the plug-in's Mix, the platform's loudness.
+  - Nothing was removed. All 26 controls are still present at the same values; they were **ranked**, not deleted, and each now carries the measurement that set it. `duck_min_closed` says it is 0.6 s because shorter made 20 ms holes that click; `declick_sensitivity` says the threshold was calibrated on findings per second, 316–666 at 3.5× against about one at 25×.
+  - **A closed row shows when something inside it has been changed**, and names which control. Disclosure that hides a setting you already moved is worse than no disclosure — the knob disappears and cannot be found. Same principle as `project.name_tag`, which writes deviating controls into the export filename: the deviation is always visible one level up.
+  - Bleed removal is a row with no controls at all, and that is not a gap. It estimates the leakage path and measures its own result; a knob would only be a way to break it.
+  - Each row can restore its own measured defaults. `audio_defaults` comes from `AudioSettings()` over `/api/state`, not a copy in JavaScript — a copy would drift silently and the marker would then be wrong or absent.
+  - Opening a row does not redraw the panel, for the same reason `swapMixButton` exists: it would swap a slider out from under the cursor mid-drag.
+
+### Fixed
+- The interface smoke test's synthetic event had no `stopPropagation`, so a handler that used it threw only in the test. A real browser event has it; the stub now does too. The smoke test also asserts the rows and the deviation marker structurally — a marker that quietly stopped appearing would otherwise still pass, since nothing throws.
+
 ## [v26.08.25.73] - 2026-08-25
 
 ### Fixed

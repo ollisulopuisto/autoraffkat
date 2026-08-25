@@ -129,8 +129,12 @@ function fireAll(report) {
       for (const fn of handlers) {
         fired += 1;
         try {
-          fn.call(el, { target: el, preventDefault() {}, metaKey: false,
-                        ctrlKey: false, key: 'a', dataTransfer: transfer() });
+          /* Tapahtuma on se mitä selain antaa, ei vähempää: puuttuva
+             `stopPropagation` näkyisi tuotannossa vasta klikkauksena joka
+             tekee kaksi asiaa yhtä aikaa, eikä testi kertoisi siitä. */
+          fn.call(el, { target: el, preventDefault() {}, stopPropagation() {},
+                        metaKey: false, ctrlKey: false, key: 'a',
+                        dataTransfer: transfer() });
         } catch (err) {
           report(`${el.tagName}.${type}`, err);
         }
@@ -466,6 +470,46 @@ const MIN_HANDLERS = 200;
 if (fired < MIN_HANDLERS) {
   console.error(`vain ${fired} käsittelijää laukesi, odotettiin ${MIN_HANDLERS}+`);
   process.exit(1);
+}
+
+/* Siirretään yksi säädin pois mitatusta oletuksesta, jotta merkin voi
+   todeta. Ilman tätä fixture on identtinen oletusten kanssa eikä testi
+   kertoisi merkistä mitään suuntaan tai toiseen. */
+run('poikkeamamerkki', () => {
+  vm.runInContext(`
+    state.audio.enabled = true;
+    state.audio.duck = true;
+    state.audio.duck_hold = (state.audio_defaults.duck_hold || 0) + 0.5;
+    OPEN_ROWS.clear();
+    renderAudio();
+  `, context);
+});
+
+/* Ääni-paneelin rivit rakenteena, ei vain «ei kaatunut».
+
+   Poikkeamamerkki on koko avautuvan rivin ehto: suljettu rivi ei saa
+   piilottaa sitä, että joku on jo siirtänyt sen sisällä olevaa säädintä.
+   Se on juuri sellainen ominaisuus joka rapistuu huomaamatta — rivi
+   piirtyy, mitään ei kaadu, ja merkki on vain poissa. */
+{
+  const rows = created.filter((el) => el.className === 'arow'
+    || el.classList._set.has('arow'));
+  if (rows.length < 4) {
+    console.error(`ääni-paneelissa ${rows.length} avautuvaa riviä, odotettiin 4+`);
+    process.exit(1);
+  }
+  const marked = rows.filter((el) => el.classList._set.has('deviates'));
+  if (!marked.length) {
+    console.error('yksikään rivi ei merkinnyt poikkeamaa, vaikka tila '
+                  + 'poikkeaa oletuksista — merkki on rivin koko idea');
+    process.exit(1);
+  }
+  const named = created.filter((el) => el.className === 'arow-dev'
+    && String(el.textContent || '').trim().length);
+  if (!named.length) {
+    console.error('poikkeamamerkki ei nimennyt mitään säädintä');
+    process.exit(1);
+  }
 }
 
 if (failures) {

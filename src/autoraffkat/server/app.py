@@ -628,6 +628,11 @@ def _state_json(state: AppState) -> dict:
         "language": state.language,
         "languages": list(LANGUAGES),
         "audio": state.settings.audio.to_json(),
+        # Mitatut oletukset käyttöliittymälle. Se merkitsee poikkeaman
+        # suljetulle riville, ja poikkeaman on tultava samasta paikasta kuin
+        # arvot itse — JavaScriptiin kirjoitettu kopio ajautuisi erilleen
+        # hiljaa, ja silloin merkki näyttäisi väärää tai ei mitään.
+        "audio_defaults": AudioSettings().to_json(),
         # Palojen ylärajan ja automaattivalinnan on oltava käyttöliittymässä
         # sama luku kuin käsittelyssä: se riippuu koneesta, ei asetuksista.
         # Alustojen lukemat palvelimelta, jotta käyttöliittymä ja käsittely

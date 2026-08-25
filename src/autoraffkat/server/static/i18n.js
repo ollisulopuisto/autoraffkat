@@ -123,6 +123,68 @@ const STRINGS = {
     'audio.programTarget': 'Tavoitetaso koskee summaa, ei yksittäistä mikkiä',
     'audio.declick': 'Maiskausten poisto',
     'audio.declickSensitivity': 'Naksujen herkkyys',
+    /* Rivien tekstit. Perustelu kertoo *mittauksen* joka asetti oletuksen —
+       se on koko ero vanhaan paneeliin, jossa numero näkyi ilman syytä. */
+    'audio.on': 'päällä',
+    'audio.off': 'pois',
+    'audio.rowChanged': '{names} · muutettu oletuksesta',
+    'audio.rowReset': 'Palauta mitatut oletukset',
+    'audio.pluginRowHint': 'Ketjun ensimmäinen vaihe.',
+    'audio.pluginNone': 'ei valittu',
+    'audio.debleedRowHint': 'Toisen puhujan ääni pois tästä mikistä.',
+    'audio.duckRowHint': 'Hiljennä mikki toisen puheen alla.',
+    'audio.declickRowHint': 'Huulinaksut ja maiskaukset.',
+    'audio.loudnessRow': 'Äänekkyys',
+    'audio.loudnessRowHint': 'Jakelualustan taso, ei yhden stemin.',
+    'audio.roomRowHint': 'Oma lane, oma taso.',
+    'knobName.plugin_workers': 'Rinnakkaisia paloja',
+    'knobName.duck_db': 'Vaimennus',
+    'knobName.duck_lookahead': 'Ennakko',
+    'knobName.duck_hold': 'Pito',
+    'knobName.duck_min_open': 'Lyhin avaus',
+    'knobName.duck_dominance_db': 'Erotus kovimpaan',
+    'knobName.duck_min_closed': 'Lyhin vaimennus',
+    'knobName.duck_fade': 'Lasku',
+    'knobName.duck_release': 'Paluu',
+    'knobName.declick_sensitivity': 'Herkkyys',
+    'knobName.target_lufs': 'Tavoiteäänekkyys',
+    'knobName.high_pass_hz': 'Ylipäästö',
+    'knobName.peak_threshold_db': 'Huippukynnys',
+    'knobName.leveler_threshold_db': 'Tasaajan kynnys',
+    'knobName.gain_db': 'Trimmi',
+    'knobName.room_db': 'Tilaäänen taso',
+    'knobName.program_target': 'Ohjelmatavoite',
+    'why.plugin_workers': 'Oletus on osuus koneen ytimistä, ei lukua '
+      + 'lähdekoodissa. Mitattuna 20 minuutin tiedostolla 168,4 s → 68,3 s. '
+      + 'Palat eivät näe toistensa kontekstia, joten tulos muuttuu hieman.',
+    'why.duck_db': 'Tämä on rivin ainoa makuasia. Loput ovat ajoituksia, '
+      + 'joiden oletukset on mitattu.',
+    'why.duck_lookahead': 'Avaa ennen sanan alkua, jottei ensitavu katoa.',
+    'why.duck_hold': 'Pitää auki puheen jälkeen, jottei portti sulkeudu tauolla.',
+    'why.duck_min_open': 'Tätä lyhyempi äännähdys ei avaa porttia.',
+    'why.duck_dominance_db': 'Molemmat mikit ylittävät kynnyksen 41 % ajasta, '
+      + 'mutta vuoto on mediaanissa 12,8 dB hiljempaa — auki jää kovin.',
+    'why.duck_min_closed': 'Ilman tätä syntyi 20 millisekunnin kuoppia: '
+      + 'naksahdus, ei vaimennus.',
+    'why.duck_fade': 'Hidas, koska se on peitossa: lasku alkaa vasta kun '
+      + 'toinen ääni on jo tullut.',
+    'why.duck_release': 'Hitaampi kuin lasku, jotta nousukin ehtii tapahtua '
+      + 'peittävän äänen alla.',
+    'why.declick_sensitivity': 'Kynnys on kalibroitu siitä montako löydöstä '
+      + 'sekunnissa syntyy: kertoimella 3,5 niitä oli 316–666, kertoimella 25 '
+      + 'noin yksi. Katto nostaa kynnystä jos löydöksiä tulee silti liikaa.',
+    'why.target_lufs': 'Ohjelman taso. Mitattu trimmi tekee siitä noin '
+      + '−15,8 per stemi, ja summa osuu −13:n tuntumaan.',
+    'why.high_pass_hz': 'Jyrinä pois ennen mittausta, jottei se vie '
+      + 'äänekkyysbudjettia.',
+    'why.peak_threshold_db': 'Seuraa tavoitetta: kynnys on suhteessa '
+      + '−20 LUFS:n viitetasoon eikä absoluuttinen.',
+    'why.leveler_threshold_db': 'Sama viittaus. Kaksi lempeää vaihetta yhden '
+      + 'rajun sijaan, kumpikin enintään 5 dB.',
+    'why.gain_db': 'Vaikuttaa vain siihen miten mikit vertautuvat '
+      + 'päällekkäisessä puheessa — ei herkkyyteen, koska pohja nousee mukana.',
+    'why.room_db': 'Ennustettava taso riippumatta siitä miten kuuma kameran '
+      + 'mikki sattui olemaan.',
     'audio.debleed': 'Vähennä toisen puhujan vuoto mikeistä',
     'audio.debleedHelp': 'Sama ääni kahdessa mikissä muutaman millisekunnin '
       + 'päässä toisistaan kuuluu metallisena kaikuna, kun raidat soivat '
@@ -309,6 +371,68 @@ const STRINGS = {
     'audio.programTarget': 'The target applies to the sum, not to one microphone',
     'audio.declick': 'Remove mouth clicks',
     'audio.declickSensitivity': 'Click sensitivity',
+    'audio.on': 'on',
+    'audio.off': 'off',
+    'audio.rowChanged': '{names} · changed from the default',
+    'audio.rowReset': 'Restore the measured defaults',
+    'audio.pluginRowHint': 'The first stage of the chain.',
+    'audio.pluginNone': 'none',
+    'audio.debleedRowHint': "The other speaker's voice out of this microphone.",
+    'audio.duckRowHint': "Quiet a microphone under the other person's speech.",
+    'audio.declickRowHint': 'Lip smacks and mouth noise.',
+    'audio.loudnessRow': 'Loudness',
+    'audio.loudnessRowHint': "The platform's level, not one stem's.",
+    'audio.roomRowHint': 'Its own lane, its own level.',
+    'knobName.plugin_workers': 'Parallel pieces',
+    'knobName.duck_db': 'Ducking',
+    'knobName.duck_lookahead': 'Lookahead',
+    'knobName.duck_hold': 'Hold',
+    'knobName.duck_min_open': 'Shortest opening',
+    'knobName.duck_dominance_db': 'Margin to loudest',
+    'knobName.duck_min_closed': 'Shortest duck',
+    'knobName.duck_fade': 'Fade',
+    'knobName.duck_release': 'Release',
+    'knobName.declick_sensitivity': 'Sensitivity',
+    'knobName.target_lufs': 'Target loudness',
+    'knobName.high_pass_hz': 'High-pass',
+    'knobName.peak_threshold_db': 'Peak threshold',
+    'knobName.leveler_threshold_db': 'Leveller threshold',
+    'knobName.gain_db': 'Trim',
+    'knobName.room_db': 'Room level',
+    'knobName.program_target': 'Programme target',
+    'why.plugin_workers': "The default is a share of the machine's cores, not "
+      + 'a number in the source. Measured on a 20-minute file: 168.4 s → '
+      + '68.3 s. The pieces cannot see each other, so the result shifts a little.',
+    'why.duck_db': "This is the row's only taste control. The rest are "
+      + 'timings, and their defaults were measured.',
+    'why.duck_lookahead': 'Opens before the word starts, so the first syllable '
+      + 'is not lost.',
+    'why.duck_hold': 'Keeps it open after speech, so the gate does not shut on '
+      + 'a pause.',
+    'why.duck_min_open': 'A blip shorter than this does not open the gate.',
+    'why.duck_dominance_db': 'Both microphones cross the threshold 41 % of the '
+      + 'time, but the bleed is a median 12.8 dB quieter — the loudest stays open.',
+    'why.duck_min_closed': 'Without this it made 20-millisecond holes: a click, '
+      + 'not a duck.',
+    'why.duck_fade': 'Slow because it is hidden: the fall starts only once the '
+      + 'masking sound has arrived.',
+    'why.duck_release': 'Slower than the fade, so the rise also happens under '
+      + 'the masking sound.',
+    'why.declick_sensitivity': 'Calibrated on how many findings a second '
+      + 'appear: at 3.5× there were 316–666, at 25× about one. A ceiling '
+      + 'raises the threshold if there are still too many.',
+    'why.target_lufs': "The programme's level. The measured trim makes that "
+      + 'about −15.8 per stem, and the sum lands near −13.',
+    'why.high_pass_hz': 'Rumble out before measuring, so it does not eat the '
+      + 'loudness budget.',
+    'why.peak_threshold_db': 'Follows the target: relative to a −20 LUFS '
+      + 'reference, not absolute.',
+    'why.leveler_threshold_db': 'Same reference. Two gentle stages instead of '
+      + 'one hard one, each capped at 5 dB.',
+    'why.gain_db': 'Only affects how the microphones compare during '
+      + 'overlapping speech — not sensitivity, since the floor moves with it.',
+    'why.room_db': 'A predictable level regardless of how hot the camera '
+      + 'microphone happened to be.',
     'audio.debleed': "Remove the other speaker's bleed from the microphones",
     'audio.debleedHelp': 'The same voice in two microphones a few '
       + 'milliseconds apart sounds like a metallic reverb when the tracks '
