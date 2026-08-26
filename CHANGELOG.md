@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.81] - 2026-08-26
+
+### Added
+- **Reaction Shots Reach the Export and the Interface**: the pipeline built earlier is now wired end to end. A row in the cut panel turns them on, measures the close-ups, and shows how far along it is; the export puts what passes the gate on its own lane.
+  - **Measuring is a button, not something the load does.** Decoding is minutes and most episodes do not want reaction shots at all. The result is cached on disk, so a second run costs seconds — which is what makes it affordable to press.
+  - It runs in a **thread**, not a child process. The child was pedalboard's requirement, which needs the main thread to load a VST3; Vision has no such constraint and ffmpeg is already its own process.
+  - **Both empty cases are reported.** Reaction shots on with nothing measured, and measured with nothing passing the gate, are different situations and each says so in the export warnings. Setting on and nothing in the result is this project's recurring failure, and silence is how it gets missed.
+  - The gate is the only control exposed, and it carries its measurement: the classes do not overlap, so 0.080 sits in the gap between the worst acceptable frame and the best unacceptable one.
+
+### Fixed
+- The interface smoke test's coverage guard caught `watchVideo` never being called — the harness did not serve `/api/video`, so the handler failed before reaching it. The route is now stubbed, which is the honest fix: the harness should answer the endpoints the interface actually calls.
+
 ## [v26.08.26.80] - 2026-08-26
 
 ### Changed

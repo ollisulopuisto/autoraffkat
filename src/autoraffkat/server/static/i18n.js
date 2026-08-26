@@ -194,6 +194,28 @@ const STRINGS = {
       + 'päällekkäisessä puheessa — ei herkkyyteen, koska pohja nousee mukana.',
     'why.room_db': 'Ennustettava taso riippumatta siitä miten kuuma kameran '
       + 'mikki sattui olemaan.',
+    /* Reaktiokuvat. Portin luku on ainoa säädin: mitattuna järjestys ei
+       ratkaise, kynnys ratkaisee. */
+    'reactions.title': 'Reaktiokuvat',
+    'reactions.hint': 'Kuuntelijan lähikuva kesken toisen puheen, omalle lanelle.',
+    'reactions.measure': 'Mittaa lähikuvat',
+    'reactions.again': 'Mittaa uudestaan',
+    'reactions.measuring': 'mitataan…',
+    'reactions.measured': '{n} mitattu',
+    'reactions.failed': 'Mittaus ei onnistunut',
+    'reactions.needMeasure': 'Lähikuvia ei ole vielä mitattu. Purku kestää '
+      + 'minuutteja, mutta tulos jää välimuistiin — toinen ajo on ilmainen.',
+    'reactions.measuringNote': 'Puretaan avainruutuja ja mitataan kasvot, '
+      + '{percent} %. Vain ne hetket joissa tämä puhuja on vaiti.',
+    'reactions.measuredNote': '{n} lähikuvaa mitattu. Reaktiokuvat menevät '
+      + 'vientiin omalle lanelleen, joten ne voi poistaa yhdellä valinnalla '
+      + 'ilman uutta vientiä.',
+    'reactions.gate': 'Portti: pään suoruus',
+    'why.reaction_turn_max': 'Suurin sallittu pään kääntymä puhujasta pois. '
+      + 'Mitattuna 23 käsin arvioidusta ruudusta luokat eivät mene '
+      + 'päällekkäin: huonoin kelvollinen 0,072, paras kelvoton 0,094. '
+      + 'Oletus 0,080 on siinä välissä, tiukemmalla puoliskolla — ohi mennyt '
+      + 'reaktiokuva ei maksa mitään, kelvoton maksaa oton.',
     'audio.debleed': 'Vähennä toisen puhujan vuoto mikeistä',
     'audio.debleedHelp': 'Sama ääni kahdessa mikissä muutaman millisekunnin '
       + 'päässä toisistaan kuuluu metallisena kaikuna, kun raidat soivat '
@@ -448,6 +470,26 @@ const STRINGS = {
       + 'overlapping speech — not sensitivity, since the floor moves with it.',
     'why.room_db': 'A predictable level regardless of how hot the camera '
       + 'microphone happened to be.',
+    'reactions.title': 'Reaction shots',
+    'reactions.hint': "The listener's close-up during the other person's speech, on its own lane.",
+    'reactions.measure': 'Measure the close-ups',
+    'reactions.again': 'Measure again',
+    'reactions.measuring': 'measuring…',
+    'reactions.measured': '{n} measured',
+    'reactions.failed': 'The measurement failed',
+    'reactions.needMeasure': 'The close-ups have not been measured yet. '
+      + 'Decoding takes minutes, but the result is cached — a second run is free.',
+    'reactions.measuringNote': 'Decoding keyframes and measuring faces, '
+      + '{percent} %. Only the moments where this speaker is silent.',
+    'reactions.measuredNote': '{n} close-ups measured. Reaction shots go into '
+      + 'the export on their own lane, so they can be removed with one '
+      + 'selection and without exporting again.',
+    'reactions.gate': 'Gate: how square the head is',
+    'why.reaction_turn_max': 'The largest head turn away from the speaker that '
+      + 'still passes. Measured over 23 hand-marked frames the classes do not '
+      + 'overlap: worst acceptable 0.072, best unacceptable 0.094. The default '
+      + '0.080 sits in that gap, on the tight half — a reaction shot that never '
+      + 'happens costs nothing, a disqualifying one costs the take.',
     'audio.debleed': "Remove the other speaker's bleed from the microphones",
     'audio.debleedHelp': 'The same voice in two microphones a few '
       + 'milliseconds apart sounds like a metallic reverb when the tracks '

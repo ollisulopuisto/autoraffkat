@@ -721,6 +721,27 @@ function renderGlobals() {
     body: (body) => { longTakeBody(body); },
   }).row);
 
+  /* Reaktiokuvat: spekulatiivinen kerros, omalle lanelleen. Oma rivinsä
+     leikkauspaneelissa eikä äänessä, koska kyse on kuvasta — ja portin
+     luku on ainoa säädin, koska mitattuna järjestys ei ratkaise. */
+  const video = state.video || {};
+  const reacting = !!(video.progress && video.progress.running);
+  rows.append(settingRow({
+    key: 'reactions',
+    label: T('reactions.title'),
+    hint: T('reactions.hint'),
+    value: state.globals.reactions
+      ? (reacting ? T('reactions.measuring')
+                  : T('reactions.measured', { n: video.measured || 0 }))
+      : T('audio.off'),
+    keys: ['reaction_turn_max'],
+    toggle: {
+      checked: state.globals.reactions,
+      onChange: (on) => { state.globals.reactions = on; renderGlobals(); schedule(0); },
+    },
+    body: (body, mark) => { reactionsBody(body, mark, video, reacting); },
+  }).row);
+
   const overlapChosen = OVERLAP_RULES()
     .find(([value]) => value === state.globals.overlap_rule);
   rows.append(settingRow({
@@ -756,6 +777,76 @@ function renderGlobals() {
   tagLabel.append(tagBox, Object.assign(document.createElement('span'),
     { textContent: T('app.nameTags') }));
   tags.append(tagLabel);
+}
+
+/* Reaktiokuvien runko: mittauspainike, tila ja portin luku.
+
+   Mittaus on painike eikä latauksen yhteydessä tehtävä työ: purku on
+   minuutteja, ja useimmiten reaktiokuvia ei haluta. Tulos on levyllä
+   välimuistissa, joten toinen ajo maksaa sekunteja. */
+function reactionsBody(host, mark, video, running) {
+  const note = document.createElement('p');
+  note.className = 'why';
+  note.textContent = running
+    ? T('reactions.measuringNote', {
+        percent: Math.round((video.progress.fraction || 0) * 100) })
+    : (video.measured
+        ? T('reactions.measuredNote', { n: video.measured })
+        : T('reactions.needMeasure'));
+  host.append(note);
+
+  if (running) {
+    host.append(progressBar(video.progress.fraction || 0));
+  } else {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'ghost small';
+    button.textContent = video.measured
+      ? T('reactions.again') : T('reactions.measure');
+    button.addEventListener('click', async () => {
+      setBusy(button, true, T('reactions.measuring'));
+      try {
+        const response = await fetch('/api/video', { method: 'POST' });
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.detail || '');
+        state = data;
+        renderGlobals();
+        watchVideo();
+        return;
+      } catch (err) {
+        banner(err.message || T('reactions.failed'), true);
+      }
+      setBusy(button, false);
+    });
+    host.append(button);
+  }
+
+  (video.errors || []).forEach((text) => {
+    host.append(Object.assign(document.createElement('p'),
+      { className: 'warn small', textContent: text }));
+  });
+
+  whyKnob(host, {
+    key: 'reaction_turn_max',
+    label: T('reactions.gate'),
+    min: 0.02, max: 0.2, step: 0.005,
+  }, mark);
+}
+
+/* Mittauksen seuranta. Sama kuvio kuin äänellä: palkki liikkuu vain jos
+   tilaa kysytään, eikä taustasäie voi kertoa siitä itse. */
+function watchVideo() {
+  const tick = async () => {
+    try {
+      const data = await (await fetch('/api/state')).json();
+      state = data;
+      renderGlobals();
+      if (data.video && data.video.progress && data.video.progress.running) {
+        setTimeout(tick, 1000);
+      }
+    } catch (err) { /* palvelin poissa: lopetetaan seuranta hiljaa */ }
+  };
+  setTimeout(tick, 800);
 }
 
 /* «Laajan kesto» koskee vain paluusääntöä, joten se piilotetaan kun laajaan

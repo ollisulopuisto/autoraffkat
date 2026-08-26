@@ -385,6 +385,15 @@ which is why `eyes` and `size` default to zero weight. `eyes` was actively
 harmful: a hard laugh closes the eyes, and rewarding open eyes buried
 exactly the frames that were worth cutting to.
 
+Measuring the video is a button, and it runs in a thread. Decoding is
+minutes and most episodes do not want reaction shots, so it must not happen
+on load; the disk cache is what makes pressing it affordable a second time.
+A thread suffices — the child process elsewhere is pedalboard's requirement
+to load a VST3 on the main thread, and Vision has no such constraint. Both
+empty cases are reported separately in the export warnings: on with nothing
+measured, and measured with nothing passing the gate, are different
+situations, and silence is how this project's recurring failure gets missed.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not

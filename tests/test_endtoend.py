@@ -829,3 +829,26 @@ def test_rhythm_and_hang_reach_the_server(scratch_xml):
     assert project.next_output_path(
         str(source), project.name_tag(project.load(str(source)))
     ).endswith("-cut.fcpxml")
+
+
+def test_reactions_on_without_measurements_warns_instead_of_silence(scratch_xml):
+    """Asetus päällä ja lopputuloksessa ei mitään on tämän projektin vika.
+
+    Reaktiokuvat tarvitsevat kuvan mittaukset, ja media voi olla irrotetulla
+    levyllä. Vienti onnistuu silti — mutta ilman reaktiokuvia, ja sen on
+    näyttävä, koska muuten käyttäjä luulee saaneensa ne.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    while not state.progress.get("ready"):
+        time.sleep(0.05)
+    state.settings.globals.reactions = True
+    state.settings.tracks = _multicam_tracks()
+    client = TestClient(create_app(state))
+    exported = client.post("/api/export", json={}).json()
+    # Ohitus olisi tässä pahempi kuin virhe: hiljaa ohittuva testi jättää
+    # juuri tämän vikaluokan vartioimatta.
+    assert exported.get("ok"), exported
+    assert exported["reactions"] == 0
+    assert any("mitattu" in w or "measured" in w for w in exported["warnings"]), \
+        exported["warnings"]

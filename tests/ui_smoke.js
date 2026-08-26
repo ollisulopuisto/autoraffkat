@@ -194,6 +194,10 @@ const routes = {
   '/api/language': () => ({ language: 'fi', languages: ['fi', 'en'] }),
   '/api/export': () => ({ ok: true, path: '/x/out.fcpxml', cuts: 3, warnings: [] }),
   '/api/mix': () => ({ ok: true, running: true }),
+  /* Mittauksen käynnistys palauttaa koko tilan, kuten palvelin. `running`
+     on false, koska true panisi `watchVideo`n kyselemään uudestaan
+     loputtomiin — testi ajaa sen kerran ja se riittää. */
+  '/api/video': () => state,
   '/api/pick': () => ({ path: '/x/valittu.fcpxml' }),
   '/api/open': () => state,
   '/api/reload': () => state,

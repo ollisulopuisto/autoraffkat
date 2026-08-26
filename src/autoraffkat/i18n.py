@@ -156,6 +156,24 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Liitännäisen ikkunaa ei saatu auki.",
         "en": "The plug-in's window could not be opened.",
     },
+    "video.not_ready": {
+        "fi": "Verhokäyrät eivät ole vielä valmiit. Reaktiokuvat tarvitsevat "
+        "tiedon siitä kuka puhuu milloinkin.",
+        "en": "The envelopes are not ready yet. Reaction shots need to know "
+        "who is speaking when.",
+    },
+    "video.none_measured": {
+        "fi": "Reaktiokuvat ovat päällä mutta yhtään lähikuvaa ei ole mitattu. "
+        "Vienti tehtiin ilman niitä — aja mittaus ja vie uudestaan.",
+        "en": "Reaction shots are on but no close-up has been measured. The "
+        "export was made without them — run the measurement and export again.",
+    },
+    "video.no_candidates": {
+        "fi": "Reaktiokuvat ovat päällä ja lähikuvat mitattu, mutta yksikään "
+        "hetki ei läpäissyt porttia. Vienti tehtiin ilman niitä.",
+        "en": "Reaction shots are on and the close-ups are measured, but no "
+        "moment passed the gate. The export was made without them.",
+    },
     "audio.debleed_no_grid": {
         "fi": "Ristivuodon vähennys jäi pois: puhujaruudukkoa ei ollut. "
         "Se tarvitsee vähintään kaksi mikkiä ja valmiin analyysin.",

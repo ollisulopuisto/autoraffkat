@@ -26,6 +26,7 @@ from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_rol
 from ..audio import chain, mix
 from ..audio.chain import ChainError
 from ..decide import WIDE_LABEL, decide
+from .. import reactions
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (
     WriteError,
@@ -107,6 +108,15 @@ class AppState:
     load_error: str = ""
     language: str = field(default_factory=i18n.detect)
     inherited_from: str = ""  # mistä roolit perittiin, "" jos ei mistään
+    # Kuvan mittaukset media-avaimittain, ja mitä jäi mittaamatta. Erillään
+    # äänestä, koska ne ovat eri kestoisia töitä eikä toisen ajaminen saa
+    # odottaa toista.
+    video_tables: dict = field(default_factory=dict)
+    video_errors: dict = field(default_factory=dict)
+    video_progress: dict = field(
+        default_factory=lambda: {"done": 0, "total": 0, "current": "",
+                                 "fraction": 0.0, "running": False}
+    )
     mix_result: mix.MixResult = field(default_factory=mix.MixResult)
     mix_progress: dict = field(
         default_factory=lambda: {
@@ -132,6 +142,10 @@ class AppState:
         self.load_error = ""
         self.inherited_from = ""
         self.mix_result = mix.MixResult()
+        self.video_tables = {}
+        self.video_errors = {}
+        self.video_progress.update({"done": 0, "total": 0, "current": "",
+                                    "fraction": 0.0, "running": False})
         self.progress = {"done": 0, "total": 0, "current": "", "ready": False}
         try:
             timeline = read_fcpxml(self.xml_path)
@@ -226,6 +240,63 @@ class AppState:
             traceback.print_exc()
         finally:
             self.progress["ready"] = True
+
+    def measure_video(self) -> None:
+        """Taustasäie: mittaa lähikuvien avainruudut reaktiokuvia varten.
+
+        Säikeessä eikä lapsiprosessissa, toisin kuin äänenkäsittely: siellä
+        pakko oli pedalboardin vaatimus ladata VST3 pääsäikeessä. Vision ei
+        vaadi mitään sellaista, ja ffmpeg on jo oma prosessinsa.
+
+        Tulos jää välimuistiin levylle, joten toinen ajo on ilmainen — ja
+        siksi tämä saa olla painike eikä latauksen yhteydessä tehtävä työ:
+        purku on minuutteja, ja useimmiten käyttäjä ei halua reaktiokuvia.
+        """
+        from ..video import analyse as video_analyse
+
+        assert self.timeline is not None and self.analysis is not None
+        try:
+            roles = resolve_roles(self.timeline, self.settings.tracks)
+            grid, _, _ = build_grid(self.analysis, self.settings.tracks, roles)
+        except (AnalysisError, ValueError) as exc:
+            self.video_errors = {"grid": str(exc)}
+            self.video_progress["running"] = False
+            return
+
+        files = video_analyse.close_up_files(grid, roles, self.timeline)
+        self.video_progress.update({"total": len(files), "done": 0,
+                                    "fraction": 0.0, "running": True})
+
+        def report(fraction: float) -> None:
+            self.video_progress.update({
+                "fraction": round(float(fraction), 4),
+                "done": int(fraction * max(1, len(files))),
+            })
+
+        try:
+            tables, errors = video_analyse.tables(
+                grid, roles, self.timeline, self.settings.globals, progress=report)
+            with self.lock:
+                self.video_tables = tables
+                self.video_errors = errors
+        except Exception as exc:  # taustasäie ei saa kaatua hiljaa
+            self.video_errors = {"video": str(exc)}
+            traceback.print_exc()
+        finally:
+            self.video_progress.update({"running": False, "fraction": 1.0,
+                                        "done": len(files)})
+
+    def reactions_now(self, grid, roles, program_start) -> list:
+        """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
+
+        Nopea: lukee valmiit taulukot eikä avaa tiedostoja. Tyhjä lista jos
+        asetus on pois tai mittauksia ei ole — jälkimmäisestä kerrotaan
+        viennin varoituksena, ei tässä.
+        """
+        if not self.settings.globals.reactions or not self.video_tables:
+            return []
+        return reactions.find(grid, roles, self.timeline, self.video_tables,
+                              self.settings.globals, float(program_start))
 
     # ---------------------------------------------------------- päätös
 
@@ -633,6 +704,11 @@ def _state_json(state: AppState) -> dict:
         # arvot itse — JavaScriptiin kirjoitettu kopio ajautuisi erilleen
         # hiljaa, ja silloin merkki näyttäisi väärää tai ei mitään.
         "audio_defaults": AudioSettings().to_json(),
+        "video": {
+            "progress": dict(state.video_progress),
+            "measured": len(state.video_tables),
+            "errors": sorted(state.video_errors.values()),
+        },
         # Palojen ylärajan ja automaattivalinnan on oltava käyttöliittymässä
         # sama luku kuin käsittelyssä: se riippuu koneesta, ei asetuksista.
         # Alustojen lukemat palvelimelta, jotta käyttöliittymä ja käsittely
@@ -833,6 +909,24 @@ def create_app(state: AppState) -> FastAPI:
         project.save(state.xml_path, state.settings)
         return _state_json(state)
 
+    @app.post("/api/video")
+    def measure_video():
+        """Käynnistää lähikuvien mittauksen taustalle.
+
+        Painike eikä automaatti: purku on minuutteja, ja useimmiten
+        reaktiokuvia ei haluta lainkaan. Tulos on levyllä välimuistissa,
+        joten toinen ajo maksaa sekunteja.
+        """
+        if state.timeline is None or state.analysis is None:
+            raise HTTPException(409, state.load_error or t("export.not_loaded"))
+        if not state.progress.get("ready"):
+            raise HTTPException(409, t("video.not_ready"))
+        if state.video_progress.get("running"):
+            return _state_json(state)
+        state.video_progress.update({"running": True, "fraction": 0.0, "done": 0})
+        threading.Thread(target=state.measure_video, daemon=True).start()
+        return _state_json(state)
+
     @app.get("/api/state")
     def get_state():
         """Koko tila. Käyttöliittymä kysyy tämän avatessa ja edistymistä pollatessa."""
@@ -955,6 +1049,16 @@ def create_app(state: AppState) -> FastAPI:
                 }
                 room = [(k, v) for k, v in result.room if os.path.exists(v)]
                 warnings = _audio_warnings(state, roles, replacements)
+
+                # Reaktiokuvat omalle lanelleen, ks. CLAUDE.md. Asetus
+                # päällä ja lopputuloksessa ei mitään on tässä projektissa
+                # tuttu vika, joten kumpikin tyhjä tapaus kerrotaan: ei
+                # mittauksia, ja mittaukset mutta ei läpäisijöitä.
+                shots = state.reactions_now(_grid, roles, program_start)
+                if state.settings.globals.reactions and not shots:
+                    warnings.append(t("video.none_measured")
+                                    if not state.video_tables
+                                    else t("video.no_candidates"))
                 if state.timeline.multicams:
                     # Monikamerassa ulos tulee monikameraleikkaus: kuvakulman
                     # voi vaihtaa Final Cutissa jälkikäteen.
@@ -969,6 +1073,8 @@ def create_app(state: AppState) -> FastAPI:
                         room=room,
                         settings=state.settings,
                         source=state.xml_path,
+                        reactions=shots,
+                        roles=roles,
                     )
                 else:
                     xml = build_fcpxml(
@@ -996,6 +1102,7 @@ def create_app(state: AppState) -> FastAPI:
             "cuts": len(decision.segments),
             "mixed": len(replacements),
             "room": len(room),
+            "reactions": len(shots),
             "warnings": warnings,
             "next_path": project.next_output_path(
                 state.xml_path, project.name_tag(state.settings)
