@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.82] - 2026-08-26
+
+### Changed
+- **Close-ups Are Measured Four at a Time**: decoding one stream does not spread across cores, so the parallelism has to be across files. On the real path the job went **990 s → 476 s**.
+  - Four is measured, not chosen: 22× realtime for one file, 38× for two, 73× for four — and then it stops, 72× at six and 71× at eight. The ceiling is neither the disk nor the CPU. During a decode `dd` pulled **759 MB/s** off the same drive while the decode held its 254 MB/s, and **66 % of the CPU was idle even at eight**. It is the number of hardware h264 decoders, and threads cannot add to those.
+  - The temp JPEG round-trip, which looked like an obvious suspect, costs about **1 %** of the time (23.1 s → 23.3 s over a 300 s segment). Scaling to 960 px costs 19 %. Everything else is the decode itself.
+  - A test asserts the files actually overlap. Serial would not fail, only take three times as long, which is the kind of slowdown nobody notices without measuring.
+
 ## [v26.08.26.81] - 2026-08-26
 
 ### Added

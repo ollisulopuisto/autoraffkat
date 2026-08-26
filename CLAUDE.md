@@ -385,6 +385,15 @@ which is why `eyes` and `size` default to zero weight. `eyes` was actively
 harmful: a hard laugh closes the eyes, and rewarding open eyes buried
 exactly the frames that were worth cutting to.
 
+Video files are decoded four at a time, and four is measured, not chosen.
+Decoding one stream does not spread across cores, so the parallelism has to
+be across files: measured 22× realtime for one, 38× for two, 73× for four —
+and then it stops, 72× at six and 71× at eight. The ceiling is neither the
+disk nor the CPU: during a decode `dd` pulled 759 MB/s off the same drive
+while the decode held its 254 MB/s, and 66 % of the CPU was idle even at
+eight. It is the number of hardware h264 decoders, which threads cannot
+add to. On the real path the whole job went 990 s → 476 s.
+
 Measuring the video is a button, and it runs in a thread. Decoding is
 minutes and most episodes do not want reaction shots, so it must not happen
 on load; the disk cache is what makes pressing it affordable a second time.

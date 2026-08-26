@@ -160,6 +160,47 @@ def test_a_speaker_who_never_listens_is_never_decoded():
     assert [key for _, key, _ in picked] == ["b"]
 
 
+def test_files_are_measured_in_parallel(monkeypatch):
+    """Purku on koko työn hinta ja se rinnakkaistuu — mitattuna neljä
+    tiedostoa yhtä aikaa on kolminkertainen läpimeno.
+
+    Sarjallinen silmukka ei kaadu vaan on kolme kertaa hitaampi, mikä on
+    juuri sellainen hidastuminen jota kukaan ei huomaa ilman mittausta.
+    """
+    import threading
+    from autoraffkat.model import Globals
+
+    grid = _Grid(_Lane("A", [1, 1]), _Lane("B", [0, 0]))
+    items = [_Item(f"k{i}", f"/x/{i}.mp4") for i in range(4)]
+    timeline = _Timeline({"camB": items})
+    monkeypatch.setattr(detect, "load", lambda name: Stub())
+    monkeypatch.setattr(analyse.os.path, "exists", lambda path: True)
+
+    live, peak = 0, 0
+    guard = threading.Lock()
+    start = threading.Event()
+
+    def slow(path, det, progress=None):
+        nonlocal live, peak
+        with guard:
+            live += 1
+            peak = max(peak, live)
+        start.wait(timeout=2.0)
+        with guard:
+            live -= 1
+        return {"times": np.zeros(1), "found": np.zeros(1, dtype=bool)}
+
+    monkeypatch.setattr(analyse.measure, "table", slow)
+    done = threading.Thread(
+        target=lambda: analyse.tables(grid, _Roles(), timeline,
+                                      Globals(reactions=True)))
+    done.start()
+    threading.Event().wait(0.3)
+    start.set()
+    done.join(timeout=5.0)
+    assert peak > 1, f"tiedostot purettiin sarjassa (samanaikaisia enintään {peak})"
+
+
 def test_missing_media_is_reported_not_swallowed(monkeypatch):
     """Levy voi olla irrotettu. Se on tavallista — mutta se on kerrottava."""
     from autoraffkat.model import Globals
