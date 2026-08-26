@@ -43,7 +43,7 @@ class Detector(Protocol):
 # ------------------------------------------------------------- macOS Vision
 
 VISION_FIELDS = ("yaw", "roll", "size", "x", "y", "w", "h", "eyes", "smile",
-                 "cx", "cy")
+                 "cx", "cy", "turn", "tilt")
 
 
 class VisionFaces:
@@ -58,7 +58,12 @@ class VisionFaces:
     """
 
     name = "vision"
-    version = 1
+    # 2: ``turn`` ja ``tilt`` maamerkeistä. Vision oma ``yaw`` on **portaittainen**
+    #    — mitattuna 9995 ruudusta viisi eri arvoa, tasan 45 asteen välein, ja
+    #    ``roll``ista kolme. Se ei ole kulma vaan lokero, eikä siitä saa
+    #    järjestystä: 95 % ruuduista osuu samaan lokeroon. Lokerona se on silti
+    #    hyvä — poispäin kääntynyt pää erottuu — joten kumpikin jää.
+    version = 2
     fields = VISION_FIELDS
 
     def __init__(self) -> None:
@@ -137,6 +142,22 @@ class VisionFaces:
                 width = float(np.ptp(pts[:, 0])) or 1e-6
                 smile = (corners - middle) / width
 
+        # Jatkuva pään asento maamerkeistä, koska Visionin oma on lokeroitu.
+        # Nenä suhteessa silmien keskipisteeseen: kun pää kääntyy, nenä
+        # siirtyy sivuun; kun se nyökkää, nenä siirtyy alas. Jaettuna
+        # silmien välimatkalla, jolloin kasvojen koko ja etäisyys eivät
+        # sekoitu mittaan.
+        turn = tilt = 0.0
+        left_eye, right_eye = self._points(marks.leftEye()), self._points(marks.rightEye())
+        nose = self._points(marks.nose()) if marks.nose() is not None else np.zeros((0, 2))
+        if len(left_eye) and len(right_eye) and len(nose):
+            a, b = left_eye.mean(axis=0), right_eye.mean(axis=0)
+            middle = (a + b) / 2.0
+            span = float(np.hypot(*(b - a))) or 1e-6
+            tip = nose.mean(axis=0)
+            turn = float((tip[0] - middle[0]) / span)
+            tilt = float((tip[1] - middle[1]) / span)
+
         every = marks.allPoints()
         pts = self._points(every) if every is not None else np.zeros((0, 2))
         centre = pts.mean(axis=0) if len(pts) else np.zeros(2)
@@ -149,6 +170,7 @@ class VisionFaces:
             "w": float(box.size.width), "h": float(box.size.height),
             "eyes": eyes, "smile": smile,
             "cx": float(centre[0]), "cy": float(centre[1]),
+            "turn": turn, "tilt": tilt,
         }
 
 
