@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.79] - 2026-08-26
+
+### Fixed
+- **Vision's `yaw` Is a Bin, Not an Angle**: measured across 9995 frames of real footage it takes exactly five values — multiples of 45° — and `roll` takes three. The components computed from the landmarks here (`smile`, `eyes`, `size`) take about nine thousand each over the same frames. So the one component that separated good reaction frames from bad was effectively binary, and the continuous ones did not separate at all. It looked like an angle and nothing said otherwise.
+  - `turn` and `tilt` now come from the nose relative to the midpoint of the eyes, divided by the eye span so face size and distance stay out of the measure. `yaw` stays: as a bin, "turned away" is exactly what it detects well. Detector version 2, so the cache invalidates itself.
+
+### Changed
+- **The Reaction Score Is a Gate, Not a Ranking**: the bar for a reaction shot is not "outstanding" but "not disqualifying" — in a finished edit most are unremarkable and only have to avoid embarrassment. Measured on 381 candidates against hand marks, a head-pose deviation of **0.057 keeps all six frames marked good, admits none of the fifteen marked bad, and halves the pool**. The same job on the quantised `yaw` let 95 % through and admitted three bad ones.
+  - `eyes` and `size` now default to zero weight. Neither separated good from bad, and `eyes` was actively harmful: a hard laugh closes the eyes, so rewarding open eyes buried the frames worth cutting to — three of the six marked good sat at ranks 66, 67 and 69 of 72 because they were neutral, attentive faces rather than grinning ones.
+
 ## [v26.08.26.78] - 2026-08-26
 
 ### Added

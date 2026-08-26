@@ -34,9 +34,23 @@ import numpy as np
 from .decide import _runs
 from .model import HOP
 
-# Katseen sallittu poikkeama perusasennosta, radiaaneina. Vision antaa yawin
-# radiaaneina; 0,35 on noin kaksikymmentä astetta, eli pään kääntö pois
-# puhujasta erottuu mutta tavallinen keinunta ei.
+# Pään asennon sallittu poikkeama perusasennosta. Yksikkö on nenän siirtymä
+# silmien välimatkaan suhteutettuna, ei radiaani.
+#
+# **Portti, ei pisteytyksen osa.** Mitattuna oikealla jaksolla, 381
+# ehdokkaasta ja käsin arvioiduista: raja 0,057 päästää läpi kaikki kuusi
+# hyväksi merkittyä eikä yhtään viidestätoista huonoksi merkitystä, ja
+# puolittaa ehdokasjoukon. Sama tehtävä Visionin omalla ``yaw``illa oli
+# hyödytön: tiukin raja joka säilytti hyvät päästi läpi 95 % kaikesta ja
+# kolme huonoa — koska ``yaw`` on portaittainen, ks. video/detect.py.
+#
+# Reaktiokuvan rima ei ole «loistava» vaan «ei kelvoton»: valmiissa
+# leikkauksessa useimmat reaktiokuvat ovat mitäänsanomattomia, niiden pitää
+# vain olla nolaamatta. Siksi ratkaisee kynnys eikä järjestys.
+TURN_MAX = 0.057
+
+# Vanha katseen levitys. Jäljellä siksi, että lokeroitu yaw on yhä hyvä
+# karkeaan hylkäykseen — poispäin kääntynyt pää erottuu siitäkin.
 GAZE_SPREAD = 0.35
 
 # Peräkkäisten näytteiden väli, jota kauempaa liikettä ei lasketa: kahden
@@ -74,10 +88,13 @@ def scores(table: dict, weights: dict) -> np.ndarray:
         spread = float(picked.std()) or 1e-9
         return (values - float(picked.mean())) / spread
 
-    yaw = column("yaw")
+    # Pään asento: poikkeama **tämän kameran** perusasennosta. Kamera ei ole
+    # kohtisuorassa, joten «puhujaan päin» ei ole nolla vaan mediaani.
     # Perusasento vain löytyneistä: nollat sotkisivat mediaanin.
-    base = float(np.median(yaw[found]))
-    gaze = np.exp(-(((yaw - base) / GAZE_SPREAD) ** 2))
+    turn = column("turn")
+    deviation = np.abs(turn - float(np.median(turn[found])))
+    yaw = column("yaw")
+    gaze = np.exp(-(((yaw - float(np.median(yaw[found]))) / GAZE_SPREAD) ** 2))
 
     times = column("times")
     move = np.zeros(n)
@@ -90,12 +107,20 @@ def scores(table: dict, weights: dict) -> np.ndarray:
         move[gap > MOVE_GAP_S] = 0.0
         move[0] = 0.0
 
-    total = (float(weights.get("gaze", 1.2)) * z(gaze)
-             + float(weights.get("smile", 0.9)) * z(column("smile"))
-             + float(weights.get("eyes", 0.7)) * z(column("eyes"))
-             + float(weights.get("motion", 0.5)) * z(move)
-             + float(weights.get("size", 0.3)) * z(column("size")))
-    out[found] = total[found]
+    # Portti ensin. Sen läpäisseiden kesken järjestys on **suoruus**: mitä
+    # vähemmän pää on kääntynyt, sitä varmemmin kuva kelpaa. Muut osat ovat
+    # pieniä lisiä, koska mitattuna ne eivät erottele — hymy hieman, silmät
+    # ja koko eivät lainkaan. Silmät oli jopa haitallinen: kova nauru sulkee
+    # silmät, ja «silmät auki» hautasi juuri ne ruudut jotka kelpasivat.
+    limit = float(weights.get("turn_max", TURN_MAX))
+    passes = found & (deviation <= limit)
+    total = (-float(weights.get("turn", 1.0)) * z(deviation)
+             + float(weights.get("gaze", 0.0)) * z(gaze)
+             + float(weights.get("smile", 0.3)) * z(column("smile"))
+             + float(weights.get("eyes", 0.0)) * z(column("eyes"))
+             + float(weights.get("motion", 0.2)) * z(move)
+             + float(weights.get("size", 0.0)) * z(column("size")))
+    out[passes] = total[passes]
     return out
 
 
@@ -139,6 +164,8 @@ def find(grid, roles, timeline, tables: dict, settings, program_start: float
     if not getattr(settings, "reactions", False):
         return []
     weights = {
+        "turn_max": settings.reaction_turn_max,
+        "turn": settings.reaction_turn,
         "gaze": settings.reaction_gaze,
         "smile": settings.reaction_smile,
         "eyes": settings.reaction_eyes,

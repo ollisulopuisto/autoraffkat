@@ -362,6 +362,26 @@ Only close-ups of speakers who are actually silent at some point get
 decoded. Decoding is the whole cost of the feature, so that narrowing
 happens *before* the decode, not after.
 
+Vision's `yaw` is a bin, not an angle. Measured across 9995 frames of real
+footage it takes exactly five values — multiples of 45° — and `roll` takes
+three, while `smile`, `eyes` and `size`, computed from the landmarks here,
+take about nine thousand each. So the one component that separated good
+reaction frames from bad was effectively binary, and the continuous ones did
+not separate at all. `turn` and `tilt` come from the nose relative to the
+midpoint of the eyes, divided by the eye span so face size and distance stay
+out of it. `yaw` remains: as a bin, "turned away" is what it detects well.
+
+The reaction score is a **gate**, not a ranking. The bar for a reaction shot
+is not "outstanding" but "not disqualifying" — in a finished edit most of
+them are unremarkable and only have to avoid embarrassment. Measured on 381
+candidates against hand marks, a head-pose deviation of 0.057 keeps all six
+frames marked good, admits none of the fifteen marked bad, and halves the
+pool; the same job on the quantised `yaw` let 95 % through. So the threshold
+is the control that matters and the ordering among survivors barely does —
+which is why `eyes` and `size` default to zero weight. `eyes` was actively
+harmful: a hard laugh closes the eyes, and rewarding open eyes buried
+exactly the frames that were worth cutting to.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not

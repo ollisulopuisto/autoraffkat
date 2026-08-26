@@ -202,16 +202,22 @@ class Globals:
     reaction_detector: str = "vision"
     # Kynnys on z-luku jakson omasta jakaumasta, ei absoluuttinen: mikään
     # mitattavista ei tarkoita samaa kahdessa eri huoneessa.
-    reaction_threshold: float = 1.5
+    # Portti: pään asennon suurin sallittu poikkeama perusasennosta. Tämä on
+    # se säädin joka ratkaisee — ks. reactions.TURN_MAX.
+    reaction_turn_max: float = 0.057
+    reaction_threshold: float = -1.0
     reaction_length: float = 1.6      # kuvan kesto, s
     reaction_spacing: float = 25.0    # lyhin väli kahden välillä, s
     # Painot. Näitä on tarkoitus säätää, ja siksi mittaukset ovat
     # välimuistissa pisteiden sijaan: säätö ei maksa uutta purkua.
-    reaction_gaze: float = 1.2
-    reaction_smile: float = 0.9
-    reaction_eyes: float = 0.7
-    reaction_motion: float = 0.5
-    reaction_size: float = 0.3
+    # Portin läpäisseiden järjestys. Suoruus edellä; loput pieninä, koska
+    # mitattuna ne eivät erottele hyvää huonosta.
+    reaction_turn: float = 1.0
+    reaction_gaze: float = 0.0
+    reaction_smile: float = 0.3
+    reaction_eyes: float = 0.0
+    reaction_motion: float = 0.2
+    reaction_size: float = 0.0
 
     project_name: str = DEFAULT_PROJECT_NAME
     # Kirjoitetaanko säätimet viennin tiedostonimeen. Samasta jaksosta

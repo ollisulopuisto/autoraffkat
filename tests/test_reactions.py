@@ -12,7 +12,8 @@ import pytest
 from autoraffkat import reactions
 from autoraffkat.model import Globals
 
-FIELDS = ("yaw", "roll", "size", "x", "y", "w", "h", "eyes", "smile", "cx", "cy")
+FIELDS = ("yaw", "roll", "size", "x", "y", "w", "h", "eyes", "smile",
+          "cx", "cy", "turn", "tilt")
 
 
 def table(n=40, **columns):
@@ -36,9 +37,38 @@ def test_a_frame_without_a_face_can_never_be_chosen():
     """
     data = table(smile=np.linspace(-1, 1, 40))
     data["found"][:10] = False
-    points = reactions.scores(data, {})
+    points = reactions.scores(data, {"turn": 0})
     assert np.all(np.isneginf(points[:10]))
     assert np.all(np.isfinite(points[10:]))
+
+
+def test_the_gate_keeps_the_facing_frames_and_stops_the_rest():
+    """Portti ratkaisee, ei järjestys.
+
+    Reaktiokuvan rima on «ei kelvoton», ei «loistava». Mitattuna oikealla
+    jaksolla raja 0,057 päästi läpi kaikki kuusi hyväksi arvioitua eikä
+    yhtään viidestätoista huonosta. Tässä sama muoto pienoiskoossa: pää
+    kääntyneenä ei kelpaa millään muulla osalla.
+    """
+    turn = np.full(40, 0.30)      # perusasento, ei nolla
+    turn[5] = 0.30 + 0.20         # kääntynyt selvästi pois
+    turn[6] = 0.30 + 0.01         # käytännössä suoraan
+    data = table(turn=turn, smile=np.full(40, 5.0))   # hymy ei saa pelastaa
+    points = reactions.scores(data, {"turn_max": 0.057})
+    assert np.isneginf(points[5]), "kääntynyt pää läpäisi portin"
+    assert np.isfinite(points[6])
+
+
+def test_the_turn_baseline_is_measured_not_assumed():
+    """Kamera ei ole kohtisuorassa, joten «puhujaan päin» ei ole nolla.
+
+    Nollaan sidottu portti hylkäisi tässä koko kameran tai päästäisi kaiken
+    sen mukaan miten kamera sattui olemaan.
+    """
+    turn = np.full(40, 0.42)      # kaikki katsovat vakaasti sivuun
+    data = table(turn=turn)
+    points = reactions.scores(data, {"turn_max": 0.057})
+    assert np.all(np.isfinite(points)), "perusasento luettiin nollaksi"
 
 
 def test_the_gaze_baseline_is_measured_not_assumed():
@@ -50,8 +80,8 @@ def test_the_gaze_baseline_is_measured_not_assumed():
     # Kaikki katsovat vakaasti 0,8 radiaanissa paitsi yksi joka kääntyy pois.
     yaw = np.full(40, 0.8)
     yaw[7] = 0.0
-    points = reactions.scores(table(yaw=yaw), {"gaze": 1.0, "smile": 0, "eyes": 0,
-                                               "motion": 0, "size": 0})
+    points = reactions.scores(table(yaw=yaw), {"gaze": 1.0, "turn": 0, "smile": 0,
+                                               "eyes": 0, "motion": 0, "size": 0})
     assert points[7] == pytest.approx(points.min())
     # Perusasennossa olevat ovat keskenään samanarvoisia.
     rest = np.delete(points, 7)
@@ -61,9 +91,9 @@ def test_the_gaze_baseline_is_measured_not_assumed():
 def test_weights_change_the_ranking_without_new_measurements():
     """Painot ovat se osa jota säädetään, eikä säätö saa maksaa purkua."""
     data = table(smile=np.linspace(0, 1, 40), eyes=np.linspace(1, 0, 40))
-    smiley = reactions.scores(data, {"gaze": 0, "smile": 1, "eyes": 0,
+    smiley = reactions.scores(data, {"turn": 0, "gaze": 0, "smile": 1, "eyes": 0,
                                      "motion": 0, "size": 0})
-    wide_eyed = reactions.scores(data, {"gaze": 0, "smile": 0, "eyes": 1,
+    wide_eyed = reactions.scores(data, {"turn": 0, "gaze": 0, "smile": 0, "eyes": 1,
                                         "motion": 0, "size": 0})
     assert int(np.argmax(smiley)) == 39
     assert int(np.argmax(wide_eyed)) == 0
@@ -75,7 +105,7 @@ def test_motion_is_not_measured_across_a_gap():
     data = table(5)
     data["times"] = times
     data["cx"] = np.array([0.0, 0.0, 0.0, 0.9, 0.9], dtype=np.float32)
-    points = reactions.scores(data, {"gaze": 0, "smile": 0, "eyes": 0,
+    points = reactions.scores(data, {"turn": 0, "gaze": 0, "smile": 0, "eyes": 0,
                                      "motion": 1, "size": 0})
     # Hyppy ruutuun 3 on 898 sekunnin päässä edellisestä eikä saa näkyä.
     assert points[3] == pytest.approx(points[0], abs=1e-6)
