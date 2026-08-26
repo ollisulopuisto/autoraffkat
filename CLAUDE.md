@@ -428,6 +428,46 @@ empty cases are reported separately in the export warnings: on with nothing
 measured, and measured with nothing passing the gate, are different
 situations, and silence is how this project's recurring failure gets missed.
 
+## The rhythm engine, and why you will miss it
+
+`decide.py` is not a threshold machine. It carries an editing model added in
+v26.08.22.48, and nothing in the module names says so — a whole session was
+spent rebuilding reaction-shot placement from scratch before noticing it was
+already there. If you are about to decide *when* something appears on
+screen, read this first.
+
+**1/f tempo** (`_compute_tempo`). Turn-taking rate over a rolling 45 s
+window, normalised to its own mean and clipped to 0.7–1.4. It scales the
+local minimum shot length as `min_shot / sqrt(tempo)`: quick exchanges cut
+faster, monologues slower. Two traps are already paid for. The window slides
+inward at the edges instead of shrinking, because a zero-padded convolution
+read the first and last 22 seconds as the slowest material in the programme
+regardless of content. And it is a summed-area table, not a convolution: the
+window is 2250 steps and the direct version cost 75 ms on a two-hour
+programme — most of the decision layer, which has to stay in milliseconds.
+
+**J-cuts and L-cuts** are `lead` and `hang`. Lead moves the picture *before*
+the new speaker starts; hang keeps the previous face while they fall silent.
+Hang is refused during overlapping speech, because then the cut is not caused
+by anyone stopping.
+
+**Pause snapping.** Long monologues break at real speech pauses or breath
+dips, not on a timer.
+
+**Presets are this model's parameters**, not a preference: broadcast 2.5 s
+minimum with J/L cuts, mellow 4.5 s, hectic 1.4 s.
+
+**There are two reaction-shot mechanisms, and they do not know about each
+other.** `LONGTAKE_REACTION` cuts to the co-host on the spine when one
+person has held the floor too long — a timeout, and blind to what the
+co-host is doing. The `video/` + `reactions.py` layer measures when the
+listener is actually worth looking at and places shots on their own lane.
+The measured one is the stronger signal: it knows *that something is
+happening*, where the timeout only knows *that time has passed*. Uniting
+them means letting the long-take rule break at a measured moment when one
+is near, and falling back to the timeout only when none is — and it must
+reach `decide.py` as a plain array, never as a file read.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not
