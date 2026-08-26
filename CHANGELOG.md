@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.78] - 2026-08-26
+
+### Added
+- **Video Analysis Layer (`video/`) and Reaction Spans (`reactions.py`)**: the scaffolding for reaction shots, built so the detection can be replaced without touching anything else. Nothing is wired into the export path or the interface yet — this is the stable half, deliberately built first.
+  - **The seam is the detector.** `video/detect.py` is a registry; a detector looks at one frame and returns numbers, knowing nothing about the timeline, the speakers or the scoring. Its `name` and `version` are part of the cache key, so swapping it invalidates the cache by itself. Without that a new detector reads the old one's traces, and the result is valid, accepted and wrong.
+  - **Measurements are cached, not scores.** Tuning the weights costs nothing, which matters because the weights are the part expected to change. `reactions.py` reads the finished table in numpy with no file access — same rule as `decide.py`, since it runs in the settings loop.
+  - **Only keyframes are decoded**, measured at 70× realtime against 16× for a full decode — one frame a second at a camera's usual keyframe interval. And only close-ups of speakers who are silent at some point: decoding is the entire cost, so the narrowing happens before it.
+  - **Reactions are written to a positive lane as video-only connected clips**, never as angle switches inside the `mc-clip`. Validated against Final Cut's own DTD.
+  - The gaze baseline is measured, not assumed: a camera is not square-on, so "facing the speaker" is that camera's median yaw, not zero. Below the threshold nothing is proposed — a reaction shot of someone looking at their phone is worse than none.
+
+### Fixed
+- Two traps found while building, both silent: `-vsync 0` no longer exists in current ffmpeg (`-fps_mode passthrough`), and without it keyframes are stretched back to full rate — the same picture dozens of times, timestamps out of step with frames. And `ffprobe`'s `csv=p=0` still emits a trailing comma, so every timestamp failed to parse.
+
 ## [v26.08.25.77] - 2026-08-25
 
 ### Fixed

@@ -726,3 +726,103 @@ def test_multicam_sequence_carries_the_settings(fixture_dir):
 def test_settings_output_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
     _, xml = _multicam_cut(fixture_dir, settings=_settings())
     validate_fcpxml(xml, "settings.fcpxml")
+
+
+# ---------------------------------------------------------------- reaktiot
+
+
+def _roles_for(tl):
+    from autoraffkat.analysis import resolve_roles
+    from autoraffkat.model import ROLE_CLOSE, ROLE_MIC, ROLE_WIDE, TrackConfig
+
+    return resolve_roles(tl, {
+        "WIDE": TrackConfig(role=ROLE_WIDE),
+        "CLOSE_A": TrackConfig(role=ROLE_CLOSE, speaker="Host"),
+        "CLOSE_B": TrackConfig(role=ROLE_CLOSE, speaker="Guest"),
+        "host Track1": TrackConfig(role=ROLE_MIC, speaker="Host"),
+        "guest Track2": TrackConfig(role=ROLE_MIC, speaker="Guest"),
+    })
+
+
+def _with_reactions(fixture_dir, spans):
+    from autoraffkat.reactions import Reaction
+
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 4.0),
+         Segment("CLOSE_A", "Host", 4.0, 36.0)],
+        [("host Track1", "Host"), ("guest Track2", "Guest")],
+        Fraction(0), Fraction(36), "Reaktiotesti",
+        source="multicam.fcpxml",
+        reactions=[Reaction(*s) for s in spans],
+        roles=_roles_for(tl),
+    )
+    return tl, xml
+
+
+def test_reactions_go_on_their_own_lane_not_into_the_multicam(fixture_dir):
+    """Spekulatiivinen kuva ei kuulu peruleikkaukseen.
+
+    Kulmanvaihtona sen poistaminen vaatisi uuden viennin, ja siihen mennessä
+    edellinen on yleensä jo tuotu Final Cutiin ja leikattu käsin. Omalta
+    lanelta sen poistaa yhdellä valinnalla, ja alla oleva leikkaus on
+    koskematon.
+    """
+    _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
+    root = ET.fromstring(xml)
+    clips = [c for c in root.iter("asset-clip") if "reaktio" in (c.get("name") or "")]
+    assert len(clips) == 1, "reaktiokuvaa ei kirjoitettu"
+    assert int(clips[0].get("lane")) > 0, "reaktio ei ole omalla lanellaan"
+    # Monikameran omat kulmavalinnat eivät saa muuttua.
+    assert [c.get("srcEnable") for c in root.iter("mc-source")].count("all") == 0
+
+
+def test_a_reaction_clip_carries_no_audio(fixture_dir):
+    """Lähikuvan liitetty klippi kantaisi sen kameran äänen, joka summautuisi
+    käsiteltyjen mikkien päälle.
+
+    Sama perhe kuin ``uid``in romahdus ja ``srcEnable``in voitto
+    ``active``ista: kelvollinen XML, siisti tuonti, väärä ääni — ja sen
+    huomaa vasta kuuntelemalla.
+    """
+    _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
+    clip = next(c for c in ET.fromstring(xml).iter("asset-clip")
+                if "reaktio" in (c.get("name") or ""))
+    assert clip.get("srcEnable") == "video"
+    assert clip.get("audioRole") is None
+
+
+def test_reactions_are_clipped_to_the_programme(fixture_dir):
+    """Ohjelman ulkopuolelle jäävästä ei kirjoiteta mitään: siitä ei ole
+    tietoa eikä vienti käytä sitä."""
+    _, xml = _with_reactions(fixture_dir, [("Guest", 35.0, 40.0, 2.0),
+                                           ("Guest", -5.0, -1.0, 2.0)])
+    clips = [c for c in ET.fromstring(xml).iter("asset-clip")
+             if "reaktio" in (c.get("name") or "")]
+    assert len(clips) == 1
+    assert parse_time(clips[0].get("duration")) <= Fraction(1)
+
+
+def test_no_reactions_writes_nothing_new(fixture_dir):
+    """Oletus ei saa muuttaa vientiä millään tavalla."""
+    _, plain = _multicam_cut(fixture_dir)
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    same = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 4.0),
+         Segment("CLOSE_A", "Host", 4.0, 12.0),
+         Segment("CLOSE_B", "Guest", 12.0, 30.0),
+         Segment("WIDE", "Laaja", 30.0, 36.0)],
+        [("host Track1", "Host"), ("guest Track2", "Guest")],
+        Fraction(0), Fraction(36), "Monikameratesti",
+        source="multicam.fcpxml", reactions=[], roles=_roles_for(tl),
+    )
+    assert same == plain
+
+
+def test_a_reaction_export_validates_against_final_cut(fixture_dir, validate_fcpxml):
+    """Oma lukijamme hyväksyy paljon enemmän kuin tuoja."""
+    _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1),
+                                           ("Host", 20.0, 21.6, 1.8)])
+    validate_fcpxml(xml)

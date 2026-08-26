@@ -329,6 +329,39 @@ a connected clip, because `mc-source` has no level control — and therefore it
 **can** drift on a ripple edit. If someone finds a way to make room tone an
 angle with a level, that is an improvement.
 
+## The video layer caches measurements, never scores
+
+`video/` is the third slow layer, and its seam is placed where the change is
+expected: **the detector.** `video/detect.py` holds a registry of detectors,
+each of which looks at one frame and returns numbers, knowing nothing about
+the timeline, the speakers or the scoring. Its `name` and `version` go into
+the cache key, so swapping detectors invalidates the cache by itself —
+without that, a new detector would read the old one's traces and the result
+would be valid, accepted and wrong.
+
+What is cached is the **measurements**, not the score. Adjusting the weights
+is then free, and the weights are the part expected to be tuned.
+`reactions.py` is the fast layer over it: numpy, no file reading, same rule
+as `decide.py` because it runs in the settings loop.
+
+Only keyframes are decoded (`-skip_frame nokey`): measured at 70× realtime
+against 16× for a full decode, which is one frame a second at a camera's
+usual keyframe interval. Use `-fps_mode passthrough`, never `-vsync 0` —
+current ffmpeg does not know the latter at all, and without either the
+keyframes are stretched back to full rate, so the same picture arrives
+dozens of times with the timestamps out of step with the frames. A test
+fails if the frame count returns to full rate: nothing crashes when it does,
+it just gets 25× slower in silence.
+
+Frames and timestamps are paired by index, so a length mismatch means every
+measurement sits at the wrong moment. That is an error, not a warning. A
+frame where the detector found nothing stays in the table as zeros with
+`found` false — dropping it would shift every index after it.
+
+Only close-ups of speakers who are actually silent at some point get
+decoded. Decoding is the whole cost of the feature, so that narrowing
+happens *before* the decode, not after.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not

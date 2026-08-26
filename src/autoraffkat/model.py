@@ -194,6 +194,25 @@ class Globals:
     )
     wide_hold: float = 3.5  # laajan kesto ennen paluuta, s (vain «return»)
     long_take_rule: str = LONGTAKE_RETURN
+    # --- Reaktiokuvat -------------------------------------------------
+    # Spekulatiivinen kerros: kuuntelijan lähikuva kesken toisen puheen.
+    # Ei osa peruleikkausta, vaan omalle lanelleen, jotta sen voi poistaa
+    # yhdellä valinnalla ilman uutta vientiä. Ks. CLAUDE.md.
+    reactions: bool = False
+    reaction_detector: str = "vision"
+    # Kynnys on z-luku jakson omasta jakaumasta, ei absoluuttinen: mikään
+    # mitattavista ei tarkoita samaa kahdessa eri huoneessa.
+    reaction_threshold: float = 1.5
+    reaction_length: float = 1.6      # kuvan kesto, s
+    reaction_spacing: float = 25.0    # lyhin väli kahden välillä, s
+    # Painot. Näitä on tarkoitus säätää, ja siksi mittaukset ovat
+    # välimuistissa pisteiden sijaan: säätö ei maksa uutta purkua.
+    reaction_gaze: float = 1.2
+    reaction_smile: float = 0.9
+    reaction_eyes: float = 0.7
+    reaction_motion: float = 0.5
+    reaction_size: float = 0.3
+
     project_name: str = DEFAULT_PROJECT_NAME
     # Kirjoitetaanko säätimet viennin tiedostonimeen. Samasta jaksosta
     # syntyy monta leikkausta, ja Final Cutin selaimessa nimi on ainoa mikä

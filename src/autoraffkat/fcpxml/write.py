@@ -914,6 +914,62 @@ def _room_lines(
     return lines
 
 
+# Reaktiokuvien lane. Mikit ja kaksoset ovat negatiivisilla, joten
+# positiivinen on vapaa — ja kuva peittää spinen vain ylempänä.
+REACTION_LANE = 1
+
+
+def _reaction_clips(
+    reactions, timeline, roles, ids, program_start, program_end,
+    frame_duration, parent_start_frames=0,
+):
+    """Reaktiokuvat liitettyinä klippeinä omalle lanelleen.
+
+    **Ei kulmanvaihtoja monikameran sisällä.** Kuvakulman vaihtaminen
+    tarkoittaisi että reaktioiden poistaminen vaatii uuden viennin, ja
+    siihen mennessä edellinen vienti on yleensä jo tuotu Final Cutiin ja
+    leikattu käsin — sitä työtä ``next_output_path`` on olemassa
+    suojaamaan. Omalta lanelta ne poistaa yhdellä valinnalla, ja alla oleva
+    leikkaus on ruutu ruudulta koskematon.
+
+    **Ääni pois, eksplisiittisesti.** Lähikuvan liitetty klippi kantaa sen
+    kameran äänen, joka summautuisi käsiteltyjen mikkien päälle. Se on sama
+    perhe kuin ``uid``in romahdus ja ``srcEnable``in voitto ``active``ista:
+    kelvollinen XML, siisti tuonti, ja väärä ääni jonka huomaa vasta
+    kuuntelemalla. ``audioRole`` jätetään pois ja ``srcEnable`` on
+    ``video``.
+    """
+    lines: list[str] = []
+    for reaction in reactions:
+        key = roles.closes.get(reaction.speaker)
+        if not key:
+            continue
+        for item in timeline.track_media(key):
+            res_id = ids.get(item.asset_id)
+            if res_id is None:
+                continue
+            for placement in item.placements:
+                start = max(reaction.start, float(placement.offset), program_start)
+                end = min(reaction.end, float(placement.end), program_end)
+                if end <= start:
+                    continue
+                off = to_frames(start - program_start, frame_duration)
+                dur = to_frames(end - start, frame_duration)
+                if dur <= 0:
+                    continue
+                src = to_frames(placement.source_at(start), frame_duration)
+                lines.append(
+                    f'              <asset-clip ref="{res_id}" '
+                    f'lane="{REACTION_LANE}" '
+                    f'offset="{frames_str(parent_start_frames + off, frame_duration)}" '
+                    f"name={quoteattr(item.name + ' reaktio')} "
+                    f'start="{frames_str(src, frame_duration)}" '
+                    f'duration="{frames_str(dur, frame_duration)}" '
+                    f'srcEnable="video"/>'
+                )
+    return lines
+
+
 def build_multicam_fcpxml(
     timeline,
     segments: list[Segment],
@@ -925,6 +981,8 @@ def build_multicam_fcpxml(
     room: list[tuple[str, str]] | None = None,
     settings: "ProjectSettings | None" = None,
     source: str = "",
+    reactions: list | None = None,
+    roles=None,
 ) -> str:
     """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
 
@@ -976,6 +1034,12 @@ def build_multicam_fcpxml(
 
     body: list[str] = []
     attached_room = False
+    attached_reactions = False
+    # Monikamerassa kulmien assetit ovat jo kopioidussa <resources>-lohkossa,
+    # joten reaktioklippi viittaa niihin sellaisenaan eikä uutta resurssia
+    # tarvita. Tunnetut id:t poimitaan sieltä, jotta viittaus tuntemattomaan
+    # assettiin jää tekemättä sen sijaan että se rikkoisi tuonnin.
+    asset_ids = set(re.findall(r'<asset\b[^>]*\bid="([^"]+)"', resources))
     for index, (seg, a, b) in enumerate(spans):
         at = program_start + frame_duration * a
         mc = timeline.multicam_at(at)
@@ -1005,6 +1069,22 @@ def build_multicam_fcpxml(
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
         sources = _mc_sources(video_angle, audio_angles, mc.angle_roles, raw_angles)
+        # Reaktiokuvat ensimmäiseen klippiin kuten tilaäänikin: liitetyt
+        # klipit ovat isäntänsä paikallisessa ajassa, joten yksi isäntä
+        # riittää koko ohjelmalle ja jakaminen klippien kesken tekisi
+        # ajoista klippikohtaisia turhaan.
+        if not attached_reactions and reactions and roles is not None:
+            attached_reactions = True
+            sources = sources + _reaction_clips(
+                reactions,
+                timeline,
+                roles,
+                {a: a for a in asset_ids},
+                program_start,
+                program_end,
+                frame_duration,
+                to_frames(mc.source_at(at), frame_duration),
+            )
         if not attached_room and room_ids:
             attached_room = True
             sources = sources + _room_lines(
