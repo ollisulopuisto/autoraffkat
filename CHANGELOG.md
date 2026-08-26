@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.85] - 2026-08-26
+
+### Added
+- **Reaction Shots Appear in the Preview Bar**: a low fourth row under the cut row, coloured by speaker, so their placement against the speech is visible before exporting. Where they fall relative to who is talking *is* the question, and a list of timecodes cannot answer it.
+  - The row is squeezed into the **same columns** as the speech rows. The bar is read across, so the rows' relation to each other is the whole point; a different division would put a reaction shot at the wrong place against the speech with nothing to say so. A test asserts the column counts match, and fails if they drift.
+  - A column is marked as soon as any reaction touches it, exactly as the speaker rows work. Reaction shots are around a second and the bar is 1400 columns wide, so an averaging squeeze would lose them precisely where they matter.
+  - The row and its legend entry appear only when there are shots; an empty strip would promise a feature that has not been measured.
+  - The lane is drawn even when the setting is off, because that is the only way to judge what turning it on would do before exporting.
+
 ## [v26.08.26.84] - 2026-08-26
 
 ### Fixed

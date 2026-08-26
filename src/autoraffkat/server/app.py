@@ -287,6 +287,25 @@ class AppState:
             self.video_progress.update({"running": False, "fraction": 1.0,
                                         "done": len(files)})
 
+    def reaction_lane(self, grid, roles, program_start) -> list:
+        """``(alku, loppu, puhujan indeksi)`` esikatselupalkkia varten.
+
+        Piirretään myös kun asetus on pois: silloin palkki näyttää mitä
+        päälle laittaminen toisi, mikä on ainoa tapa arvioida sitä ennen
+        vientiä.
+        """
+        if not self.video_tables:
+            return []
+        names = [lane.name for lane in grid.speakers]
+        wanted = dataclasses_replace(self.settings.globals, reactions=True)
+        try:
+            found = reactions.find(grid, roles, self.timeline, self.video_tables,
+                                   wanted, float(program_start))
+        except (ValueError, KeyError):
+            return []
+        return [(r.start, r.end, names.index(r.speaker))
+                for r in found if r.speaker in names]
+
     def reactions_now(self, grid, roles, program_start) -> list:
         """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
 
@@ -590,7 +609,11 @@ class AppState:
             # merkkijono päätyy vientiin rooliksi. Käyttöliittymä kääntää sen
             # näytölle, ja tarvitsee siihen tiedon siitä mikä tunnus se on.
             "wide_label": WIDE_LABEL,
-            "preview": build_preview(grid, decision),
+            # Reaktiokuvat samaan palkkiin: niiden ajoitus suhteessa puheeseen
+            # on koko kysymys, eikä sitä näe erillisestä listasta.
+            "preview": build_preview(
+                grid, decision, reactions=self.reaction_lane(grid, roles, program_start)
+            ),
             # Tuoreus mukaan säätökierrokselle, jotta painike vanhenee samalla
             # hetkellä kuin tulos: asetuksen muutos tekee valmiista työstä
             # vanhentunutta, ja se on nähtävä kysymättä erikseen.

@@ -500,3 +500,7 @@ button.ghost.small[disabled] { opacity: .35; cursor: default; }
 @media (prefers-reduced-motion: reduce) {
   .arow-chev { transition: none; }
 }
+
+/* Selitteen reaktiomerkki: matala palkki kuten palkissakin, ei täysi
+   neliö — muuten se lupaisi yhtä painavaa kerrosta kuin puhujat. */
+.legend i.thin { height: 5px; align-self: center; background: #8b93a1; }

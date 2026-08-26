@@ -184,3 +184,63 @@ def test_crowded_candidates_are_thinned_best_first():
     kept = reactions._thin(found, settings)
     assert [r.start for r in kept] == [11.0, 60.0]
     assert kept[0].score == 3.0
+
+
+def test_the_preview_lane_lines_up_with_the_speech_rows():
+    """Reaktiorivi tiivistetään samoihin sarakkeisiin kuin puhujarivit.
+
+    Palkkia luetaan päällekkäin: rivien suhde toisiinsa *on* se mitä siitä
+    katsotaan. Eri jaolla reaktiokuva näyttäisi osuvan väärään kohtaan
+    puheen suhteen, eikä mikään kertoisi siitä.
+    """
+    from autoraffkat.decide import Decision
+    from autoraffkat.preview import build
+
+    class Lane:
+        def __init__(self, name, on):
+            self.name, self.on = name, np.asarray(on, dtype=bool)
+            self.close_key = "cam"
+
+    class Grid:
+        n = 200
+        duration = 100.0
+        program_start = 0.0
+        speakers = [Lane("A", [1] * 100 + [0] * 100),
+                    Lane("B", [0] * 100 + [1] * 100)]
+
+    decision = Decision(segments=[], active=np.zeros((2, 200), dtype=bool),
+                        chosen=np.zeros(200, dtype=np.int32))
+    # Reaktio ohjelman puolivälistä eteenpäin, viisi sekuntia.
+    out = build(Grid(), decision, columns=100, reactions=[(50.0, 55.0, 1)])
+    lane = out["reactions"]
+    assert len(lane) == len(out["chosen"]) == out["columns"]
+    on = [i for i, v in enumerate(lane) if v >= 0]
+    assert on, "reaktio katosi tiivistyksessä"
+    # Puolivälissä ohjelmaa = puolivälissä sarakkeita, samalla jaolla.
+    assert 48 <= on[0] <= 52, on
+    assert all(lane[i] == 1 for i in on), "puhujan indeksi ei säilynyt"
+
+
+def test_a_short_reaction_survives_the_squeeze():
+    """Reaktiokuva on sekunnin luokkaa ja palkki on tuhat saraketta.
+
+    Keskiarvoistava tiivistys hukkaisi ne juuri niiltä kohdin jotka
+    halutaan nähdä — sarake merkitään heti kun yksikin osuu siihen.
+    """
+    from autoraffkat.decide import Decision
+    from autoraffkat.preview import build
+
+    class Lane:
+        name, close_key = "A", "cam"
+        on = np.ones(4000, dtype=bool)
+
+    class Grid:
+        n = 4000
+        duration = 4000.0
+        program_start = 0.0
+        speakers = [Lane()]
+
+    decision = Decision(segments=[], active=np.zeros((1, 4000), dtype=bool),
+                        chosen=np.zeros(4000, dtype=np.int32))
+    out = build(Grid(), decision, columns=1400, reactions=[(1000.0, 1001.6, 0)])
+    assert any(v >= 0 for v in out["reactions"]), "lyhyt reaktio katosi"

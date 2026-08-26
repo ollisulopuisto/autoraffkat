@@ -17,8 +17,15 @@ def _bucket_bounds(n: int, columns: int) -> np.ndarray:
     return np.linspace(0, n, columns + 1).astype(np.int64)
 
 
-def build(grid: Grid, decision: Decision, columns: int = 1400) -> dict:
-    """Palauttaa palkin: kuka äänessä ja mikä kuva valittiin, sarakkeittain."""
+def build(grid: Grid, decision: Decision, columns: int = 1400,
+          reactions=None) -> dict:
+    """Palauttaa palkin: kuka äänessä ja mikä kuva valittiin, sarakkeittain.
+
+    ``reactions`` on lista ``(alku, loppu, puhujan indeksi)`` ohjelma-ajassa.
+    Se tiivistetään samoihin sarakkeisiin kuin muukin, koska rivit luetaan
+    päällekkäin: eri jaolla reaktiokuva näyttäisi osuvan väärään kohtaan
+    puheen suhteen, ja juuri sitä suhdetta palkista katsotaan.
+    """
     n = grid.n
     columns = max(1, min(columns, max(1, n)))
     bounds = _bucket_bounds(n, columns)
@@ -39,9 +46,23 @@ def build(grid: Grid, decision: Decision, columns: int = 1400) -> dict:
             }
         )
 
+    # Reaktiokuvat omalle rivilleen: -1 = ei mitään, muuten puhujan indeksi.
+    # Ne ovat lyhyitä — sekunnin luokkaa — joten sarake merkitään heti kun
+    # yksikin osuu siihen, kuten puhujariveilläkin. Muuten koko kerros
+    # katoaisi tiivistyksessä juuri niiltä kohdin jotka halutaan nähdä.
+    lane = [-1] * columns
+    if reactions:
+        seconds = grid.duration or 1.0
+        for start, end, index in reactions:
+            first = int((start - grid.program_start) / seconds * columns)
+            last = int((end - grid.program_start) / seconds * columns)
+            for column in range(max(0, first), min(columns, max(last, first + 1))):
+                lane[column] = int(index)
+
     chosen = decision.chosen[mids] if n else np.zeros(0, dtype=np.int32)
     return {
         "columns": columns,
+        "reactions": lane,
         "duration": grid.duration,
         "program_start": grid.program_start,
         "speakers": speakers,

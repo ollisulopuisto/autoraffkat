@@ -1717,9 +1717,14 @@ function drawBar() {
   const preview = latest && latest.preview;
   const ratio = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
-  const rows = preview ? preview.speakers.length + 1 : 1;
-  const rowHeight = 22, gap = 4;
-  const height = rows * rowHeight + (rows - 1) * gap + 8;
+  /* Reaktiorivi vain jos niitä on: tyhjä kaistale palkin alla lupaisi
+     ominaisuutta jota ei ole mitattu. */
+  const shots = (preview && preview.reactions) || [];
+  const hasShots = shots.some((v) => v >= 0);
+  const rows = preview ? preview.speakers.length + 1 + (hasShots ? 1 : 0) : 1;
+  const rowHeight = 22, gap = 4, shotHeight = 10;
+  const height = (rows - (hasShots ? 1 : 0)) * rowHeight
+    + (hasShots ? shotHeight : 0) + (rows - 1) * gap + 8;
   canvas.style.height = height + 'px';
   canvas.width = Math.max(1, Math.round(width * ratio));
   canvas.height = Math.round(height * ratio);
@@ -1754,6 +1759,19 @@ function drawBar() {
   for (let i = 1; i < columns; i++) {
     if (preview.chosen[i] !== preview.chosen[i - 1]) ctx.fillRect(i * step, y, 1, rowHeight);
   }
+
+  /* Reaktiokuvat matalana rivinä leikkausrivin alla. Matalana, koska ne
+     eivät ole yhtä painava kerros kuin leikkaus itse — ja leikkausrivin
+     alla, koska ne tulevat sen päälle omalle lanelleen. */
+  if (!hasShots) return;
+  const shotY = y + rowHeight + gap;
+  ctx.fillStyle = '#191c22';
+  ctx.fillRect(0, shotY, width, shotHeight);
+  for (let i = 0; i < columns; i++) {
+    if (shots[i] < 0) continue;
+    ctx.fillStyle = colorFor(shots[i]);
+    ctx.fillRect(i * step, shotY, Math.max(step, 1.5), shotHeight);
+  }
 }
 
 /* Aika-asteikko palkin alle. Väli valitaan luettavista arvoista (1, 2, 5, 10,
@@ -1782,9 +1800,16 @@ function renderLegend() {
   const entries = latest.preview.speakers.map((s) => [colorFor(s.index),
     s.has_close ? s.name : T('legend.noClose', { name: s.name })]);
   entries.push([colorFor(-1), T('legend.wide')]);
+  /* Reaktiorivi selitteeseen vain kun se on palkissakin: selite jota
+     vastaavaa riviä ei ole kertoo väärää. */
+  const shots = latest.preview.reactions || [];
+  const count = shots.filter((v, i) => v >= 0 && (i === 0 || shots[i - 1] < 0)).length;
+  if (count) entries.push([null, T('legend.reactions', { n: count })]);
   entries.forEach(([color, text]) => {
     const item = document.createElement('span');
-    item.innerHTML = `<i style="background:${color}"></i>${text}`;
+    item.innerHTML = color
+      ? `<i style="background:${color}"></i>${text}`
+      : `<i class="thin"></i>${text}`;
     host.append(item);
   });
 }
