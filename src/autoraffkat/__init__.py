@@ -1,3 +1,3 @@
 """Automaattinen monikameraleikkaus: FCPXML sisään, FCPXML ulos."""
 
-__version__ = "2026.8.26.92"
+__version__ = "2026.8.26.93"

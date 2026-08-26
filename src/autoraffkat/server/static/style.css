@@ -517,3 +517,6 @@ tr.reaction td:nth-child(2) { padding-left: 22px; }
 .preview-head .zoomed { color: var(--accent); font-size: 12px; margin-left: auto;
                         margin-right: 12px; }
 #bar { cursor: ew-resize; touch-action: none; }
+
+/* Reaktiorivit joita ei viedä: sama tieto, mutta ei lupausta. */
+tr.reaction.off td { opacity: .45; font-style: italic; }

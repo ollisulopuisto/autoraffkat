@@ -1934,11 +1934,13 @@ function drawBar() {
   const shotY = y + rowHeight + gap;
   ctx.fillStyle = '#191c22';
   ctx.fillRect(0, shotY, width, shotHeight);
+  ctx.globalAlpha = state.globals.reactions ? 1 : 0.35;
   for (let i = 0; i < columns; i++) {
     if (shots[i] < 0) continue;
     ctx.fillStyle = colorFor(shots[i]);
     ctx.fillRect(i * step, shotY, Math.max(step, 1.5), shotHeight);
   }
+  ctx.globalAlpha = 1;
   cacheBar(canvas, preview);
 }
 
@@ -2004,7 +2006,14 @@ function renderLegend() {
      vastaavaa riviä ei ole kertoo väärää. */
   const shots = latest.preview.reactions || [];
   const count = shots.filter((v, i) => v >= 0 && (i === 0 || shots[i - 1] < 0)).length;
-  if (count) entries.push([null, T('legend.reactions', { n: count })]);
+  if (count) {
+    /* Rivi piirretään myös kun asetus on pois, jotta näkee mitä päälle
+       laittaminen toisi. Silloin on sanottava ettei sitä viedä — muuten
+       palkki lupaa kuvia joita vienti ei kirjoita, eikä mikään kerro. */
+    entries.push([null, state.globals.reactions
+      ? T('legend.reactions', { n: count })
+      : T('legend.reactionsOff', { n: count })]);
+  }
   entries.forEach(([color, text]) => {
     const item = document.createElement('span');
     item.innerHTML = color
@@ -2041,7 +2050,7 @@ function renderCuts() {
   lines.forEach((line) => {
     if (line.shot) {
       const row = document.createElement('tr');
-      row.className = 'reaction';
+      row.className = state.globals.reactions ? 'reaction' : 'reaction off';
       const index = speakerIndex(line.shot.speaker);
       row.innerHTML =
         '<td></td>' +
@@ -2074,7 +2083,11 @@ function renderCuts() {
     T('app.shots', { n: latest.segments.length }),
     fmtTime(latest.program.duration),
     counts,
-    shots.length ? T('cuts.reactions', { n: shots.length }) : '',
+    shots.length
+      ? (state.globals.reactions
+          ? T('cuts.reactions', { n: shots.length })
+          : T('cuts.reactionsOff', { n: shots.length }))
+      : '',
   ].filter(Boolean).join(' · ');
   $('counts').textContent = T('app.decision', { ms: latest.ms });
 }

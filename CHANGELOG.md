@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.93] - 2026-08-26
+
+### Fixed
+- **The Preview Promised Reaction Shots the Export Would Not Write**: the preview lane and the cut list deliberately ignore the on/off switch, so you can see what turning it on would do. But with the switch off they showed 96 shots and the export correctly wrote none, with nothing saying why. The lane, the legend and the list now state plainly that these are **not exported** while the switch is off — dimmed, italic, and labelled.
+
 ## [v26.08.26.92] - 2026-08-26
 
 ### Added

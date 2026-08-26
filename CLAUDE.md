@@ -483,6 +483,13 @@ close-up, and the wide restores the geography. It only splits when both
 halves clear `min_shot`; below that it would be two flashes rather than two
 shots.
 
+What the preview shows and what the export writes must agree, or the
+difference must be stated. The reaction lane is drawn even when the switch
+is off — that is the only way to judge the feature before committing to it —
+and for one version that meant the panel showed 96 shots while the export
+wrote none, correctly and silently. Anything drawn but not exported says so
+on its face.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not

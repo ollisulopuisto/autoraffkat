@@ -871,3 +871,26 @@ def test_measuring_video_returns_only_its_own_state(scratch_xml):
     body = client.post("/api/video").json()
     assert set(body) == {"video"}, body
     assert "globals" in client.get("/api/state").json()   # /api/state yhä laaja
+
+
+def test_the_export_warns_when_reactions_are_visible_but_switched_off(scratch_xml):
+    """Esikatselu näyttää reaktiokuvat myös kytkin pois — vienti ei kirjoita.
+
+    Se on tahallista: näin näkee mitä päälle laittaminen toisi. Mutta
+    silloin lupaus ja lopputulos eroavat, ja ero on kerrottava. Vienti
+    ilman varoitusta jättäisi käyttäjän luulemaan saaneensa ne.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    while not state.progress.get("ready"):
+        time.sleep(0.05)
+    state.settings.tracks = _multicam_tracks()
+    state.settings.globals.reactions = False
+    client = TestClient(create_app(state))
+    exported = client.post("/api/export", json={}).json()
+    assert exported.get("ok"), exported
+    # Kytkin pois: ei reaktioita eikä varoitusta niistä — varoitus kuuluu
+    # vain silloin kun ne on pyydetty mutta ei saatu.
+    assert exported["reactions"] == 0
+    assert not any("reakti" in w.lower() or "reaction" in w.lower()
+                   for w in exported["warnings"]), exported["warnings"]
