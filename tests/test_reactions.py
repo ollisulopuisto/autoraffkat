@@ -401,6 +401,29 @@ def test_a_reaction_keeps_clear_of_the_cut_boundaries():
                           host, settings)
 
 
+def test_the_margin_is_the_programmes_own_minimum_shot():
+    """Isäntäkuvan alkupala on kuva siinä missä muutkin.
+
+    Mitattu vika: leikkaus laajasta Wanckeen ja 1,04 s myöhemmin
+    reaktiokuva — juuri vaihtunut lähikuva ei ehtinyt alkaa. Sekunnin
+    marginaali salli sen. Marginaali on nyt ``min_shot``, sama ehto kuin
+    ``decide._force_wide``:n kolmiosaisella jaolla. Oikealla jaksolla 22
+    reaktiokuvaa 98:sta osui alle kahden sekunnin päähän leikkauksesta, ja
+    ehdon kiristäminen maksoi 13 kuvaa.
+    """
+    host = _Dec(_Seg("Wancke", 0.0, 30.0))
+    settings = Globals(reactions=True, reaction_length=2.2, min_shot=2.5)
+    close = reactions.Reaction("Nyman", 1.5, 3.7, 1.0)
+    assert not reactions.fits(close, host, settings)
+    assert reactions.fits(reactions.Reaction("Nyman", 3.0, 5.2, 1.0),
+                          host, settings)
+    # Nopeassa profiilissa raja seuraa mukana, ei jää kiinni vakioon.
+    assert reactions.fits(close, host, replace(settings, min_shot=1.4))
+    # Sekunti on silti alaraja: tärähdys on tärähdys kaikilla asetuksilla.
+    assert not reactions.fits(reactions.Reaction("Nyman", 0.5, 2.7, 1.0),
+                              host, replace(settings, min_shot=0.2))
+
+
 def test_a_reaction_will_not_fit_a_shot_too_short_to_hold_it():
     """Isäntäkuvan on mahduttava reaktio ja molemmat marginaalit."""
     settings = Globals(reactions=True, reaction_length=1.6)

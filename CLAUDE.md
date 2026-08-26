@@ -380,6 +380,16 @@ all three, and the conditions are applied **before** thinning: otherwise an
 interval is spent on a candidate that is then rejected, and no acceptable
 one can take its place.
 
+The margin around a cut is `min_shot`, not a constant of its own. A second
+was enough to keep a reaction from touching a boundary, but not enough for
+the *host* shot to exist: measured, a cut from the wide to Wancke and 1.04 s
+later a reaction — the close-up had not begun. The host's head and tail are
+shots like any other, so they get the programme's own minimum, which is the
+same condition `decide._force_wide` uses to decide whether its three-beat
+form may split. One second remains the floor, because a flash is a flash at
+any setting. Measured on the real episode: 22 of 98 sat under two seconds
+from a cut; the rule costs 14 shots and moves the nearest to 2.50 s.
+
 The interval follows `decide._compute_tempo`, the same 1/f measure that
 scales `min_shot`. A fixed interval made the reaction layer the most
 metronomic thing in the programme — measured, its interval spread was

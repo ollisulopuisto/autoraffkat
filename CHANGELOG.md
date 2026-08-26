@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.98] - 2026-08-26
+
+### Fixed
+- **A Reaction Shot Landed Before Its Host Shot Had Begun**: a cut from the wide to Wancke, then 1.04 s later a reaction, then back. The one-second margin kept the reaction off the boundary but did nothing for the shot it sat in — the close-up had not established. The margin is now the programme's own **`min_shot`**, the same condition `decide._force_wide` uses before splitting into its three-beat form; one second stays as the floor, because a flash is a flash at any setting.
+  - Measured on the episode: 22 of 98 reaction shots sat under two seconds from a cut. The rule costs 14 of them and moves the nearest to 2.50 s.
+
 ## [v26.08.26.97] - 2026-08-26
 
 ### Added

@@ -72,7 +72,8 @@ MOVE_GAP_S = 4.0
 # oikealla jaksolla 18 reaktiokuvaa 121:stä osui alle 0,2 sekunnin päähän
 # leikkausrajasta: kuva vaihtuu, reaktiokuva välähtää, kuva vaihtuu taas.
 # Se ei ole reaktio vaan tärähdys. Sekunti on lyhin väli jossa molemmat
-# leikkaukset ehtii lukea erillisinä.
+# leikkaukset ehtii lukea erillisinä — mutta vain **alaraja**: varsinainen
+# marginaali on ohjelman oma ``min_shot``, ks. ``fits``.
 CUT_MARGIN = 1.0
 
 # Kuinka paljon ennen mitattua ruutua leikkaus tehdään.
@@ -213,9 +214,14 @@ def fits(reaction: Reaction, decision, settings) -> bool:
     **Ei oman puhujan kuvan päälle.** Nymanin reaktio Nymanin lähikuvan
     päällä on hyppyleikkaus samaan kasvoon. Mitattuna 7 kertaa 121:stä.
 
-    **Ei kiinni leikkausrajassa.** Alle sekunnin päässä rajasta kuva
-    vaihtuu kahdesti peräkkäin ja se luetaan tärähdyksenä, ei kuvana.
-    Mitattuna 18 kertaa alle 0,2 s:n päässä.
+    **Ei kiinni leikkausrajassa.** Marginaali on ohjelman oma
+    vähimmäiskesto ``min_shot``, ei erillinen vakio: isäntäkuvan alku- ja
+    loppupala ovat kuvia siinä missä muutkin, ja lyhyempinä ne ovat
+    välähdyksiä. Sama ehto kuin ``decide._force_wide``:n kolmiosaisella
+    jaolla, joka jakaantuu vain jos molemmat puoliskot ylittävät
+    ``min_shot``. Sekunti on silti alaraja: mitattuna 18 reaktiokuvaa
+    121:stä osui alle 0,2 s:n päähän rajasta, ja se on tärähdys kaikilla
+    asetuksilla.
 
     **Ei kuvaan joka ei mahdu sitä pitämään.** Isäntäkuvan on oltava
     pidempi kuin reaktio ja molemmat marginaalit, muutenkaan sitä ei voi
@@ -232,11 +238,12 @@ def fits(reaction: Reaction, decision, settings) -> bool:
         return False
     if host.label == reaction.speaker:
         return False
-    need = (reaction.end - reaction.start) + 2 * CUT_MARGIN
+    margin = max(CUT_MARGIN, float(getattr(settings, "min_shot", CUT_MARGIN)))
+    need = (reaction.end - reaction.start) + 2 * margin
     if float(host.duration) < need:
         return False
-    return (reaction.start - float(host.start) >= CUT_MARGIN
-            and float(host.end) - reaction.end >= CUT_MARGIN)
+    return (reaction.start - float(host.start) >= margin
+            and float(host.end) - reaction.end >= margin)
 
 
 def find(grid, roles, timeline, tables: dict, settings, program_start: float,
