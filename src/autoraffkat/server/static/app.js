@@ -58,6 +58,7 @@ const LONGTAKE_RULES = () => [
   ['return', T('longtake.return'), T('longtake.returnHint')],
   ['stay', T('longtake.stay'), T('longtake.stayHint')],
   ['reaction', T('longtake.reaction'), T('longtake.reactionHint')],
+  ['reaction_wide', T('longtake.reactionWide'), T('longtake.reactionWideHint')],
 ];
 
 const OVERLAP_KNOBS = () => [

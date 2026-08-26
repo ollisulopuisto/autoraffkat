@@ -463,10 +463,25 @@ person has held the floor too long — a timeout, and blind to what the
 co-host is doing. The `video/` + `reactions.py` layer measures when the
 listener is actually worth looking at and places shots on their own lane.
 The measured one is the stronger signal: it knows *that something is
-happening*, where the timeout only knows *that time has passed*. Uniting
-them means letting the long-take rule break at a measured moment when one
-is near, and falling back to the timeout only when none is — and it must
-reach `decide.py` as a plain array, never as a file read.
+happening*, where the timeout only knows *that time has passed*. They are united: the long-take rule breaks at a measured moment when one
+is within `REACTION_REACH` (4 s), and falls back to the timeout when none
+is. The measurement reaches `decide.py` as a plain `(speakers, n)` boolean
+array from `reactions.marks` — an array, never a file read, and measured at
+24.3 ms → 24.2 ms for `decide()` with marks against without. `marks()`
+itself costs 24 ms, so it is cached on the settings that feed it; recomputing
+it every settings round would have spent a quarter of the response budget on
+something that rarely changes.
+
+Four seconds is the reach because a break dragged further starts to feel
+like a different part of the turn. The measured moment also beats the breath
+point: a breath says you *may* cut here, a measured moment says there is
+something to look at.
+
+`LONGTAKE_REACTION_WIDE` is the three-beat form — reaction, wide, back to the
+speaker. Returning through the wide is a softer cut than close-up straight to
+close-up, and the wide restores the geography. It only splits when both
+halves clear `min_shot`; below that it would be two flashes rather than two
+shots.
 
 ## Speculative picture goes on its own lane
 

@@ -115,6 +115,9 @@ class AppState:
     # Esikatselun ikkuna ohjelma-ajassa, tai None = koko ohjelma. Vain
     # katselua varten: leikkaaminen tapahtuu Final Cutissa.
     preview_window: tuple | None = None
+    # Mitattujen reaktiohetkien välimuisti, ks. reaction_marks.
+    _marks: object = None
+    _marks_key: tuple | None = None
     video_tables: dict = field(default_factory=dict)
     video_errors: dict = field(default_factory=dict)
     video_progress: dict = field(
@@ -148,6 +151,7 @@ class AppState:
         self.mix_result = mix.MixResult()
         self.video_tables = {}
         self.video_errors = {}
+        self._marks_key = None
         self.video_progress.update({"done": 0, "total": 0, "current": "",
                                     "fraction": 0.0, "running": False})
         self.progress = {"done": 0, "total": 0, "current": "", "ready": False}
@@ -283,6 +287,7 @@ class AppState:
             with self.lock:
                 self.video_tables = tables
                 self.video_errors = errors
+                self._marks_key = None
         except Exception as exc:  # taustasäie ei saa kaatua hiljaa
             self.video_errors = {"video": str(exc)}
             traceback.print_exc()
@@ -290,7 +295,33 @@ class AppState:
             self.video_progress.update({"running": False, "fraction": 1.0,
                                         "done": len(files)})
 
-    def reaction_lane(self, grid, roles, program_start) -> list:
+    def reaction_marks(self, grid, roles, program_start):
+        """Mitatut reaktiohetket taulukkona, välimuistitettuna.
+
+        Laskenta maksaa mitattuna 24 ms, ja tämä ajetaan joka
+        säätökierroksella. Käyttöliittymän vasteaika on tämän projektin
+        tärkein vaatimus, joten tulos säilytetään ja lasketaan uudestaan
+        vain kun jokin siihen vaikuttava muuttuu — mittaukset tai ne
+        asetukset joista pisteytys riippuu.
+        """
+        globals_ = self.settings.globals
+        if not globals_.reactions or not self.video_tables:
+            return None
+        key = (id(self.video_tables), len(self.video_tables), float(program_start),
+               globals_.reaction_turn_max, globals_.reaction_threshold,
+               globals_.reaction_length, globals_.reaction_turn,
+               globals_.reaction_gaze, globals_.reaction_smile,
+               globals_.reaction_eyes, globals_.reaction_motion,
+               globals_.reaction_size)
+        if self._marks_key == key:
+            return self._marks
+        self._marks = reactions.marks(grid, roles, self.timeline,
+                                      self.video_tables, globals_,
+                                      float(program_start))
+        self._marks_key = key
+        return self._marks
+
+    def reaction_lane(self, grid, roles, program_start, decision=None) -> list:
         """``(alku, loppu, puhujan indeksi)`` esikatselupalkkia varten.
 
         Piirretään myös kun asetus on pois: silloin palkki näyttää mitä
@@ -304,7 +335,8 @@ class AppState:
         try:
             found = reactions.find(grid, roles, self.timeline, self.video_tables,
                                    wanted, float(program_start),
-                                   decision=decide(grid, self.settings.globals))
+                                   decision=decision
+                                   or decide(grid, self.settings.globals))
         except (ValueError, KeyError):
             return []
         return [(r.start, r.end, names.index(r.speaker))
@@ -595,8 +627,12 @@ class AppState:
         except AnalysisError as exc:
             return {"ok": False, "problems": [str(exc)], "ms": 0.0}
 
-        decision = decide(grid, self.settings.globals)
-        lane = self.reaction_lane(grid, roles, program_start)
+        # Mitatut reaktiohetket päätökselle: aikakatkaisu tietää vain että
+        # aikaa on kulunut, mittaus että jotain tapahtuu. Taulukkona, koska
+        # päätöskerros ei lue tiedostoja.
+        marks = self.reaction_marks(grid, roles, program_start)
+        decision = decide(grid, self.settings.globals, marks=marks)
+        lane = self.reaction_lane(grid, roles, program_start, decision)
         names = [speaker.name for speaker in grid.speakers]
         counts: dict[str, int] = {}
         for seg in decision.segments:

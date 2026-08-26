@@ -86,6 +86,10 @@ const STRINGS = {
     'longtake.stay': 'Jää laajaan',
     'longtake.stayHint': 'Laaja jatkuu, kunnes joku toinen saa puheenvuoron.',
     'longtake.reaction': 'Reaktiokuva',
+    'longtake.reactionWide': 'Reaktio ja laaja',
+    'longtake.reactionWideHint': 'Kuuntelijan reaktio, sitten laaja, sitten '
+      + 'takaisin puhujaan. Paluu lähikuvasta laajan kautta on pehmeämpi kuin '
+      + 'lähikuvasta suoraan lähikuvaan, ja laaja palauttaa maantieteen.',
     'longtake.reactionHint': 'Toisen puhujan lähikuva välissä, sitten takaisin.',
     'overlap.wide': 'Laaja',
     'overlap.wideHint': 'Molemmat äänessä, mennään laajaan.',
@@ -381,6 +385,10 @@ const STRINGS = {
     'longtake.stay': 'Stay wide',
     'longtake.stayHint': 'The wide continues until somebody else speaks.',
     'longtake.reaction': 'Reaction shot',
+    'longtake.reactionWide': 'Reaction, then wide',
+    'longtake.reactionWideHint': "The listener's reaction, then the wide, then "
+      + 'back to the speaker. Returning through the wide is a softer cut than '
+      + 'close-up straight to close-up, and the wide restores the geography.',
     'longtake.reactionHint': 'Cut to co-host reaction, then back to the speaker.',
     'overlap.wide': 'Wide',
     'overlap.wideHint': 'Both talking, cut to the wide.',

@@ -288,6 +288,38 @@ def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
     return found
 
 
+def marks(grid, roles, timeline, tables: dict, settings,
+          program_start: float) -> np.ndarray | None:
+    """Mitatut reaktiohetket ruudukkona, ``(puhujia, n)``.
+
+    Tämä on se muoto jossa mittaus saa mennä ``decide.py``:hyn: pelkkä
+    taulukko, ei tiedostonlukua eikä mittausrajapintaa. Päätöskerroksen on
+    pysyttävä millisekunneissa, ja se sääntö on tässä projektissa
+    tärkeämpi kuin yksikään ominaisuus.
+
+    Harventamaton ja sijoitusehdoitta: päätös tarvitsee tietää *missä
+    kelvollisia hetkiä on*, ei sitä mitkä niistä lopulta valitaan. Valinta
+    tehdään vasta kun leikkaus on päätetty, koska se riippuu leikkauksesta.
+    """
+    if not tables or not getattr(grid, "speakers", None):
+        return None
+    names = [lane.name for lane in grid.speakers]
+    out = np.zeros((len(names), grid.n), dtype=bool)
+    wanted = settings
+    if not getattr(settings, "reactions", False):
+        return None
+    for reaction in _gather(grid, roles, timeline, tables, wanted, program_start):
+        if reaction.speaker not in names:
+            continue
+        row = names.index(reaction.speaker)
+        low = int((reaction.start - program_start) / HOP)
+        high = int((reaction.end - program_start) / HOP)
+        low, high = max(0, low), min(grid.n, max(high, low + 1))
+        if high > low:
+            out[row, low:high] = True
+    return out if out.any() else None
+
+
 def _thin(found: list[Reaction], settings, tempo=None,
           program_start: float = 0.0) -> list[Reaction]:
     """Karsii päällekkäiset ja liian tiheät, paras ensin.

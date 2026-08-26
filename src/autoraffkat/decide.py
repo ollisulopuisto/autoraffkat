@@ -15,12 +15,19 @@ import numpy as np
 
 from .model import (
     HOP,
+    LONGTAKE_REACTION,
+    LONGTAKE_REACTION_WIDE,
     LONGTAKE_STAY,
     OVERLAP_HOLD,
     OVERLAP_WIDE,
     Globals,
     Segment,
 )
+
+# Kuinka kaukaa katkaisukohtaa saa siirtää mitattuun reaktiohetkeen.
+# Neljä sekuntia: tarpeeksi löytääkseen hetken, liian vähän siirtääkseen
+# katkaisua paikkaan jossa puheenvuoro tuntuu jo eri kohdalta.
+REACTION_REACH = 4.0
 
 WIDE = -2  # want-taulukon erikoisarvot
 HOLD = -1
@@ -376,12 +383,52 @@ def _available_between(sp: SpeakerLanes, grid: Grid, start: float, end: float) -
     return bool(sp.available[lo:hi].all())
 
 
+def _reaction_point(
+    grid: Grid | None, marks, avoid_angle: str, target: float, window: float
+):
+    """Lähin **mitattu** reaktiohetki tavoiteajan ympäriltä.
+
+    Aikakatkaisu tietää vain että aikaa on kulunut; mittaus tietää että
+    jotain tapahtuu. Jälkimmäinen on vahvempi signaali, joten kun pitkä
+    puheenvuoro on katkaistava ja lähellä on mitattu hetki, katkaisu
+    siirretään siihen. Ilman sitä katkaisukohta on kellon valitsema ja
+    kuunteljan kasvot sattumaa.
+
+    Palauttaa ``(aika, kulma, nimi)`` tai ``None``. Haku on kaksi
+    ``flatnonzero``ta muutaman sadan ruudun yli, eli päätöskerroksen
+    millisekuntibudjetissa.
+    """
+    if marks is None or grid is None or not grid.speakers:
+        return None
+    centre = int(round((target - grid.program_start) / HOP))
+    low = max(0, centre - int(round(window / HOP)))
+    high = min(grid.n, centre + int(round(window / HOP)))
+    if high <= low:
+        return None
+    best = None
+    for index, speaker in enumerate(grid.speakers):
+        if not speaker.close_key or speaker.close_key == avoid_angle:
+            continue
+        if index >= marks.shape[0]:
+            continue
+        hits = np.flatnonzero(marks[index, low:high])
+        if not hits.size:
+            continue
+        pick = int(hits[np.argmin(np.abs(hits - (centre - low)))])
+        at = grid.program_start + (low + pick) * HOP
+        distance = abs(at - target)
+        if best is None or distance < best[0]:
+            best = (distance, at, speaker.close_key, speaker.name)
+    return best[1:] if best else None
+
+
 def _force_wide(
     segments: list[Segment],
     g: Globals,
     wide_label: str,
     wide_key: str,
     grid: Grid | None = None,
+    marks=None,
 ) -> list[Segment]:
     """Katkaisee pitkän puheenvuoron laajaan tai reaktiokuvaan.
 
@@ -391,7 +438,10 @@ def _force_wide(
     if g.wide_every <= 0 or not wide_key:
         return segments
     stay = g.long_take_rule == LONGTAKE_STAY
-    reaction = g.long_take_rule == "reaction"
+    # Kumpikin reaktiosääntö käyttää mitattuja hetkiä; ero on siinä mitä
+    # katkaisun sisään mahtuu.
+    reaction = g.long_take_rule in (LONGTAKE_REACTION, LONGTAKE_REACTION_WIDE)
+    through_wide = g.long_take_rule == LONGTAKE_REACTION_WIDE
     hold = max(g.wide_hold, g.min_shot)
 
     def alt_target(speaker_angle: str, start: float, end: float) -> tuple[str, str]:
@@ -419,6 +469,11 @@ def _force_wide(
             cut = _find_breath_point(
                 grid, seg.angle, target_cut, window=min(1.5, g.wide_every * 0.2)
             )
+            measured = _reaction_point(
+                grid, marks if reaction else None, seg.angle, target_cut,
+                window=min(REACTION_REACH, g.wide_every * 0.35))
+            if measured is not None:
+                cut = measured[0]
             if cut < seg.start + g.min_shot or seg.end - cut < g.min_shot:
                 cut = target_cut
             if seg.end - cut < g.min_shot:
@@ -438,6 +493,14 @@ def _force_wide(
                 stop = _find_breath_point(
                     grid, seg.angle, target_stop, window=min(1.5, g.wide_every * 0.2)
                 )
+                # Mitattu hetki voittaa hengähdyskohdan: hengähdys kertoo
+                # että tähän *voi* leikata, mitattu hetki että tässä on
+                # jotain katsottavaa.
+                measured = _reaction_point(
+                    grid, marks if reaction else None, seg.angle, target_stop,
+                    window=min(REACTION_REACH, g.wide_every * 0.35))
+                if measured is not None:
+                    stop = measured[0]
                 if stop < cursor + g.min_shot or seg.end - stop < g.min_shot:
                     stop = target_stop
             else:
@@ -447,7 +510,17 @@ def _force_wide(
                 stop = seg.end
             if to_alt:
                 insert_key, insert_label = alt_target(seg.angle, cursor, stop)
-                out.append(Segment(insert_key, insert_label, cursor, stop))
+                # Reaktio, laaja, takaisin: kolme kuvaa yhden sijaan, kun
+                # katkaisun kesto riittää kumpaankin omaksi kuvakseen.
+                # Alle sen se olisi kaksi välähdystä eikä kahta kuvaa.
+                pivot = cursor + max(g.min_shot, (stop - cursor) / 2.0)
+                if (through_wide and insert_key != wide_key and wide_key
+                        and stop - pivot >= g.min_shot
+                        and pivot - cursor >= g.min_shot):
+                    out.append(Segment(insert_key, insert_label, cursor, pivot))
+                    out.append(Segment(wide_key, wide_label, pivot, stop))
+                else:
+                    out.append(Segment(insert_key, insert_label, cursor, stop))
             else:
                 out.append(Segment(seg.angle, seg.label, cursor, stop))
             cursor = stop
@@ -468,8 +541,13 @@ def _merge(segments: list[Segment]) -> list[Segment]:
     return merged
 
 
-def decide(grid: Grid, g: Globals) -> Decision:
-    """Leikkauslista. Tämän on pyörittävä millisekunneissa."""
+def decide(grid: Grid, g: Globals, marks=None) -> Decision:
+    """Leikkauslista. Tämän on pyörittävä millisekunneissa.
+
+    ``marks`` on valinnainen ``(puhujia, n)`` totuustaulukko mitatuista
+    reaktiohetkistä. Taulukko eikä rajapinta: päätöskerros ei lue
+    tiedostoja, ks. CLAUDE.md.
+    """
     want, active = _want_array(grid, g)
     tempo = _compute_tempo(active, grid.n)
     cuts = _cut_points(want, g, tempo=tempo, active=active)
@@ -491,7 +569,8 @@ def decide(grid: Grid, g: Globals) -> Decision:
             Segment(key, label, grid.program_start + at, grid.program_start + end)
         )
     segments = _merge(segments)
-    segments = _force_wide(segments, g, WIDE_LABEL, grid.wide_key, grid=grid)
+    segments = _force_wide(segments, g, WIDE_LABEL, grid.wide_key,
+                           grid=grid, marks=marks)
 
     # Esikatselua varten: mikä kuva milläkin hetkellä.
     chosen = np.full(grid.n, WIDE, dtype=np.int32)

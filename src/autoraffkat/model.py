@@ -56,7 +56,13 @@ RHYTHM_PRESET_VALUES: dict[str, dict[str, float]] = {
 LONGTAKE_RETURN = "return"  # laaja välissä, takaisin samaan puhujaan
 LONGTAKE_STAY = "stay"  # laajaan ja siihen jäädään puhujan vaihtoon asti
 LONGTAKE_REACTION = "reaction"  # toisen puhujan reaktiokuva välissä, sitten takaisin
-LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY, LONGTAKE_REACTION)
+# Reaktio, laaja, takaisin puhujaan. Kolme kuvaa yhden sijaan: reaktio on
+# motivoitu (mittaus kertoo että jotain tapahtuu), laaja palauttaa
+# maantieteen, ja paluu puhujaan on lähikuvasta laajan kautta eikä
+# lähikuvasta suoraan lähikuvaan — mikä on pehmeämpi leikkaus.
+LONGTAKE_REACTION_WIDE = "reaction_wide"
+LONGTAKE_RULES = (LONGTAKE_RETURN, LONGTAKE_STAY, LONGTAKE_REACTION,
+                  LONGTAKE_REACTION_WIDE)
 
 # Jakelualustojen äänekkyyslukemat. Nämä eivät ole makuasioita vaan
 # alustojen normalisointitasoja: kovempi vienti vain vaimennetaan toistossa,

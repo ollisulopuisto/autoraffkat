@@ -1,5 +1,7 @@
 """Päätöskerroksen säännöt. Puhdasta numpyta — ei ffmpegiä eikä tiedostoja."""
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -668,3 +670,85 @@ def test_tempo_does_not_slow_down_at_the_edges():
     middle = float(tempo[n // 2])
     assert float(tempo[0]) == pytest.approx(middle, abs=0.1)
     assert float(tempo[-1]) == pytest.approx(middle, abs=0.1)
+
+
+def _long_take_grid(seconds=60.0):
+    """Yksi puhuja pitää lattiaa koko ajan, toinen on vaiti."""
+    import numpy as np
+
+    from autoraffkat.decide import Grid, SpeakerLanes
+
+    n = int(seconds / HOP)
+    talker = SpeakerLanes(
+        name="Talker", close_key="CAM_A", on=np.ones(n, dtype=bool),
+        level=np.full(n, -20.0, dtype=np.float32))
+    listener = SpeakerLanes(
+        name="Listener", close_key="CAM_B", on=np.zeros(n, dtype=bool),
+        level=np.full(n, -60.0, dtype=np.float32))
+    return Grid(n=n, program_start=0.0, speakers=[talker, listener],
+                wide_key="WIDE")
+
+
+def test_a_long_take_breaks_at_a_measured_reaction_when_one_is_near():
+    """Aikakatkaisu tietää että aikaa on kulunut, mittaus että jotain tapahtuu.
+
+    Jälkimmäinen on vahvempi signaali, joten katkaisu siirretään mitattuun
+    hetkeen kun sellainen on lähellä. Ilman tätä katkaisukohta on kellon
+    valitsema ja kuuntelijan kasvot sattumaa.
+    """
+    import numpy as np
+
+    from autoraffkat.decide import decide
+    from autoraffkat.model import LONGTAKE_REACTION
+
+    grid = _long_take_grid(60.0)
+    g = Globals(wide_every=14.0, wide_hold=5.0, min_shot=2.5,
+                long_take_rule=LONGTAKE_REACTION)
+    plain = decide(grid, g).segments
+
+    # Mitattu hetki kolme sekuntia aikakatkaisun jälkeen.
+    marks = np.zeros((2, grid.n), dtype=bool)
+    at = int(17.0 / HOP)
+    marks[1, at:at + int(1.6 / HOP)] = True
+    moved = decide(grid, g, marks=marks).segments
+
+    def first_break(segments):
+        return next((s.start for s in segments if s.angle != "CAM_A"), None)
+
+    assert first_break(plain) is not None and first_break(moved) is not None
+    assert abs(first_break(moved) - 17.0) < abs(first_break(plain) - 17.0), (
+        first_break(plain), first_break(moved))
+
+
+def test_a_measured_reaction_too_far_away_does_not_move_the_break():
+    """Neljä sekuntia on raja: kauempaa siirretty katkaisu tuntuisi jo eri
+    kohdalta puheenvuoroa."""
+    import numpy as np
+
+    from autoraffkat.decide import decide
+    from autoraffkat.model import LONGTAKE_REACTION
+
+    grid = _long_take_grid(60.0)
+    g = Globals(wide_every=14.0, wide_hold=5.0, min_shot=2.5,
+                long_take_rule=LONGTAKE_REACTION)
+    marks = np.zeros((2, grid.n), dtype=bool)
+    marks[1, int(40.0 / HOP):int(41.6 / HOP)] = True   # kaukana
+    plain = decide(grid, g).segments
+    far = decide(grid, g, marks=marks).segments
+    assert [s.start for s in plain] == [s.start for s in far]
+
+
+def test_reaction_then_wide_puts_three_shots_where_reaction_puts_one():
+    """Reaktio, laaja, takaisin: paluu lähikuvasta laajan kautta."""
+    from autoraffkat.decide import decide
+    from autoraffkat.model import LONGTAKE_REACTION, LONGTAKE_REACTION_WIDE
+
+    grid = _long_take_grid(60.0)
+    base = Globals(wide_every=14.0, wide_hold=8.0, min_shot=2.5,
+                   long_take_rule=LONGTAKE_REACTION)
+    one = decide(grid, base).segments
+    three = decide(grid, replace(base, long_take_rule=LONGTAKE_REACTION_WIDE)).segments
+    assert len(three) > len(one), ([s.angle for s in one], [s.angle for s in three])
+    # Laaja esiintyy vain kolmen kuvan säännössä.
+    assert any(s.angle == "WIDE" for s in three)
+    assert not any(s.angle == "WIDE" for s in one)

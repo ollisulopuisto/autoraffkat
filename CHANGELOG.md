@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.92] - 2026-08-26
+
+### Added
+- **The Long-Take Break Now Lands on a Measured Reaction**: the timeout knows only that time has passed; the measurement knows that something is happening. The stronger signal now decides. When a long turn must be broken and a measured reaction moment falls within 4 s of the timeout, the cut moves there and goes to *that* speaker's close-up; otherwise the timeout stands. The measured moment also beats the breath point — a breath says you *may* cut here, a measured moment says there is something to look at.
+  - The measurement reaches `decide.py` as a plain `(speakers, n)` boolean array. No file reading in the decision layer, and measured: `decide()` runs at **24.3 ms without marks and 24.2 ms with them**.
+  - `reactions.marks()` costs 24 ms itself, so it is cached against the settings that feed it. Recomputing it every settings round would have spent a quarter of the interface's response budget on something that rarely changes.
+- **`LONGTAKE_REACTION_WIDE`, a three-beat break**: reaction, then wide, then back to the speaker. Returning through the wide is a softer cut than close-up straight to close-up, and the wide restores the geography. It only splits when both halves clear `min_shot` — below that it is two flashes, not two shots.
+
 ## [v26.08.26.91] - 2026-08-26
 
 ### Fixed
