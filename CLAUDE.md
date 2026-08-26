@@ -329,6 +329,33 @@ a connected clip, because `mc-source` has no level control — and therefore it
 **can** drift on a ripple edit. If someone finds a way to make room tone an
 angle with a level, that is an improvement.
 
+## Speculative picture goes on its own lane
+
+Reaction shots — cutting to the listener while someone else talks — are not
+part of the base cut and must not be written into the `mc-clip` as angle
+switches. They go on a **positive lane** as connected clips (mics and twins
+are all on negative lanes, so positive is free).
+
+The reason is reversibility without recomputation. Removing an angle switch
+means exporting again, and by then the previous export is usually already
+imported into Final Cut and edited by hand — the work `next_output_path`
+exists to protect. A lane makes removal one selection, leaves the multicam
+underneath untouched frame for frame, and gives a free A/B by toggling.
+
+Three rules come with it. The clips are **video only**, explicitly and
+verified by importing: a connected clip from a close-up carries that
+camera's audio, which would sum with the processed microphones — the same
+family as the `uid` collapse and `srcEnable` beating `active`. They ship
+**enabled**, because a lane that is off by default is never evaluated. And
+`project.name_tag` records them like `audio`, so the export is
+distinguishable in the browser.
+
+The known cost is drift: connected clips can move on a ripple edit. For room
+tone that is a tolerated compromise; for a reaction shot it means landing on
+the wrong moment, which is the only thing it is for. A nested `mc-clip` on
+the lane may avoid it — but that is a construction Final Cut does not write
+itself, so it has to be settled by importing, not by reasoning.
+
 ## Final Cut is stricter than our own reader
 
 The export must be validated against Final Cut's own DTD
