@@ -371,6 +371,23 @@ not separate at all. `turn` and `tilt` come from the nose relative to the
 midpoint of the eyes, divided by the eye span so face size and distance stay
 out of it. `yaw` remains: as a bin, "turned away" is what it detects well.
 
+Reaction shots obey the cut that was already made. Placement began as pure
+greed — best score first, 25 s apart, knowing nothing about the edit — and
+measured on a real episode that put 18 of 121 within 0.2 s of a cut (a
+flash, not a shot), 7 on their own speaker's close-up (a jump cut to the
+same face), and 18 inside a host shot under 3 s. `reactions.fits` refuses
+all three, and the conditions are applied **before** thinning: otherwise an
+interval is spent on a candidate that is then rejected, and no acceptable
+one can take its place.
+
+The interval follows `decide._compute_tempo`, the same 1/f measure that
+scales `min_shot`. A fixed interval made the reaction layer the most
+metronomic thing in the programme — measured, its interval spread was
+σ 10 s against everything else's variation; with the placement rules and
+tempo it is σ 17 s. Note there are **two** reaction mechanisms: the older
+`LONGTAKE_REACTION` cuts to the co-host on the spine during a monologue and
+already used the rhythm engine, and this one puts them on their own lane.
+
 The gate decides which moments qualify; `reaction_spacing` decides how many
 are used. Measured: a gate of 0.03 → 0.40 moves the candidates from 461 to
 1875, while what reaches the export moves only from 94 to 131, because

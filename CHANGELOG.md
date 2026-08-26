@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.91] - 2026-08-26
+
+### Fixed
+- **Reaction Shots Ignored the Cut They Were Placed Into**: placement was pure greed — best score first, a fixed 25 s apart, with no knowledge of the edit. Measured on a real episode: **18 of 121 landed within 0.2 s of a cut** (the picture changes, a reaction flashes, it changes back — a jolt, not a shot), **7 sat on their own speaker's close-up** (a jump cut to the same face), and **18 were inside a host shot under 3 s**. All three are now refused, and all three measure zero afterwards.
+  - The conditions run **before** thinning. Applied after, an interval would be spent on a candidate that is then rejected, and no acceptable one could take its place.
+- **The Interval Follows the Conversation's Tempo**: the same 1/f measure that scales `min_shot` in `decide.py` now scales the spacing, so reaction shots come closer together where turn-taking is quick and further apart in a monologue. A fixed interval had made this layer the most metronomic thing in the programme — interval spread was σ 10 s; it is now σ 17 s.
+  - Worth knowing: there are **two** reaction mechanisms. The older `LONGTAKE_REACTION` cuts to the co-host on the spine during a monologue and already used the rhythm engine; this one places them on their own lane.
+
 ## [v26.08.26.90] - 2026-08-26
 
 ### Fixed

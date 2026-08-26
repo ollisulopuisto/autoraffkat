@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 from autoraffkat import reactions
-from autoraffkat.model import Globals
+from autoraffkat.model import HOP as HOP_FOR_TEST, Globals
 
 FIELDS = ("yaw", "roll", "size", "x", "y", "w", "h", "eyes", "smile",
           "cx", "cy", "turn", "tilt")
@@ -355,3 +355,68 @@ def test_candidates_and_find_answer_different_questions():
     thinned = reactions.find(grid, Roles(), Timeline(), {"cam": data},
                              settings, 0.0)
     assert len(raw) > len(thinned), (len(raw), len(thinned))
+
+
+class _Seg:
+    def __init__(self, label, start, end):
+        self.label, self.start, self.end = label, start, end
+        self.duration = end - start
+
+
+class _Dec:
+    def __init__(self, *segs):
+        self.segments = list(segs)
+
+
+def test_a_reaction_never_lands_on_its_own_speaker():
+    """Nymanin reaktio Nymanin kuvan päällä on hyppyleikkaus samaan kasvoon.
+
+    Mitattuna oikealla jaksolla näin kävi 7 kertaa 121:stä — sijoitus ei
+    tiennyt leikkauksesta mitään.
+    """
+    settings = Globals(reactions=True)
+    own = reactions.Reaction("Nyman", 10.0, 11.6, 2.0)
+    other = reactions.Reaction("Nyman", 10.0, 11.6, 2.0)
+    assert not reactions.fits(own, _Dec(_Seg("Nyman", 0.0, 30.0)), settings)
+    assert reactions.fits(other, _Dec(_Seg("Wancke", 0.0, 30.0)), settings)
+
+
+def test_a_reaction_keeps_clear_of_the_cut_boundaries():
+    """Alle sekunnin päässä rajasta kuva vaihtuu kahdesti peräkkäin.
+
+    Se luetaan tärähdyksenä eikä kuvana. Mitattuna 18 kertaa 121:stä osui
+    alle 0,2 sekunnin päähän.
+    """
+    settings = Globals(reactions=True, reaction_length=1.6)
+    host = _Dec(_Seg("Wancke", 0.0, 30.0))
+    assert not reactions.fits(reactions.Reaction("Nyman", 0.2, 1.8, 1.0),
+                              host, settings)
+    assert not reactions.fits(reactions.Reaction("Nyman", 28.6, 30.2, 1.0),
+                              host, settings)
+    assert reactions.fits(reactions.Reaction("Nyman", 10.0, 11.6, 1.0),
+                          host, settings)
+
+
+def test_a_reaction_will_not_fit_a_shot_too_short_to_hold_it():
+    """Isäntäkuvan on mahduttava reaktio ja molemmat marginaalit."""
+    settings = Globals(reactions=True, reaction_length=1.6)
+    short = _Dec(_Seg("Wancke", 0.0, 2.5))
+    assert not reactions.fits(reactions.Reaction("Nyman", 0.4, 2.0, 1.0),
+                              short, settings)
+
+
+def test_the_interval_follows_the_conversation_tempo():
+    """Kiinteä väli on metronomi.
+
+    Sama 1/f-vaihtelu joka säätää kuvan vähimmäiskestoa säätää nyt myös
+    reaktioiden väliä — mitattuna välien hajonta nousi 10 sekunnista
+    17:ään, eli kerros lakkasi olemasta jakson tasatahtisin asia.
+    """
+    settings = Globals(reactions=True, reaction_length=1.0,
+                       reaction_spacing=20.0)
+    found = [reactions.Reaction("A", t * 2.0, t * 2.0 + 1.0, 1.0)
+             for t in range(120)]
+    steady = reactions._thin(found, settings)
+    fast = np.full(int(240 / HOP_FOR_TEST), 1.4, dtype=np.float32)
+    quick = reactions._thin(found, settings, fast, 0.0)
+    assert len(quick) > len(steady), (len(quick), len(steady))

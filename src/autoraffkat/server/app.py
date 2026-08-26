@@ -303,7 +303,8 @@ class AppState:
         wanted = dataclasses_replace(self.settings.globals, reactions=True)
         try:
             found = reactions.find(grid, roles, self.timeline, self.video_tables,
-                                   wanted, float(program_start))
+                                   wanted, float(program_start),
+                                   decision=decide(grid, self.settings.globals))
         except (ValueError, KeyError):
             return []
         return [(r.start, r.end, names.index(r.speaker))
@@ -319,7 +320,8 @@ class AppState:
         if not self.settings.globals.reactions or not self.video_tables:
             return []
         return reactions.find(grid, roles, self.timeline, self.video_tables,
-                              self.settings.globals, float(program_start))
+                              self.settings.globals, float(program_start),
+                              decision=decide(grid, self.settings.globals))
 
     # ---------------------------------------------------------- päätös
 
@@ -683,7 +685,8 @@ def _video_json(state: AppState) -> dict:
                 wanted, float(program_start)))
             placed = len(reactions.find(
                 grid, roles, state.timeline, state.video_tables,
-                wanted, float(program_start)))
+                wanted, float(program_start),
+                decision=decide(grid, state.settings.globals)))
         except (AnalysisError, ValueError, KeyError):
             candidates = placed = None
 
