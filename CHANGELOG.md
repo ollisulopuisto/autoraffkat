@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.86] - 2026-08-26
+
+### Added
+- **Reaction Shots Appear in the Cut List**: interleaved by timecode with the cuts, but **unnumbered and indented**. They are not cuts — they are overlays on their own lane, and the numbering is the running order of cuts. Numbering them would claim they are part of the cut underneath, which is exactly what the separate lane exists to deny. The summary line counts them separately.
+
 ## [v26.08.26.85] - 2026-08-26
 
 ### Added

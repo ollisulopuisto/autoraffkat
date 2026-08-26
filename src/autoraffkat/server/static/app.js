@@ -1828,7 +1828,32 @@ function renderCuts() {
   body.textContent = '';
   if (!latest || !latest.ok) { $('cut-summary').textContent = ''; return; }
   const start = latest.program.start;
-  latest.segments.forEach((seg, i) => {
+  /* Reaktiokuvat sekaan aikajärjestyksessä mutta **numeroimatta**: ne eivät
+     ole leikkauksia vaan omalla lanellaan olevia päällyksiä, ja numerointi
+     on leikkausten juokseva järjestys. Numeroituna ne väittäisivät olevansa
+     osa alla olevaa leikkausta, jota ne eivät ole. */
+  const shots = (latest.reactions || []).map((r) => ({ shot: true, ...r }));
+  const lines = latest.segments
+    .map((seg, i) => ({ seg, number: i + 1, start: seg.start }))
+    .concat(shots.map((r) => ({ shot: r, start: r.start })))
+    .sort((a, b) => a.start - b.start);
+
+  lines.forEach((line) => {
+    if (line.shot) {
+      const row = document.createElement('tr');
+      row.className = 'reaction';
+      const index = speakerIndex(line.shot.speaker);
+      row.innerHTML =
+        '<td></td>' +
+        `<td>${fmtTime(line.shot.start - start)}</td>` +
+        `<td>${fmtTime(line.shot.end - start)}</td>` +
+        `<td>${(line.shot.end - line.shot.start).toFixed(2)} s</td>` +
+        `<td><span class="swatch thin" style="background:${colorFor(index)}"></span>`
+        + `${T('cuts.reaction', { name: line.shot.speaker })}</td>`;
+      body.append(row);
+      return;
+    }
+    const seg = line.seg, i = line.number - 1;
     const tr = document.createElement('tr');
     /* Laaja ei ole puhuja, joten sitä ei löydy puhujalistasta: ilman tätä
        speakerIndex putoaisi nollaan ja laaja saisi ensimmäisen puhujan
@@ -1845,9 +1870,12 @@ function renderCuts() {
   });
   const counts = Object.entries(latest.counts)
     .map(([k, v]) => `${shotLabel(k)} ${v}`).join(' · ');
-  $('cut-summary').textContent = [T('app.shots', { n: latest.segments.length }),
-                                  fmtTime(latest.program.duration),
-                                  counts].filter(Boolean).join(' · ');
+  $('cut-summary').textContent = [
+    T('app.shots', { n: latest.segments.length }),
+    fmtTime(latest.program.duration),
+    counts,
+    shots.length ? T('cuts.reactions', { n: shots.length }) : '',
+  ].filter(Boolean).join(' · ');
   $('counts').textContent = T('app.decision', { ms: latest.ms });
 }
 

@@ -582,6 +582,8 @@ class AppState:
             return {"ok": False, "problems": [str(exc)], "ms": 0.0}
 
         decision = decide(grid, self.settings.globals)
+        lane = self.reaction_lane(grid, roles, program_start)
+        names = [speaker.name for speaker in grid.speakers]
         counts: dict[str, int] = {}
         for seg in decision.segments:
             counts[seg.label] = counts.get(seg.label, 0) + 1
@@ -611,9 +613,13 @@ class AppState:
             "wide_label": WIDE_LABEL,
             # Reaktiokuvat samaan palkkiin: niiden ajoitus suhteessa puheeseen
             # on koko kysymys, eikä sitä näe erillisestä listasta.
-            "preview": build_preview(
-                grid, decision, reactions=self.reaction_lane(grid, roles, program_start)
-            ),
+            "preview": build_preview(grid, decision, reactions=lane),
+            # Myös listaan: palkista näkee rytmin, listasta tarkan hetken.
+            "reactions": [
+                {"speaker": names[index], "start": float(start),
+                 "end": float(end)}
+                for start, end, index in lane
+            ],
             # Tuoreus mukaan säätökierrokselle, jotta painike vanhenee samalla
             # hetkellä kuin tulos: asetuksen muutos tekee valmiista työstä
             # vanhentunutta, ja se on nähtävä kysymättä erikseen.
