@@ -1892,7 +1892,9 @@ function drawBar() {
   /* Reaktiorivi vain jos niitä on: tyhjä kaistale palkin alla lupaisi
      ominaisuutta jota ei ole mitattu. */
   const shots = (preview && preview.reactions) || [];
-  const hasShots = shots.some((v) => v >= 0);
+  /* -1 = tyhjä, -2 = laaja, 0.. = puhuja. Reaktiokuva ei aina näytä sitä
+     kasvoa joka mitattiin, joten «negatiivinen» ei enää tarkoita tyhjää. */
+  const hasShots = shots.some((v) => v !== -1);
   const rows = preview ? preview.speakers.length + 1 + (hasShots ? 1 : 0) : 1;
   const rowHeight = 22, gap = 4, shotHeight = 10;
   const height = (rows - (hasShots ? 1 : 0)) * rowHeight
@@ -1942,7 +1944,7 @@ function drawBar() {
   ctx.fillRect(0, shotY, width, shotHeight);
   ctx.globalAlpha = state.globals.reactions ? 1 : 0.35;
   for (let i = 0; i < columns; i++) {
-    if (shots[i] < 0) continue;
+    if (shots[i] === -1) continue;
     ctx.fillStyle = colorFor(shots[i]);
     ctx.fillRect(i * step, shotY, Math.max(step, 1.5), shotHeight);
   }
@@ -2011,7 +2013,7 @@ function renderLegend() {
   /* Reaktiorivi selitteeseen vain kun se on palkissakin: selite jota
      vastaavaa riviä ei ole kertoo väärää. */
   const shots = latest.preview.reactions || [];
-  const count = shots.filter((v, i) => v >= 0 && (i === 0 || shots[i - 1] < 0)).length;
+  const count = shots.filter((v, i) => v !== -1 && (i === 0 || shots[i - 1] === -1)).length;
   if (count) {
     /* Rivi piirretään myös kun asetus on pois, jotta näkee mitä päälle
        laittaminen toisi. Silloin on sanottava ettei sitä viedä — muuten
@@ -2057,14 +2059,17 @@ function renderCuts() {
     if (line.shot) {
       const row = document.createElement('tr');
       row.className = state.globals.reactions ? 'reaction' : 'reaction off';
-      const index = speakerIndex(line.shot.speaker);
+      /* Laaja ei ole puhuja: ilman tätä speakerIndex putoaisi nollaan ja
+         laajana näytetty reaktio saisi ensimmäisen puhujan värin. */
+      const index = line.shot.speaker === latest.wide_label
+        ? -1 : speakerIndex(line.shot.speaker);
       row.innerHTML =
         '<td></td>' +
         `<td>${fmtTime(line.shot.start - start)}</td>` +
         `<td>${fmtTime(line.shot.end - start)}</td>` +
         `<td>${(line.shot.end - line.shot.start).toFixed(2)} s</td>` +
         `<td><span class="swatch thin" style="background:${colorFor(index)}"></span>`
-        + `${T('cuts.reaction', { name: line.shot.speaker })}</td>`;
+        + `${T('cuts.reaction', { name: shotLabel(line.shot.speaker) })}</td>`;
       body.append(row);
       return;
     }

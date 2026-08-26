@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.99] - 2026-08-26
+
+### Added
+- **A Repeated Reaction Goes to the Wide**: the measurement says *when* to cut; what appears is the programme's decision. Left alone the layer repeated itself — measured, **49 of 83** consecutive reaction shots showed the same face as the one before, and close-up straight to close-up is the cut the three-beat long-take form already softens by going through the wide. The second of a repeated pair now uses the wide: **1 of 83** afterwards, split 31 / 27 / 26 across Wancke, the wide and Nyman.
+  - It is a repetition breaker, not an alternation. The wide spends the measurement that caused the cut, since a face is small in it.
+  - `Reaction.speaker` stays the measured person — it is the reason for the cut, and the placement rules need it — while `Reaction.shot` names the track actually shown. The preview bar, the cut list and the Final Cut keyword all follow the shot, not the reason.
+  - Nothing is substituted when the host shot is already the wide: that would be a cut to the picture already on screen.
+
 ## [v26.08.26.98] - 2026-08-26
 
 ### Fixed

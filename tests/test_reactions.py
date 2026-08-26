@@ -362,9 +362,10 @@ def test_candidates_and_find_answer_different_questions():
 
 
 class _Seg:
-    def __init__(self, label, start, end):
+    def __init__(self, label, start, end, angle=""):
         self.label, self.start, self.end = label, start, end
         self.duration = end - start
+        self.angle = angle
 
 
 class _Dec:
@@ -511,3 +512,35 @@ def test_a_cut_lands_on_a_pause_when_one_is_within_reach():
     assert abs(moved - 2.0) < 0.05, moved
     # Kaukana olevaa taukoa ei haeta.
     assert reactions._snap(Grid(), 8.0, 0.0, Globals()) == 8.0
+
+
+def test_the_same_face_twice_in_a_row_becomes_the_wide():
+    """Mittaus kertoo milloin, ohjelma päättää mitä.
+
+    Ilman tätä kerros toistaa itseään: mitattuna oikealla jaksolla 49
+    reaktiokuvaa 83:sta oli sama kasvo kuin edellinen, ja peräkkäin ne ovat
+    lähikuvasta lähikuvaan — juuri se leikkaus jonka laaja pehmentää.
+    Säännön jälkeen 0/83.
+    """
+    class Grid:
+        wide_key = "camWide"
+
+    host = _Dec(_Seg("Wancke", 0.0, 300.0))
+    found = [reactions.Reaction("Nyman", t, t + 2.2, 1.0)
+             for t in (10.0, 40.0, 70.0)]
+    out = reactions._vary(found, Grid(), host)
+    assert [r.shot for r in out] == ["", "camWide", ""]
+    # Mitattu kasvo säilyy syynä, vaikka ruudulla olisi laaja.
+    assert all(r.speaker == "Nyman" for r in out)
+
+    # Laajan päälle ei vaihdeta laajaa: se olisi leikkaus samaan kuvaan.
+    wide_host = _Dec(_Seg("Laaja", 0.0, 300.0))
+    wide_host.segments[0].angle = "camWide"
+    again = [reactions.Reaction("Nyman", t, t + 2.2, 1.0) for t in (10.0, 40.0)]
+    assert [r.shot for r in reactions._vary(again, Grid(), wide_host)] == ["", ""]
+
+    # Ilman laajaa raitaa sääntöä ei ole.
+    class NoWide:
+        wide_key = ""
+    plain = [reactions.Reaction("Nyman", t, t + 2.2, 1.0) for t in (10.0, 40.0)]
+    assert [r.shot for r in reactions._vary(plain, NoWide(), host)] == ["", ""]

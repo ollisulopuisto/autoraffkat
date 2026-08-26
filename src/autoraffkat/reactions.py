@@ -97,12 +97,18 @@ PAUSE_REACH = 0.5
 
 @dataclass
 class Reaction:
-    """Yksi ehdotettu reaktiokuva, aikajanan aikaa."""
+    """Yksi ehdotettu reaktiokuva, aikajanan aikaa.
+
+    ``speaker`` on se jonka kasvot mitattiin — se on syy, ei välttämättä
+    se mitä ruudulla näkyy. ``shot`` on näytettävän raidan avain, tyhjä
+    kun se on puhujan oma lähikuva; ks. ``_vary``.
+    """
 
     speaker: str
     start: float
     end: float
     score: float
+    shot: str = ""
 
 
 def scores(table: dict, weights: dict) -> np.ndarray:
@@ -266,7 +272,7 @@ def find(grid, roles, timeline, tables: dict, settings, program_start: float,
     speakers = getattr(grid, "speakers", None) or []
     if speakers and getattr(grid, "n", 0):
         tempo = _compute_tempo(np.stack([lane.on for lane in speakers]), grid.n)
-    return _thin(found, settings, tempo, program_start)
+    return _vary(_thin(found, settings, tempo, program_start), grid, decision)
 
 
 def _snap(grid, at: float, program_start: float, settings) -> float:
@@ -377,6 +383,37 @@ def marks(grid, roles, timeline, tables: dict, settings,
         if high > low:
             out[row, low:high] = True
     return out if out.any() else None
+
+
+def _vary(found: list[Reaction], grid, decision) -> list[Reaction]:
+    """Sama kasvo kahdesti peräkkäin: toinen kerta laajana.
+
+    Mittaus kertoo **milloin** kannattaa leikata; mitä ruudulle pannaan on
+    ohjelman oma päätös. Ilman tätä kerros toistaa itseään: mitattuna
+    oikealla jaksolla 49 reaktiokuvaa 83:sta oli sama kasvo kuin edellinen,
+    ja peräkkäin ne ovat lähikuvasta lähikuvaan — juuri se leikkaus jonka
+    ``LONGTAKE_REACTION_WIDE`` pehmentää laajalla. Säännön jälkeen 0/83, ja
+    jakauma on 31 / 28 / 25 kolmen kuvan kesken.
+
+    Laaja maksaa sen mittauksen jonka takia tähän leikattiin — kasvot
+    näkyvät pienenä — joten se on toiston purkaja eikä vuorottelu. Jos
+    isäntäkuva on jo laaja, mitään ei vaihdeta: se olisi leikkaus samaan
+    kuvaan.
+    """
+    wide = getattr(grid, "wide_key", "")
+    if not wide or decision is None:
+        return found
+    previous = ""
+    for reaction in found:
+        host = next((s for s in decision.segments
+                     if float(s.start) <= reaction.start < float(s.end)), None)
+        shown = reaction.speaker
+        if (previous == shown and host is not None
+                and getattr(host, "angle", "") != wide):
+            reaction.shot = wide
+            shown = wide
+        previous = shown
+    return found
 
 
 def _thin(found: list[Reaction], settings, tempo=None,

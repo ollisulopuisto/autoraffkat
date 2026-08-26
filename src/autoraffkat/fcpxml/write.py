@@ -21,6 +21,7 @@ from dataclasses import replace
 from .. import __version__
 from ..audio.mix import ROOM_ROLE
 from ..i18n import t
+from ..decide import WIDE_LABEL
 from ..model import DEFAULT_PROJECT_NAME, MediaItem, Segment
 from ..timeline import FPS_LABELS, format_time, frames_str, fps_of, to_frames
 
@@ -953,7 +954,12 @@ def _reaction_clips(
     lines: list[str] = []
     own = set(mc.angle_ids)
     for index, reaction in enumerate(reactions):
-        key = roles.closes.get(reaction.speaker)
+        # ``shot`` on se raita joka näytetään, ``speaker`` se jonka kasvot
+        # mitattiin. Ne eroavat kun sama kasvo osuisi kahdesti peräkkäin,
+        # ks. ``reactions._vary``.
+        key = getattr(reaction, "shot", "") or roles.closes.get(reaction.speaker)
+        shown = (WIDE_LABEL if getattr(reaction, "shot", "") == roles.wide_key
+                 else reaction.speaker)
         if not key:
             continue
         angle_id = next((x for x in angles_of.get(key, []) if x in own), "")
@@ -970,7 +976,7 @@ def _reaction_clips(
         lines.append(
             f'              <mc-clip lane="{REACTION_LANE}" '
             f"ref={quoteattr(mc.media_id)} "
-            f"name={quoteattr(f'{reaction.speaker} reaktio {index + 1:02d}')} "
+            f"name={quoteattr(f'{shown} reaktio {index + 1:02d}')} "
             f'offset="{frames_str(source, frame_duration)}" '
             f'start="{frames_str(source, frame_duration)}" '
             f'duration="{frames_str(dur, frame_duration)}">'
@@ -986,7 +992,7 @@ def _reaction_clips(
         lines.append(
             f'                <keyword start="{frames_str(source, frame_duration)}" '
             f'duration="{frames_str(dur, frame_duration)}" '
-            f"value={quoteattr(f'Reaktio · {reaction.speaker}')}/>"
+            f"value={quoteattr(f'Reaktio · {shown}')}/>"
         )
         lines.append("              </mc-clip>")
     return lines

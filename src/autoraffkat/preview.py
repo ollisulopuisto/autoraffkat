@@ -64,7 +64,8 @@ def build(grid: Grid, decision: Decision, columns: int = 1400,
             }
         )
 
-    # Reaktiokuvat omalle rivilleen: -1 = ei mitään, muuten puhujan indeksi.
+    # Reaktiokuvat omalle rivilleen: -1 = ei mitään, -2 = laaja, muuten
+    # puhujan indeksi. Reaktiokuva ei aina näytä sitä kasvoa joka mitattiin.
     # Ne ovat lyhyitä — sekunnin luokkaa — joten sarake merkitään heti kun
     # yksikin osuu siihen, kuten puhujariveilläkin. Muuten koko kerros
     # katoaisi tiivistyksessä juuri niiltä kohdin jotka halutaan nähdä.

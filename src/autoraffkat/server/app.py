@@ -340,7 +340,11 @@ class AppState:
                                    or decide(grid, self.settings.globals))
         except (ValueError, KeyError):
             return []
-        return [(r.start, r.end, names.index(r.speaker))
+        # -2 = laaja, kuten päätösrivillä: reaktiokuva ei aina näytä sitä
+        # kasvoa joka mitattiin, ks. ``reactions._vary``.
+        return [(r.start, r.end,
+                 -2 if r.shot and r.shot == grid.wide_key
+                 else names.index(r.speaker))
                 for r in found if r.speaker in names]
 
     def reactions_now(self, grid, roles, program_start) -> list:
@@ -689,8 +693,8 @@ class AppState:
                                      window=self.preview_window),
             # Myös listaan: palkista näkee rytmin, listasta tarkan hetken.
             "reactions": [
-                {"speaker": names[index], "start": float(start),
-                 "end": float(end)}
+                {"speaker": WIDE_LABEL if index < 0 else names[index],
+                 "start": float(start), "end": float(end)}
                 for start, end, index in lane
             ],
             # Tuoreus mukaan säätökierrokselle, jotta painike vanhenee samalla

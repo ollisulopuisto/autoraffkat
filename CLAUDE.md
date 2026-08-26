@@ -398,6 +398,18 @@ tempo it is σ 17 s. Note there are **two** reaction mechanisms: the older
 `LONGTAKE_REACTION` cuts to the co-host on the spine during a monologue and
 already used the rhythm engine, and this one puts them on their own lane.
 
+The measurement says *when*, the programme decides *what*. A reaction shot
+does not have to be the measured face. Left alone the layer repeats itself:
+measured on the real episode, 49 of 83 consecutive reaction shots showed the
+same face as the one before, and consecutive close-ups are exactly the cut
+`LONGTAKE_REACTION_WIDE` softens by going through the wide. `reactions._vary`
+sends the second of a repeated pair to the wide instead — 1 of 83 afterwards,
+split 31 / 27 / 26 across the three shots. It is a repetition breaker, not an
+alternation: the wide spends the measurement that caused the cut, because a
+face is small in it. `Reaction.speaker` therefore stays the measured person
+(it is the reason, and `fits` needs it) and `Reaction.shot` names the track
+actually shown. Nothing is substituted when the host shot is already the wide.
+
 The gate decides which moments qualify; `reaction_spacing` decides how many
 are used. Measured: a gate of 0.03 → 0.40 moves the candidates from 461 to
 1875, while what reaches the export moves only from 94 to 131, because
