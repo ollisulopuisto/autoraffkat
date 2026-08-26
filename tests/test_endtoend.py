@@ -894,3 +894,48 @@ def test_the_export_warns_when_reactions_are_visible_but_switched_off(scratch_xm
     assert exported["reactions"] == 0
     assert not any("reakti" in w.lower() or "reaction" in w.lower()
                    for w in exported["warnings"]), exported["warnings"]
+
+
+def test_every_global_the_interface_shows_can_be_set(scratch_xml):
+    """Vartio koko asetusluokalle, ei yhdelle kentälle.
+
+    ``apply()`` poimii globaalit nimilistalta. Lista unohtui päivittää
+    reaktiokuvia lisätessä, ja seuraus oli tämän projektin tyypillisin
+    vika: rasti näkyi, liikkui, eikä koskaan päässyt palvelimelle. Joka
+    tilan päivitys palautti sen pois ja vienti kirjoitti oikein nolla
+    reaktiokuvaa — kaikki toimi paitsi se mitä käyttäjä pyysi.
+
+    Tämä kokeilee jokaista ``Globals``in kenttää: jos kenttä ei mene läpi,
+    se on joko lisättävä listalle tai kirjattava tähän syyn kanssa.
+    """
+    import dataclasses
+
+    # Nämä eivät tule käyttöliittymästä vaan johdetaan muualta.
+    NOT_FROM_UI = {
+        "rhythm",            # oma esiasetusvalintansa
+        "overlap_rule",      # oma valintansa, ei numero
+        "long_take_rule",    # sama
+        "project_name",      # oma kenttänsä
+        "name_tags",         # oma rastinsa
+        "reaction_detector",  # tunnistimen nimi, ei säädin
+    }
+
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    client = TestClient(create_app(state))
+    missed = []
+    for field in dataclasses.fields(Globals):
+        if field.name in NOT_FROM_UI:
+            continue
+        current = getattr(state.settings.globals, field.name)
+        if isinstance(current, bool):
+            wanted = not current
+        elif isinstance(current, (int, float)):
+            wanted = round(float(current) + 0.25, 4) if current is not None else 0.25
+        else:
+            continue
+        client.post("/api/settings", json={
+            "tracks": {}, "globals": {field.name: wanted}, "audio": {}})
+        if getattr(state.settings.globals, field.name) != wanted:
+            missed.append(field.name)
+    assert not missed, f"nämä eivät mene käyttöliittymästä läpi: {missed}"

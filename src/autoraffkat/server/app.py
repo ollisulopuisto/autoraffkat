@@ -391,9 +391,29 @@ class AppState:
             "min_overlap",
             "wide_every",
             "wide_hold",
+            # Reaktiokuvien luvut. Nämä puuttuivat listalta, ja seuraus oli
+            # juuri tämän projektin tyypillisin vika: säädin näkyi, liikkui
+            # ja ei tehnyt mitään. Rasti ei koskaan päässyt palvelimelle,
+            # joka tilan päivitys palautti sen pois, ja vienti kirjoitti
+            # oikein nolla reaktiokuvaa. Testi alla estää toistumisen.
+            "reaction_turn_max",
+            "reaction_spacing",
+            "reaction_length",
+            "reaction_turn",
+            "reaction_gaze",
+            "reaction_smile",
+            "reaction_eyes",
+            "reaction_motion",
+            "reaction_size",
         ):
             if name in raw:
                 setattr(g, name, max(0.0, float(raw[name])))
+        if "reaction_threshold" in raw:
+            # Kynnys on z-luku ja saa olla negatiivinen: yllä oleva silmukka
+            # nollaisi sen.
+            g.reaction_threshold = float(raw["reaction_threshold"])
+        if "reactions" in raw:
+            g.reactions = bool(raw["reactions"])
         if raw.get("overlap_rule") in OVERLAP_RULES:
             g.overlap_rule = raw["overlap_rule"]
         if raw.get("long_take_rule") in LONGTAKE_RULES:

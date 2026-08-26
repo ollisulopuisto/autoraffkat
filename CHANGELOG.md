@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.95] - 2026-08-26
+
+### Fixed
+- **The Reaction Switch Never Reached the Server**: `apply()` reads globals from a name list, and none of the reaction settings were on it. So the box showed ticked, the sliders moved, the count updated — and nothing was stored. Every state refresh reset it, and the export correctly wrote zero reaction shots. Three exports were made this way. Everything worked except the thing that was asked for, which is this project's most typical failure.
+  - `reaction_threshold` is handled separately: it is a z-score and may be negative, which the shared clamp would have zeroed.
+  - **A test now walks every `Globals` field** and fails on any that cannot round-trip through `/api/settings`. Fixing the one field would have left the next one to fail the same way; the list is the bug, not the entry.
+
 ## [v26.08.26.94] - 2026-08-26
 
 ### Fixed

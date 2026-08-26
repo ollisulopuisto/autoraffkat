@@ -490,6 +490,14 @@ and for one version that meant the panel showed 96 shots while the export
 wrote none, correctly and silently. Anything drawn but not exported says so
 on its face.
 
+`apply()` reads globals from a name list, and forgetting to extend it is
+silent. Every reaction setting was missing from it: the switch showed, the
+sliders moved, nothing reached the server, every state refresh reset it, and
+the export correctly wrote zero reaction shots. Everything worked except the
+thing that was asked for. `test_every_global_the_interface_shows_can_be_set`
+walks every `Globals` field and fails on any that cannot round-trip, so the
+next field added has to be listed or explicitly excused.
+
 A reaction shot on a lane is a nested `mc-clip`, not an `asset-clip`. The
 first attempt referenced the angle's asset directly: valid DTD, clean
 import, and **nothing on the timeline at all**. A hand-made comparison in
