@@ -514,5 +514,6 @@ tr.reaction td:nth-child(2) { padding-left: 22px; }
 
 /* Zoomausvihje viivaimen oikeaan reunaan. Absoluuttinen kuten muutkin
    viivaimen merkinnät, mutta oikeaan reunaan kiinnitettynä. */
-.ruler .zoomed { left: auto; right: 0; color: var(--accent); transform: none; }
+.preview-head .zoomed { color: var(--accent); font-size: 12px; margin-left: auto;
+                        margin-right: 12px; }
 #bar { cursor: ew-resize; touch-action: none; }

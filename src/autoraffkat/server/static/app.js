@@ -1725,6 +1725,11 @@ function colorFor(index) {
    koko ruudukkoa. */
 let previewWindow = null;   // [alku, loppu] ohjelma-aikaa, tai null = kaikki
 let windowTimer = 0;
+/* Viimeksi piirretty palkki ja se ikkuna jota se esittää. Zoomatessa se
+   venytetään uuteen ikkunaan heti, ja tarkka versio korvaa sen kun
+   palvelin vastaa. Ilman tätä palkki seisoo paikallaan koko rullauksen
+   ajan ja hyppää vasta lopuksi — mikä on juuri se mikä tuntuu rikkinäiseltä. */
+let barCache = null;
 
 const MIN_WINDOW = 4.0;     // lyhin katseltava jakso, s
 
@@ -1741,9 +1746,36 @@ function setPreviewWindow(next) {
   /* Piirretään heti nykyisellä datalla, jotta liike tuntuu välittömältä, ja
      pyydetään tarkempi versio vasta kun liike pysähtyy. Ilman viivettä
      jokainen rullauksen pykälä olisi oma pyyntönsä. */
+  nudgeBar();
   renderRuler();
   clearTimeout(windowTimer);
-  windowTimer = setTimeout(() => schedule(0), 120);
+  windowTimer = setTimeout(() => schedule(0), 110);
+}
+
+/* Venyttää välimuistissa olevan kuvan uuteen ikkunaan. Sumea lähennettäessä,
+   tarkka loitonnettaessa — molemmissa oikeassa kohdassa, mikä on ainoa asia
+   jolla on väliä ennen kuin tarkka versio saapuu. */
+function nudgeBar() {
+  const canvas = $('bar');
+  if (!barCache || !canvas || !latest || !latest.program) return;
+  const full = latest.program;
+  const view = previewWindow || [full.start, full.start + full.duration];
+  const span = barCache.end - barCache.start;
+  if (!(span > 0)) return;
+  const ctx = canvas.getContext('2d');
+  const ratio = window.devicePixelRatio || 1;
+  const width = canvas.clientWidth;
+  const height = canvas.height / ratio;
+  const left = ((view[0] - barCache.start) / span) * barCache.bitmap.width;
+  const right = ((view[1] - barCache.start) / span) * barCache.bitmap.width;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = false;
+  try {
+    ctx.drawImage(barCache.bitmap, left, 0, Math.max(1, right - left),
+                  barCache.bitmap.height, 0, 0, width * ratio, height * ratio);
+  } catch (err) { /* tyhjä välimuisti: tarkka versio tulee kohta */ }
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
 }
 
 function bindZoom(canvas) {
@@ -1756,7 +1788,13 @@ function bindZoom(canvas) {
     const view = previewWindow || [full.start, full.start + full.duration];
     const rect = canvas.getBoundingClientRect();
     const at = view[0] + (view[1] - view[0]) * ((event.clientX - rect.left) / rect.width);
-    const factor = Math.exp(event.deltaY * 0.002);
+    /* Rullan askel rajataan. Ohjauslevy lähettää suuria deltoja tiheään,
+       ja rajaamaton eksponentti hyppäsi koko ohjelmasta sekunteihin
+       yhdellä eleellä — se on se «liikaa» jonka käyttäjä näkee. Katolla
+       yksi tapahtuma muuttaa mittakaavaa enintään noin kuusi prosenttia,
+       jolloin ele on jatkuva eikä hyppy. */
+    const stepped = Math.max(-40, Math.min(40, event.deltaY));
+    const factor = Math.exp(stepped * 0.0015);
     setPreviewWindow([at - (at - view[0]) * factor, at + (view[1] - at) * factor]);
   }, { passive: false });
 
@@ -1831,7 +1869,7 @@ function drawBar() {
   /* Reaktiokuvat matalana rivinä leikkausrivin alla. Matalana, koska ne
      eivät ole yhtä painava kerros kuin leikkaus itse — ja leikkausrivin
      alla, koska ne tulevat sen päälle omalle lanelleen. */
-  if (!hasShots) return;
+  if (!hasShots) { cacheBar(canvas, preview); return; }
   const shotY = y + rowHeight + gap;
   ctx.fillStyle = '#191c22';
   ctx.fillRect(0, shotY, width, shotHeight);
@@ -1840,6 +1878,22 @@ function drawBar() {
     ctx.fillStyle = colorFor(shots[i]);
     ctx.fillRect(i * step, shotY, Math.max(step, 1.5), shotHeight);
   }
+  cacheBar(canvas, preview);
+}
+
+function cacheBar(canvas, preview) {
+  const full = latest && latest.program;
+  if (!full) return;
+  const start = preview.view_start != null ? preview.view_start : full.start;
+  const end = preview.view_end != null
+    ? preview.view_end : full.start + full.duration;
+  try {
+    const off = document.createElement('canvas');
+    off.width = canvas.width;
+    off.height = canvas.height;
+    off.getContext('2d').drawImage(canvas, 0, 0);
+    barCache = { start, end, bitmap: off };
+  } catch (err) { barCache = null; }
 }
 
 /* Aika-asteikko palkin alle. Väli valitaan luettavista arvoista (1, 2, 5, 10,
@@ -1867,11 +1921,14 @@ function renderRuler() {
     mark.textContent = fmtTime(t);
     host.append(mark);
   }
-  if (previewWindow) {
-    const note = document.createElement('span');
-    note.className = 'zoomed';
-    note.textContent = T('preview.zoomed', { span: fmtTime(span) });
-    host.append(note);
+  /* Vihje ei kuulu viivaimeen: siellä se meni tikkujen päälle ja peitti
+     juuri ne ajat joita viivain on varten. Se menee osion otsikkoriville,
+     jossa on jo päätöksen kesto. */
+  const badge = $('zoom-note');
+  if (badge) {
+    badge.textContent = previewWindow
+      ? T('preview.zoomed', { span: fmtTime(span) }) : '';
+    badge.className = previewWindow ? 'zoomed' : 'zoomed hidden';
   }
 }
 

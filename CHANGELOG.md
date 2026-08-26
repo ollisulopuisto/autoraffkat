@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.88] - 2026-08-26
+
+### Fixed
+- **Zooming Felt Broken in Three Separate Ways**, all now addressed:
+  - **The bar did not move while scrolling.** Only the ruler updated; the picture stood still until the server replied and then jumped. The last drawn bar is now kept and stretched into the new window immediately — blurry when zoomed in, sharp when zoomed out, but always in the right place, which is the only thing that matters before the exact version arrives.
+  - **The zoom rate was unusable.** The wheel step went into an unclamped exponent, and a trackpad sends large deltas many times a second, so one gesture jumped from the whole programme to seconds. A step now changes the scale by at most about 6 %, making it a continuous gesture rather than a leap.
+  - **The hint sat on top of the ruler**, covering exactly the times the ruler exists to show. It moved to the preview's heading row, beside the decision timing.
+
 ## [v26.08.26.87] - 2026-08-26
 
 ### Added
