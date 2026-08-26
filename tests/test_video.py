@@ -201,6 +201,40 @@ def test_files_are_measured_in_parallel(monkeypatch):
     assert peak > 1, f"tiedostot purettiin sarjassa (samanaikaisia enintään {peak})"
 
 
+def test_measuring_works_with_the_setting_off(monkeypatch):
+    """«Mittaa lähikuvat» on nimenomainen pyyntö, ei asetuksen seuraus.
+
+    Aiemmin tämä palasi tyhjänä kun ``reactions`` oli pois: palkki juoksi
+    sekunnissa läpi, nolla tiedostoa mitattiin eikä mitään kerrottu.
+    Mittaaminen on tiedon keräämistä; asetus päättää vain käytetäänkö sitä.
+    """
+    from autoraffkat.model import Globals
+
+    grid = _Grid(_Lane("A", [1, 1]), _Lane("B", [0, 0]))
+    timeline = _Timeline({"camB": [_Item("b", "/x/b.mp4")]})
+    monkeypatch.setattr(detect, "load", lambda name: Stub())
+    monkeypatch.setattr(analyse.os.path, "exists", lambda path: True)
+    monkeypatch.setattr(analyse.measure, "table",
+                        lambda *a, **k: {"times": np.zeros(1),
+                                         "found": np.zeros(1, dtype=bool)})
+    tables, errors = analyse.tables(
+        grid, _Roles(), timeline, Globals(reactions=False))
+    assert set(tables) == {"b"}, "asetus pois esti mittauksen"
+    assert not errors
+
+
+def test_nothing_to_measure_is_said_out_loud(monkeypatch):
+    """Painike ei saa näyttää onnistuneen tekemättä mitään."""
+    from autoraffkat.model import Globals
+
+    grid = _Grid(_Lane("A", [1, 1]), _Lane("B", [1, 1]))   # kumpikaan ei vaikene
+    monkeypatch.setattr(detect, "load", lambda name: Stub())
+    tables, errors = analyse.tables(
+        grid, _Roles(), _Timeline({}), Globals(reactions=True))
+    assert tables == {}
+    assert errors, "tyhjä mittaus ei kertonut mitään"
+
+
 def test_missing_media_is_reported_not_swallowed(monkeypatch):
     """Levy voi olla irrotettu. Se on tavallista — mutta se on kerrottava."""
     from autoraffkat.model import Globals

@@ -79,11 +79,17 @@ def tables(grid, roles, timeline, settings, progress=None) -> tuple[dict, dict]:
     levyllä, ja se on tavallinen tilanne eikä vika ohjelmassa. Mutta se
     **kerrotaan**: asetus päällä ja tuloksessa ei mitään on juuri se vika
     joka tässä projektissa on jäänyt huomaamatta kerta toisensa jälkeen.
+
+    Mittaus ei katso ``reactions``-asetusta.
+
+    Se on tahallista. Mittaaminen on tiedon keräämistä, ja asetus päättää
+    vain käytetäänkö sitä. Aiemmin tämä palasi tyhjänä kun asetus oli pois,
+    jolloin «Mittaa lähikuvat» ajoi palkin läpi sekunnissa, mittasi nolla
+    tiedostoa eikä kertonut mitään — painallus on nimenomainen pyyntö, ja
+    sellainen ei saa olla hiljainen tyhjäkäynti.
     """
     out: dict = {}
     errors: dict = {}
-    if not getattr(settings, "reactions", False):
-        return out, errors
     try:
         detector = detect.load(settings.reaction_detector)
     except detect.DetectError as exc:
@@ -91,6 +97,13 @@ def tables(grid, roles, timeline, settings, progress=None) -> tuple[dict, dict]:
         return out, errors
 
     files = close_up_files(grid, roles, timeline)
+    if not files:
+        # Ei ole mitä mitata: joko lähikuvia ei ole roolitettu tai kukaan ei
+        # ole kertaakaan vaiti. Kumpikin on kelvollinen tilanne mutta
+        # kumpikaan ei ole «valmis», ja ilman tätä painike näyttäisi
+        # onnistuneen tekemättä mitään.
+        errors["files"] = "ei mitattavia lähikuvia"
+        return out, errors
     todo = []
     for speaker, key, path in files:
         if not os.path.exists(path):

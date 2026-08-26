@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.83] - 2026-08-26
+
+### Fixed
+- **"Mittaa lähikuvat" Was a Silent No-op While Reaction Shots Were Off**: the progress bar ran through in a second, zero files were measured, and nothing was said. `analyse.tables()` returned empty as soon as it saw the setting off — but pressing the button is an explicit request, and measuring is gathering data; the setting only decides whether the data gets used. The measurement no longer looks at it.
+- **Nothing to measure now says so.** If no close-up qualifies — none roled, or nobody ever falls silent — that is a valid situation but it is not "done", and the button must not look like it succeeded.
+
 ## [v26.08.26.82] - 2026-08-26
 
 ### Changed

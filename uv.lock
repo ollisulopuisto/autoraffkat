@@ -48,7 +48,7 @@ wheels = [
 
 [[package]]
 name = "autoraffkat"
-version = "2026.8.26.82"
+version = "2026.8.26.83"
 source = { editable = "." }
 dependencies = [
     { name = "fastapi" },
