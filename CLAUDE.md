@@ -396,6 +396,22 @@ outnumber intervals. Showing only the exported count made the gate slider
 look broken. Both numbers belong on screen, and `reactions.candidates()`
 exists separately from `find()` for that reason.
 
+A word boundary does not exist in this data. The reaction shot arrived too
+fast, and the obvious fix — snap the cut to a word — has nothing to snap to:
+the envelope switches at syllable rate. Measured over 77 minutes, 26 452
+on/off transitions, speech runs median 0.22 s and pauses 0.14 s, so every
+reaction was already within 0.06 s of a "boundary" and the metric decided
+nothing. What is available is a **pause**: `_snap` moves the cut to the
+nearest moment where nobody speaks for `PAUSE` (0.3 s), searching `PAUSE_REACH`
+(0.5 s) either way. That is a sentence boundary, and the ear hears it as one.
+
+The cut leads the measured frame. Keyframes come one per second, so a
+measurement says the listener looked good *somewhere* in that second — cut at
+its start and the picture arrives after the reaction began. `reaction_lead`
+(0.4 s) moves it earlier, the same reasoning as a J-cut's lead, clamped so it
+can never precede the programme's start. And the length is 2.2 s, not 1.6:
+below two seconds the shot begins and ends before a viewer has read the face.
+
 The reaction score is a **gate**, not a ranking. The bar for a reaction shot
 is not "outstanding" but "not disqualifying" — in a finished edit most of
 them are unremarkable and only have to avoid embarrassment. Measured on 381

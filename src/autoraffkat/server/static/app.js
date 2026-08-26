@@ -738,7 +738,8 @@ function renderGlobals() {
                       ? T('reactions.notMeasured')
                       : T('reactions.candidates', { n: video.placed })))
       : T('audio.off'),
-    keys: ['reaction_turn_max', 'reaction_spacing', 'reaction_length'],
+    keys: ['reaction_turn_max', 'reaction_spacing', 'reaction_length',
+           'reaction_lead'],
     toggle: {
       checked: state.globals.reactions,
       onChange: (on) => { state.globals.reactions = on; renderGlobals(); schedule(0); },
@@ -858,7 +859,12 @@ function reactionsBody(host, mark, video, running) {
   whyKnob(host, {
     key: 'reaction_length',
     label: T('reactions.length'),
-    min: 0.6, max: 5, step: 0.1, unit: T('unit.seconds'),
+    min: 0.6, max: 6, step: 0.1, unit: T('unit.seconds'),
+  }, mark);
+  whyKnob(host, {
+    key: 'reaction_lead',
+    label: T('reactions.lead'),
+    min: 0, max: 1.5, step: 0.05, unit: T('unit.seconds'),
   }, mark);
 }
 

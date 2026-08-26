@@ -6,6 +6,8 @@ riippua siitä. Taulukot kirjoitetaan tässä käsin — se on sama muoto jonka
 macOS:n kasvontunnistuksesta.
 """
 
+from dataclasses import replace
+
 import numpy as np
 import pytest
 
@@ -350,6 +352,8 @@ def test_candidates_and_find_answer_different_questions():
 
     data = table(200, turn=np.zeros(200))
     data["times"] = np.arange(200, dtype=np.float32)
+    # Ennakko siirtäisi ensimmäiset ehdokkaat ohjelman alkua edelle.
+    settings = replace(settings, reaction_lead=0.0)
     raw = reactions.candidates(grid, Roles(), Timeline(), {"cam": data},
                                settings, 0.0)
     thinned = reactions.find(grid, Roles(), Timeline(), {"cam": data},
@@ -420,3 +424,67 @@ def test_the_interval_follows_the_conversation_tempo():
     fast = np.full(int(240 / HOP_FOR_TEST), 1.4, dtype=np.float32)
     quick = reactions._thin(found, settings, fast, 0.0)
     assert len(quick) > len(steady), (len(quick), len(steady))
+
+
+def test_the_cut_leads_the_measured_frame():
+    """Avainruutuja on yksi sekunnissa.
+
+    Mittaus kertoo minkä sekunnin sisällä ilme on, ei milloin se alkoi.
+    Ilman ennakkoa kuva vaihtuu vasta kun reaktio on jo käynnissä — sama
+    syy kuin J-cutin ennakolla.
+    """
+    settings = Globals(reactions=True, reaction_threshold=-99.0,
+                       reaction_lead=0.4, reaction_length=2.2,
+                       reaction_spacing=0.0)
+    grid = _grid("B" * 400)
+
+    class Item:
+        key = "cam"
+        asset_start = 0
+
+        class P:
+            offset, end, start = 0, 400, 0
+        placements = [P()]
+
+    class Timeline:
+        def track_media(self, key):
+            return [Item()]
+
+    class Roles:
+        closes = {"A": "camA"}
+
+    data = table(50, turn=np.zeros(50))
+    data["times"] = np.arange(50, dtype=np.float32) + 1.0
+    found = reactions.candidates(grid, Roles(), Timeline(), {"cam": data},
+                                 settings, 0.0)
+    late = reactions.candidates(grid, Roles(), Timeline(), {"cam": data},
+                                replace(settings, reaction_lead=0.0), 0.0)
+    assert found and late
+    early = sorted(r.start for r in found)
+    without = sorted(r.start for r in late)
+    assert len(early) == len(without)
+    for a, b in zip(early, without):
+        assert abs((b - a) - 0.4) < 1e-6, (a, b)
+
+
+def test_a_cut_lands_on_a_pause_when_one_is_within_reach():
+    """Puheen keskelle osuva leikkaus kuulostaa katkaisulta.
+
+    «Sanan raja» ei ole tässä aineistossa olemassa: verhokäyrä heilahtelee
+    tavurytmissä, mitattuna puhejaksojen mediaani 0,22 s ja taukojen
+    0,14 s. Kolmasosasekunnin tauko on lauseen raja, ja siihen osutaan.
+    """
+    class Lane:
+        def __init__(self, name, on):
+            self.name, self.on = name, np.asarray(on, dtype=bool)
+
+    class Grid:
+        n = 200
+        speakers = [Lane("A", np.ones(200, dtype=bool))]
+
+    # Tauko ruuduissa 100-125 = 2,0…2,5 s.
+    Grid.speakers[0].on[100:125] = False
+    moved = reactions._snap(Grid(), 2.3, 0.0, Globals())
+    assert abs(moved - 2.0) < 0.05, moved
+    # Kaukana olevaa taukoa ei haeta.
+    assert reactions._snap(Grid(), 8.0, 0.0, Globals()) == 8.0

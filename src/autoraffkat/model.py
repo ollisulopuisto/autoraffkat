@@ -212,7 +212,14 @@ class Globals:
     # se säädin joka ratkaisee — ks. reactions.TURN_MAX.
     reaction_turn_max: float = 0.080
     reaction_threshold: float = -1.0
-    reaction_length: float = 1.6      # kuvan kesto, s
+    # Kuvan kesto. 1,6 s tuntui liian nopealta: reaktio ehtii alkaa ja
+    # loppua ennen kuin katsoja on lukenut kasvot. Ennakko ei korvaa
+    # kestoa — se siirtää alun, ei pidennä.
+    reaction_length: float = 2.2      # kuvan kesto, s
+    # Ennakko: kuinka paljon ennen mitattua ruutua leikataan. Avainruutuja
+    # on yksi sekunnissa, joten ilman tätä reaktio on jo käynnissä kun kuva
+    # vaihtuu. Ks. reactions.LEAD.
+    reaction_lead: float = 0.4
     reaction_spacing: float = 25.0    # lyhin väli kahden välillä, s
     # Painot. Näitä on tarkoitus säätää, ja siksi mittaukset ovat
     # välimuistissa pisteiden sijaan: säätö ei maksa uutta purkua.

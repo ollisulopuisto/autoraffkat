@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.96] - 2026-08-26
+
+### Changed
+- **Reaction Shots Were Cut Too Fast to Read**: 1.6 s was long enough for the shot to begin and end before a viewer had read the face. The length is now **2.2 s** and adjustable up to 6 s.
+- **The Cut Leads the Measured Frame**: keyframes are one per second, so a measurement says the listener looked good *somewhere* in that second — cutting at its start arrives after the reaction has begun. A `reaction_lead` (default 0.4 s) moves the cut earlier, the same reasoning as a J-cut's lead.
+- **The Cut Lands on a Pause When One Is Near**: within half a second of the intended point, the cut moves to the nearest moment where **nobody** is speaking for at least 0.3 s.
+  - Not a word boundary: there is no such thing in this data. The envelope switches at syllable rate — measured over 77 minutes, 26 452 on/off transitions, speech runs median 0.22 s and pauses 0.14 s, so every reaction was already within 0.06 s of a "boundary" and the metric said nothing. A third of a second of silence is a sentence boundary, and that is what is snapped to.
+  - The lead never moves a cut before the programme's start.
+
 ## [v26.08.26.95] - 2026-08-26
 
 ### Fixed

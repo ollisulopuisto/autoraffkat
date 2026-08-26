@@ -226,13 +226,20 @@ const STRINGS = {
     'reactions.gate': 'Portti: pään suoruus',
     'reactions.spacing': 'Lyhin väli',
     'reactions.length': 'Kuvan kesto',
+    'reactions.lead': 'Ennakko',
+    'why.reaction_lead': 'Kuinka paljon ennen mitattua ruutua leikataan. '
+      + 'Avainruutuja on yksi sekunnissa, joten mittaus kertoo minkä sekunnin '
+      + 'sisällä ilme on — ei milloin se alkoi. Ilman ennakkoa kuva vaihtuu '
+      + 'vasta kun reaktio on jo käynnissä. Sama idea kuin J-cutin ennakolla. '
+      + 'Ennakko siirtää alkua, ei pidennä kuvaa: kestoa säädetään erikseen.',
     'why.reaction_spacing': 'Tämä ratkaisee **määrän**, ei portti. Portin '
       + 'läpäisseitä on aina enemmän kuin välejä, joten harvennus ottaa '
       + 'yhden kustakin välistä: mitattuna portti 0,03 -> 0,40 vei ehdokkaat '
       + '461:stä 1875:een mutta vientiin päätyvät vain 94:stä 131:een.',
-    'why.reaction_length': 'Kuinka kauan reaktiokuvassa viivytään. Lyhyt on '
-      + 'vilkaisu, pitkä alkaa olla oma kuvansa — ja pidempi kuva vie myös '
-      + 'enemmän tilaa välistä.',
+    'why.reaction_length': 'Kuinka kauan reaktiokuvassa viivytään. 1,6 s '
+      + 'tuntui liian nopealta: reaktio ehtii alkaa ja loppua ennen kuin '
+      + 'katsoja on lukenut kasvot. Lyhyt on vilkaisu, pitkä alkaa olla oma '
+      + 'kuvansa — ja pidempi kuva vie myös enemmän tilaa välistä.',
     'why.reaction_turn_max': 'Suurin sallittu pään kääntymä puhujasta pois. '
       + 'Mitattuna 23 käsin arvioidusta ruudusta luokat eivät mene '
       + 'päällekkäin: huonoin kelvollinen 0,072, paras kelvoton 0,094. '
@@ -522,13 +529,21 @@ const STRINGS = {
     'reactions.gate': 'Gate: how square the head is',
     'reactions.spacing': 'Shortest interval',
     'reactions.length': 'Shot length',
+    'reactions.lead': 'Lead',
+    'why.reaction_lead': 'How far before the measured frame the cut is made. '
+      + 'Keyframes come once a second, so the measurement says which second '
+      + 'holds the expression, not when it began. Without a lead the picture '
+      + 'changes only once the reaction is already under way — the same idea '
+      + 'as a J-cut. The lead moves the start, it does not lengthen the shot; '
+      + 'the duration is a separate control.',
     'why.reaction_spacing': 'This decides the **count**, not the gate. There '
       + 'are always more qualifying moments than intervals, so thinning takes '
       + 'one per interval: measured, a gate of 0.03 → 0.40 moved candidates '
       + 'from 461 to 1875 but the exported count only from 94 to 131.',
-    'why.reaction_length': 'How long the reaction shot holds. Short is a '
-      + 'glance, long starts becoming its own shot — and a longer shot also '
-      + 'takes more room out of the interval.',
+    'why.reaction_length': 'How long the reaction shot holds. 1.6 s read as '
+      + 'too quick: the reaction begins and ends before the viewer has read '
+      + 'the face. Short is a glance, long starts becoming its own shot — and '
+      + 'a longer shot also takes more room out of the interval.',
     'why.reaction_turn_max': 'The largest head turn away from the speaker that '
       + 'still passes. Measured over 23 hand-marked frames the classes do not '
       + 'overlap: worst acceptable 0.072, best unacceptable 0.094. The default '

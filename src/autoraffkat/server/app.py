@@ -309,7 +309,8 @@ class AppState:
             return None
         key = (id(self.video_tables), len(self.video_tables), float(program_start),
                globals_.reaction_turn_max, globals_.reaction_threshold,
-               globals_.reaction_length, globals_.reaction_turn,
+               globals_.reaction_length, globals_.reaction_lead,
+               globals_.reaction_turn,
                globals_.reaction_gaze, globals_.reaction_smile,
                globals_.reaction_eyes, globals_.reaction_motion,
                globals_.reaction_size)
@@ -399,6 +400,7 @@ class AppState:
             "reaction_turn_max",
             "reaction_spacing",
             "reaction_length",
+            "reaction_lead",
             "reaction_turn",
             "reaction_gaze",
             "reaction_smile",

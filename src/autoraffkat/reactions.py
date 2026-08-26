@@ -75,6 +75,24 @@ MOVE_GAP_S = 4.0
 # leikkaukset ehtii lukea erillisinä.
 CUT_MARGIN = 1.0
 
+# Kuinka paljon ennen mitattua ruutua leikkaus tehdään.
+#
+# Avainruutuja on **yksi sekunnissa**. Mittaus kertoo siis että kuuntelija
+# näyttää hyvältä jossain tuon sekunnin sisällä, ei milloin ilme alkoi — ja
+# sekunnin alusta leikattuna reaktio on jo käynnissä kun kuva vaihtuu.
+# Sama idea kuin J-cutin ennakolla: kuva ennen tapahtumaa, ei sen jälkeen.
+LEAD = 0.4
+
+# Tauko, jota lyhyempi ei kelpaa leikkauskohdaksi. Verhokäyrän on/off
+# heilahtelee tavurytmissä — mitattuna puhejaksojen mediaani on 0,22 s ja
+# taukojen 0,14 s — joten «sanan raja» ei ole tässä aineistossa olemassa.
+# Kolmasosasekunnin tauko on lauseen raja, ja se on.
+PAUSE = 0.30
+
+# Kuinka kaukaa tauko kelpaa. Kauempaa siirretty leikkaus ei enää liity
+# siihen reaktioon jonka takia se tehdään.
+PAUSE_REACH = 0.5
+
 
 @dataclass
 class Reaction:
@@ -244,6 +262,34 @@ def find(grid, roles, timeline, tables: dict, settings, program_start: float,
     return _thin(found, settings, tempo, program_start)
 
 
+def _snap(grid, at: float, program_start: float, settings) -> float:
+    """Siirtää leikkauksen lähimpään taukoon, jos sellainen on lähellä.
+
+    Puheen keskelle osuva leikkaus kuulostaa katkaisulta. Tauko on tässä
+    hetki jolloin **kukaan** ei ole äänessä vähintään ``PAUSE`` ajan —
+    yhden puhujan hiljaisuus ei riitä, koska toinen voi puhua päälle.
+    """
+    if not getattr(grid, "speakers", None) or not getattr(grid, "n", 0):
+        return at
+    quiet = ~np.any(np.stack([lane.on for lane in grid.speakers]), axis=0)
+    need = max(1, int(PAUSE / HOP))
+    reach = int(PAUSE_REACH / HOP)
+    centre = int((at - program_start) / HOP)
+    low, high = max(0, centre - reach), min(grid.n, centre + reach)
+    if high <= low:
+        return at
+    best = None
+    for start, end, silent in _runs(quiet[low:high].astype(np.int8)):
+        if not silent or (end - start) < need:
+            continue
+        # Tauon alku: leikkaus tehdään kun puhe loppuu, ei kesken tauon.
+        cell = low + start
+        distance = abs(cell - centre)
+        if best is None or distance < best[0]:
+            best = (distance, program_start + cell * HOP)
+    return best[1] if best else at
+
+
 def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
             ) -> list[Reaction]:
     """Portin läpäisseet hetket ilman harvennusta."""
@@ -283,7 +329,13 @@ def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
                 cell = int((at - program_start) / HOP)
                 if cell < 0 or cell >= len(quiet) or not quiet[cell]:
                     continue
-                found.append(Reaction(speaker, at, at + settings.reaction_length,
+                # Ennakko: avainruutu kertoo sekunnin, ei hetkeä. Ilman
+                # tätä kuva vaihtuu vasta kun reaktio on jo käynnissä.
+                lead = float(getattr(settings, "reaction_lead", LEAD))
+                begin = max(program_start,
+                            _snap(grid, at - lead, program_start, settings))
+                found.append(Reaction(speaker, begin,
+                                      begin + settings.reaction_length,
                                       float(value)))
     return found
 
