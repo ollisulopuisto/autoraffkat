@@ -77,6 +77,10 @@ function makeElement(tag) {
       if (this._id) registry.set(this._id, node);
     },
     remove() {},
+    /* Osoittimen kaappaus on oikea DOM-toiminto, ja zoomaus käyttää sitä.
+       Ilman näitä vetokäsittelijä kaatuu vain testissä. */
+    setPointerCapture() {},
+    releasePointerCapture() {},
     setAttribute(name, value) { this.attributes[name] = value; },
     getAttribute(name) { return this.attributes[name]; },
     addEventListener(type, fn) {
@@ -132,8 +136,12 @@ function fireAll(report) {
           /* Tapahtuma on se mitä selain antaa, ei vähempää: puuttuva
              `stopPropagation` näkyisi tuotannossa vasta klikkauksena joka
              tekee kaksi asiaa yhtä aikaa, eikä testi kertoisi siitä. */
+          /* Osoitin- ja rullatapahtumien kentät mukaan: zoomaus lukee
+             `clientX`:n ja `deltaY`:n, ja ilman niitä laskenta tuottaa
+             NaN:ia jota mikään ei huomaisi. */
           fn.call(el, { target: el, preventDefault() {}, stopPropagation() {},
                         metaKey: false, ctrlKey: false, key: 'a',
+                        clientX: 120, clientY: 40, deltaY: -100, pointerId: 1,
                         dataTransfer: transfer() });
         } catch (err) {
           report(`${el.tagName}.${type}`, err);

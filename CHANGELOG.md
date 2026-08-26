@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.87] - 2026-08-26
+
+### Added
+- **The Preview Bar Zooms**: wheel to zoom around the cursor, drag to pan, double-click for the whole programme. Inspection only — editing stays in Final Cut.
+  - The reason is resolution, not comfort. The whole programme in 1400 columns makes a column **3.3 s**: measured, 791 cuts at 5.9 s each is **1.8 columns per cut**, and a 1.6 s reaction shot is **half a column**. As an overview the bar reads the rhythm correctly; as a timeline it cannot show where anything is, because a second is not a distance in it.
+  - The window is applied **server-side**, where the squeezing already happens: the same column count over a shorter span *is* a sharper picture, and the whole grid never has to reach the browser. The bar redraws immediately on the data it has and asks for the sharper version once the movement stops, so a wheel notch is not a request.
+  - The ruler now draws from the **view**, not the programme duration. Tied to the total it would have shown wrong times while zoomed, which is worse than no ruler.
+
+### Fixed
+- The smoke test's stub had no `setPointerCapture` and its synthetic event carried no `clientX` or `deltaY`, so the drag handler failed and the zoom arithmetic would have produced `NaN` that nothing checked. A real canvas has all three.
+
 ## [v26.08.26.86] - 2026-08-26
 
 ### Added

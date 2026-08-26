@@ -18,7 +18,7 @@ def _bucket_bounds(n: int, columns: int) -> np.ndarray:
 
 
 def build(grid: Grid, decision: Decision, columns: int = 1400,
-          reactions=None) -> dict:
+          reactions=None, window=None) -> dict:
     """Palauttaa palkin: kuka äänessä ja mikä kuva valittiin, sarakkeittain.
 
     ``reactions`` on lista ``(alku, loppu, puhujan indeksi)`` ohjelma-ajassa.
@@ -27,8 +27,26 @@ def build(grid: Grid, decision: Decision, columns: int = 1400,
     puheen suhteen, ja juuri sitä suhdetta palkista katsotaan.
     """
     n = grid.n
-    columns = max(1, min(columns, max(1, n)))
-    bounds = _bucket_bounds(n, columns)
+    # Ikkuna ohjelma-ajassa -> ruudukon indeksit. Tiivistys tehdään vain
+    # ikkunan yli, jolloin sama sarakemäärä tarkoittaa sitä tarkempaa kuvaa
+    # mitä lähemmäs mennään — koko ohjelmassa sarake on 3,3 s, eli lyhyempi
+    # leikkaus ei mahdu edes kahteen sarakkeeseen eikä reaktiokuva yhteen.
+    step = grid.duration / n if n else 0.0
+    first, last = 0, n
+    view_start, view_end = grid.program_start, grid.program_start + grid.duration
+    if window and step > 0:
+        want_start = max(grid.program_start, min(float(window[0]), view_end))
+        want_end = min(view_end, max(float(window[1]), want_start + step))
+        first = int((want_start - grid.program_start) / step)
+        last = int(round((want_end - grid.program_start) / step))
+        first = max(0, min(first, max(0, n - 1)))
+        last = max(first + 1, min(last, n))
+        view_start = grid.program_start + first * step
+        view_end = grid.program_start + last * step
+
+    span = last - first
+    columns = max(1, min(columns, max(1, span)))
+    bounds = _bucket_bounds(span, columns) + first
     mids = np.clip((bounds[:-1] + bounds[1:]) // 2, 0, max(0, n - 1))
 
     speakers = []
@@ -52,11 +70,11 @@ def build(grid: Grid, decision: Decision, columns: int = 1400,
     # katoaisi tiivistyksessä juuri niiltä kohdin jotka halutaan nähdä.
     lane = [-1] * columns
     if reactions:
-        seconds = grid.duration or 1.0
+        seconds = (view_end - view_start) or 1.0
         for start, end, index in reactions:
-            first = int((start - grid.program_start) / seconds * columns)
-            last = int((end - grid.program_start) / seconds * columns)
-            for column in range(max(0, first), min(columns, max(last, first + 1))):
+            low = int((start - view_start) / seconds * columns)
+            high = int((end - view_start) / seconds * columns)
+            for column in range(max(0, low), min(columns, max(high, low + 1))):
                 lane[column] = int(index)
 
     chosen = decision.chosen[mids] if n else np.zeros(0, dtype=np.int32)
@@ -65,6 +83,9 @@ def build(grid: Grid, decision: Decision, columns: int = 1400,
         "reactions": lane,
         "duration": grid.duration,
         "program_start": grid.program_start,
+        # Näkymän rajat: viivain piirtää näistä, ei ohjelman kokonaiskestosta.
+        "view_start": float(view_start),
+        "view_end": float(view_end),
         "speakers": speakers,
         # -2 = laaja, 0.. = puhujan indeksi
         "chosen": [int(v) for v in chosen],

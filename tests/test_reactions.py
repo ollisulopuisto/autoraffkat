@@ -244,3 +244,60 @@ def test_a_short_reaction_survives_the_squeeze():
                         chosen=np.zeros(4000, dtype=np.int32))
     out = build(Grid(), decision, columns=1400, reactions=[(1000.0, 1001.6, 0)])
     assert any(v >= 0 for v in out["reactions"]), "lyhyt reaktio katosi"
+
+
+def test_zooming_makes_a_column_shorter_not_the_programme():
+    """Ikkuna on sama sarakemäärä lyhyemmän jakson yli.
+
+    Se *on* koko zoomauksen idea: koko ohjelmassa sarake on 3,3 s, eikä
+    sekunnin mittaista reaktiokuvaa voi siinä nähdä. Jos ikkunaa ei
+    huomioida, palkki näyttää samalta eikä mikään kerro siitä.
+    """
+    from autoraffkat.decide import Decision
+    from autoraffkat.preview import build
+
+    class Lane:
+        name, close_key = "A", "cam"
+        on = np.zeros(1000, dtype=bool)
+
+    class Grid:
+        n = 1000
+        duration = 1000.0
+        program_start = 0.0
+        speakers = [Lane()]
+
+    Lane.on[500:502] = True      # kahden sekunnin repliikki keskellä
+    decision = Decision(segments=[], active=np.zeros((1, 1000), dtype=bool),
+                        chosen=np.zeros(1000, dtype=np.int32))
+
+    whole = build(Grid(), decision, columns=100)
+    zoomed = build(Grid(), decision, columns=100, window=(480.0, 520.0))
+    assert whole["view_end"] - whole["view_start"] == 1000.0
+    assert 39.0 <= zoomed["view_end"] - zoomed["view_start"] <= 41.0
+
+    # Sama repliikki vie zoomatussa selvästi useamman sarakkeen.
+    wide = sum(whole["speakers"][0]["active"])
+    near = sum(zoomed["speakers"][0]["active"])
+    assert near > wide, f"zoomaus ei tarkentanut ({near} vs {wide} saraketta)"
+
+
+def test_a_window_outside_the_programme_is_clamped():
+    """Vedon saa viedä reunan yli, mutta näkymä ei saa karata ohjelmasta."""
+    from autoraffkat.decide import Decision
+    from autoraffkat.preview import build
+
+    class Lane:
+        name, close_key = "A", "cam"
+        on = np.ones(500, dtype=bool)
+
+    class Grid:
+        n = 500
+        duration = 500.0
+        program_start = 100.0
+        speakers = [Lane()]
+
+    decision = Decision(segments=[], active=np.zeros((1, 500), dtype=bool),
+                        chosen=np.zeros(500, dtype=np.int32))
+    out = build(Grid(), decision, columns=50, window=(-9999.0, 9999.0))
+    assert out["view_start"] >= 100.0
+    assert out["view_end"] <= 600.0 + 0.001

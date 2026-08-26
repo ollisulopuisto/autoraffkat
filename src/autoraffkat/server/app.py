@@ -112,6 +112,9 @@ class AppState:
     # Kuvan mittaukset media-avaimittain, ja mitä jäi mittaamatta. Erillään
     # äänestä, koska ne ovat eri kestoisia töitä eikä toisen ajaminen saa
     # odottaa toista.
+    # Esikatselun ikkuna ohjelma-ajassa, tai None = koko ohjelma. Vain
+    # katselua varten: leikkaaminen tapahtuu Final Cutissa.
+    preview_window: tuple | None = None
     video_tables: dict = field(default_factory=dict)
     video_errors: dict = field(default_factory=dict)
     video_progress: dict = field(
@@ -322,6 +325,15 @@ class AppState:
 
     def apply(self, payload: dict) -> None:
         """Ottaa käyttöliittymän arvot vastaan ja tallentaa ne."""
+        # Esikatselun ikkuna ei ole asetus eikä mene tiedostoon: se on
+        # katselutila, joka elää vain istunnon ajan.
+        if "preview_window" in payload:
+            window = payload.get("preview_window")
+            try:
+                self.preview_window = (
+                    (float(window[0]), float(window[1])) if window else None)
+            except (TypeError, ValueError, IndexError):
+                self.preview_window = None
         tracks = payload.get("tracks") or {}
         for key, values in tracks.items():
             cfg = self.settings.config_for(key)
@@ -613,7 +625,8 @@ class AppState:
             "wide_label": WIDE_LABEL,
             # Reaktiokuvat samaan palkkiin: niiden ajoitus suhteessa puheeseen
             # on koko kysymys, eikä sitä näe erillisestä listasta.
-            "preview": build_preview(grid, decision, reactions=lane),
+            "preview": build_preview(grid, decision, reactions=lane,
+                                     window=self.preview_window),
             # Myös listaan: palkista näkee rytmin, listasta tarkan hetken.
             "reactions": [
                 {"speaker": names[index], "start": float(start),

@@ -1712,6 +1712,73 @@ function colorFor(index) {
 
 /* Esikatselupalkki: rivi per puhuja (kuka on äänessä) ja alimpana valittu kuva.
    Piirretään devicePixelRatiolla, jotta viivat eivät sumene Retinalla. */
+/* Esikatselun zoomaus, pelkkää katselua varten — leikkaaminen tapahtuu
+   Final Cutissa.
+
+   Syy on erottelukyky, ei mukavuus. Koko ohjelma 1400 sarakkeessa on 3,3 s
+   sarake: mitattuna 791 leikkausta eli 1,8 saraketta kutakin, ja 1,6 s:n
+   reaktiokuva on **puoli saraketta**. Yleiskuvana palkki kertoo rytmin,
+   mutta sijaintia siitä ei voi lukea, koska sekunti ei ole siinä mitään.
+
+   Ikkuna on palvelimen puolella, koska tiivistys on siellä: sama sarakemäärä
+   pienemmän ikkunan yli *on* tarkempi kuva, eikä selaimeen tarvitse lähettää
+   koko ruudukkoa. */
+let previewWindow = null;   // [alku, loppu] ohjelma-aikaa, tai null = kaikki
+let windowTimer = 0;
+
+const MIN_WINDOW = 4.0;     // lyhin katseltava jakso, s
+
+function setPreviewWindow(next) {
+  const full = latest && latest.program;
+  if (!full) return;
+  if (next) {
+    const lo = Math.max(full.start, Math.min(next[0], full.start + full.duration));
+    const hi = Math.min(full.start + full.duration, Math.max(next[1], lo + MIN_WINDOW));
+    previewWindow = (hi - lo >= full.duration - 0.001) ? null : [lo, hi];
+  } else {
+    previewWindow = null;
+  }
+  /* Piirretään heti nykyisellä datalla, jotta liike tuntuu välittömältä, ja
+     pyydetään tarkempi versio vasta kun liike pysähtyy. Ilman viivettä
+     jokainen rullauksen pykälä olisi oma pyyntönsä. */
+  renderRuler();
+  clearTimeout(windowTimer);
+  windowTimer = setTimeout(() => schedule(0), 120);
+}
+
+function bindZoom(canvas) {
+  if (canvas._zoomed) return;
+  canvas._zoomed = true;
+  canvas.addEventListener('wheel', (event) => {
+    const full = latest && latest.program;
+    if (!full) return;
+    event.preventDefault();
+    const view = previewWindow || [full.start, full.start + full.duration];
+    const rect = canvas.getBoundingClientRect();
+    const at = view[0] + (view[1] - view[0]) * ((event.clientX - rect.left) / rect.width);
+    const factor = Math.exp(event.deltaY * 0.002);
+    setPreviewWindow([at - (at - view[0]) * factor, at + (view[1] - at) * factor]);
+  }, { passive: false });
+
+  let dragging = null;
+  canvas.addEventListener('pointerdown', (event) => {
+    if (!previewWindow) return;          // koko ohjelmassa ei ole mitä panoroida
+    dragging = { x: event.clientX, view: previewWindow.slice() };
+    canvas.setPointerCapture(event.pointerId);
+  });
+  canvas.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    const rect = canvas.getBoundingClientRect();
+    const span = dragging.view[1] - dragging.view[0];
+    const shift = -((event.clientX - dragging.x) / rect.width) * span;
+    setPreviewWindow([dragging.view[0] + shift, dragging.view[1] + shift]);
+  });
+  const stop = () => { dragging = null; };
+  canvas.addEventListener('pointerup', stop);
+  canvas.addEventListener('pointercancel', stop);
+  canvas.addEventListener('dblclick', () => setPreviewWindow(null));
+}
+
 function drawBar() {
   const canvas = $('bar');
   const preview = latest && latest.preview;
@@ -1728,6 +1795,7 @@ function drawBar() {
   canvas.style.height = height + 'px';
   canvas.width = Math.max(1, Math.round(width * ratio));
   canvas.height = Math.round(height * ratio);
+  bindZoom(canvas);
   const ctx = canvas.getContext('2d');
   ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
   ctx.clearRect(0, 0, width, height);
@@ -1780,16 +1848,30 @@ function renderRuler() {
   const host = $('ruler');
   host.textContent = '';
   if (!latest || !latest.program) return;
-  const total = latest.program.duration;
-  const targets = 8;
-  const raw = total / targets;
-  const nice = [1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
-    .find((v) => v >= raw) || 3600;
-  for (let t = 0; t <= total + 0.001; t += nice) {
-    const span = document.createElement('span');
-    span.style.left = `${(t / total) * 100}%`;
-    span.textContent = fmtTime(t);
-    host.append(span);
+  const full = latest.program;
+  /* Viivain piirtää **näkymästä**, ei ohjelman kestosta. Zoomatussa
+     palkissa kokonaiskestoon sidottu viivain näyttäisi vääriä aikoja, mikä
+     on pahempi kuin ei viivainta lainkaan. */
+  const preview = latest.preview || {};
+  const from = (preview.view_start != null && previewWindow)
+    ? preview.view_start - full.start : (previewWindow ? previewWindow[0] - full.start : 0);
+  const to = (preview.view_end != null && previewWindow)
+    ? preview.view_end - full.start
+    : (previewWindow ? previewWindow[1] - full.start : full.duration);
+  const span = Math.max(0.001, to - from);
+  const nice = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 900, 1800, 3600]
+    .find((v) => v >= span / 8) || 3600;
+  for (let t = Math.ceil(from / nice) * nice; t <= to + 0.001; t += nice) {
+    const mark = document.createElement('span');
+    mark.style.left = `${((t - from) / span) * 100}%`;
+    mark.textContent = fmtTime(t);
+    host.append(mark);
+  }
+  if (previewWindow) {
+    const note = document.createElement('span');
+    note.className = 'zoomed';
+    note.textContent = T('preview.zoomed', { span: fmtTime(span) });
+    host.append(note);
   }
 }
 
@@ -1886,7 +1968,8 @@ function renderCuts() {
 function payload() {
   const tracks = {};
   state.tracks.forEach((m) => { tracks[m.key] = m.config; });
-  return { tracks, globals: state.globals, audio: state.audio };
+  return { tracks, globals: state.globals, audio: state.audio,
+           preview_window: previewWindow };
 }
 
 /* Niputus: säätimen liike ei lähetä pyyntöä heti. Roolin vaihto kutsutaan
