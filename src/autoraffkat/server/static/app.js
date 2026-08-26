@@ -733,11 +733,11 @@ function renderGlobals() {
     hint: T('reactions.hint'),
     value: state.globals.reactions
       ? (reacting ? T('reactions.measuring')
-                  : (video.candidates == null
+                  : (video.placed == null
                       ? T('reactions.notMeasured')
-                      : T('reactions.candidates', { n: video.candidates })))
+                      : T('reactions.candidates', { n: video.placed })))
       : T('audio.off'),
-    keys: ['reaction_turn_max'],
+    keys: ['reaction_turn_max', 'reaction_spacing', 'reaction_length'],
     toggle: {
       checked: state.globals.reactions,
       onChange: (on) => { state.globals.reactions = on; renderGlobals(); schedule(0); },
@@ -800,7 +800,9 @@ function reactionsBody(host, mark, video, running) {
             frames: (video.frames || 0).toLocaleString('fi-FI'),
             faces: video.frames
               ? Math.round(100 * (video.faces || 0) / video.frames) : 0,
-            candidates: video.candidates == null ? '–' : video.candidates })
+            candidates: video.candidates == null ? '–' : video.candidates,
+            placed: video.placed == null ? '–' : video.placed,
+            spacing: state.globals.reaction_spacing })
         : T('reactions.needMeasure'));
   host.append(note);
 
@@ -843,6 +845,20 @@ function reactionsBody(host, mark, video, running) {
     label: T('reactions.gate'),
     min: 0.02, max: 0.2, step: 0.005,
   }, mark);
+  /* Väli on se säädin joka oikeasti päättää määrän. Portti muuttaa
+     ehdokkaita satojen verran, mutta harvennus ottaa niistä yhden per
+     väli, joten vientiin päätyvä luku tuskin liikkuu. Ilman tätä säädintä
+     määrää ei voi säätää lainkaan. */
+  whyKnob(host, {
+    key: 'reaction_spacing',
+    label: T('reactions.spacing'),
+    min: 5, max: 180, step: 5, unit: T('unit.seconds'),
+  }, mark);
+  whyKnob(host, {
+    key: 'reaction_length',
+    label: T('reactions.length'),
+    min: 0.6, max: 5, step: 0.1, unit: T('unit.seconds'),
+  }, mark);
 }
 
 /* Portin luku päivittyy säätimen vieressä.
@@ -860,16 +876,27 @@ function refreshReactionCount() {
   if (value && state.globals.reactions) {
     value.textContent = T('reactions.candidates', { n: shots.length });
   }
+  /* Ehdokasluku tulee palvelimen tuoreimmasta tilasta; se on se joka
+     liikkuu portin mukana. Haetaan se erikseen, koska `/api/settings`
+     ei sitä palauta. */
+  fetch('/api/state').then((r) => r.json()).then((data) => {
+    if (data && data.video) { state.video = data.video; paintReactionNote(shots); }
+  }).catch(() => paintReactionNote(shots));
+  paintReactionNote(shots);
+}
+
+function paintReactionNote(shots) {
   const note = $('reaction-note');
   const video = state.video || {};
-  if (note && video.measured && !(video.progress || {}).running) {
-    note.textContent = T('reactions.measuredNote', {
-      files: video.measured,
-      frames: (video.frames || 0).toLocaleString('fi-FI'),
-      faces: video.frames ? Math.round(100 * (video.faces || 0) / video.frames) : 0,
-      candidates: shots.length,
-    });
-  }
+  if (!note || !video.measured || (video.progress || {}).running) return;
+  note.textContent = T('reactions.measuredNote', {
+    files: video.measured,
+    frames: (video.frames || 0).toLocaleString('fi-FI'),
+    faces: video.frames ? Math.round(100 * (video.faces || 0) / video.frames) : 0,
+    candidates: video.candidates == null ? '–' : video.candidates,
+    placed: shots ? shots.length : (video.placed == null ? '–' : video.placed),
+    spacing: state.globals.reaction_spacing,
+  });
 }
 
 /* Mittauksen seuranta. Sama kuvio kuin äänellä: palkki liikkuu vain jos

@@ -301,3 +301,57 @@ def test_a_window_outside_the_programme_is_clamped():
     out = build(Grid(), decision, columns=50, window=(-9999.0, 9999.0))
     assert out["view_start"] >= 100.0
     assert out["view_end"] <= 600.0 + 0.001
+
+
+def test_the_gate_moves_candidates_and_the_spacing_moves_the_count():
+    """Kaksi lukua, kaksi kysymystä.
+
+    Mitattuna oikealla jaksolla portti 0,03 -> 0,40 vei ehdokkaat 461:stä
+    1875:een mutta vientiin päätyvät vain 94:stä 131:een, koska harvennus
+    ottaa yhden kustakin välistä. Pelkkä jälkimmäinen näytettynä säädin
+    näyttää rikkinäiseltä — se oli oikea havainto käyttäjältä.
+    """
+    settings = Globals(reactions=True, reaction_length=1.0,
+                       reaction_spacing=25.0, reaction_threshold=-1.0)
+    # Kaksisataa ehdokasta viiden sekunnin välein: enemmän kuin välejä.
+    found = [reactions.Reaction("A", t * 5.0, t * 5.0 + 1.0, 1.0)
+             for t in range(200)]
+    kept = reactions._thin(found, settings)
+    assert len(found) == 200
+    assert len(kept) < 45, f"harvennus ei rajoittanut ({len(kept)})"
+    # Väli puolitettuna mahtuu noin kaksinkertainen määrä.
+    tighter = reactions._thin(found, Globals(
+        reactions=True, reaction_length=1.0, reaction_spacing=10.0))
+    assert len(tighter) > len(kept) * 1.5, (len(tighter), len(kept))
+
+
+def test_candidates_and_find_answer_different_questions():
+    """``candidates`` ei harvenna, ``find`` harventaa."""
+    grid = _grid("B" * 400)
+    settings = Globals(reactions=True, reaction_threshold=-99.0,
+                       reaction_spacing=30.0, reaction_length=1.0)
+
+    class Item:
+        key = "cam"
+        asset_start = 0
+
+        class P:
+            offset = 0
+            end = 400
+            start = 0
+        placements = [P()]
+
+    class Timeline:
+        def track_media(self, key):
+            return [Item()]
+
+    class Roles:
+        closes = {"A": "camA"}
+
+    data = table(200, turn=np.zeros(200))
+    data["times"] = np.arange(200, dtype=np.float32)
+    raw = reactions.candidates(grid, Roles(), Timeline(), {"cam": data},
+                               settings, 0.0)
+    thinned = reactions.find(grid, Roles(), Timeline(), {"cam": data},
+                             settings, 0.0)
+    assert len(raw) > len(thinned), (len(raw), len(thinned))

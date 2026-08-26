@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.90] - 2026-08-26
+
+### Fixed
+- **The Note Promised a Number That Cannot Move**: "121 moments pass the gate — that number changes as soon as you move the gate" was false, and the report was right. Measured on a real episode, moving the gate from 0.03 to 0.40 takes the candidates from **461 to 1875** — but what reaches the export only goes from **94 to 131**, because `reaction_spacing` takes one moment per interval and there are always more qualifying moments than intervals.
+  - Both numbers are now shown, because they answer different questions: the gate decides **which** moments qualify, the spacing decides **how many** get used. `reactions.candidates()` was split out from `find()` for exactly this.
+  - **The spacing and the shot length are now controls.** The setting that actually decides the count was not exposed at all, so the count could not be changed by any slider on screen.
+
 ## [v26.08.26.89] - 2026-08-26
 
 ### Fixed

@@ -661,7 +661,7 @@ def _video_json(state: AppState) -> dict:
         frames += int(len(found))
         faces += int(found.sum())
 
-    candidates = None
+    candidates = placed = None
     if state.video_tables and state.timeline is not None and state.analysis:
         try:
             roles = resolve_roles(state.timeline, state.settings.tracks)
@@ -672,11 +672,20 @@ def _video_json(state: AppState) -> dict:
             # päättää käytetäänkö sitä. Muuten se näyttäisi nollaa
             # silloinkin kun ehdokkaita on satoja.
             wanted = dataclasses_replace(state.settings.globals, reactions=True)
-            candidates = len(reactions.find(
+            # Kaksi lukua, koska ne vastaavat eri kysymyksiin: portin läpi
+            # kertoo mitä aineistossa on ja liikkuu säätimen mukana,
+            # vientiin päätyvät on käytännössä ``reaction_spacing``in
+            # määräämä. Pelkkä jälkimmäinen saa säätimen näyttämään
+            # rikkinäiseltä — mitattuna se liikkui 121:stä 129:ään samalla
+            # kun ehdokkaat menivät 1118:sta 1572:een.
+            candidates = len(reactions.candidates(
+                grid, roles, state.timeline, state.video_tables,
+                wanted, float(program_start)))
+            placed = len(reactions.find(
                 grid, roles, state.timeline, state.video_tables,
                 wanted, float(program_start)))
         except (AnalysisError, ValueError, KeyError):
-            candidates = None
+            candidates = placed = None
 
     return {
         "progress": dict(state.video_progress),
@@ -684,6 +693,7 @@ def _video_json(state: AppState) -> dict:
         "frames": frames,
         "faces": faces,
         "candidates": candidates,
+        "placed": placed,
         "errors": sorted(state.video_errors.values()),
     }
 

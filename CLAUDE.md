@@ -371,6 +371,14 @@ not separate at all. `turn` and `tilt` come from the nose relative to the
 midpoint of the eyes, divided by the eye span so face size and distance stay
 out of it. `yaw` remains: as a bin, "turned away" is what it detects well.
 
+The gate decides which moments qualify; `reaction_spacing` decides how many
+are used. Measured: a gate of 0.03 → 0.40 moves the candidates from 461 to
+1875, while what reaches the export moves only from 94 to 131, because
+thinning takes one moment per interval and qualifying moments always
+outnumber intervals. Showing only the exported count made the gate slider
+look broken. Both numbers belong on screen, and `reactions.candidates()`
+exists separately from `find()` for that reason.
+
 The reaction score is a **gate**, not a ranking. The bar for a reaction shot
 is not "outstanding" but "not disqualifying" — in a finished edit most of
 them are unremarkable and only have to avoid embarrassment. Measured on 381

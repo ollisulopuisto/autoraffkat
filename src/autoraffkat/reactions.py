@@ -162,14 +162,35 @@ def to_timeline(item, file_times: np.ndarray, program_start: float) -> np.ndarra
     return out
 
 
+def candidates(grid, roles, timeline, tables: dict, settings,
+               program_start: float) -> list[Reaction]:
+    """Kaikki portin läpäisseet hetket, **harventamatta**.
+
+    Erillään ``find``istä, koska luvut vastaavat eri kysymyksiin: tämä
+    kertoo mitä aineistossa on ja liikkuu portin mukana, ``find`` kertoo
+    montako niistä päätyy vientiin ja on käytännössä ``reaction_spacing``in
+    määräämä. Mitattuna oikealla jaksolla portti 0,03 -> 0,40 vie ehdokkaat
+    461:stä 1875:een mutta vientiin päätyvät 94:stä 131:een — jos vain
+    jälkimmäisen näyttää, säädin näyttää rikkinäiseltä.
+    """
+    return _gather(grid, roles, timeline, tables, settings, program_start)
+
+
 def find(grid, roles, timeline, tables: dict, settings, program_start: float
          ) -> list[Reaction]:
-    """Ehdotetut reaktiokuvat, aikajärjestyksessä.
+    """Vientiin päätyvät reaktiokuvat, aikajärjestyksessä.
 
     ``tables`` on media-avain -> mittaustaulukko. Puuttuva taulukko ei ole
     virhe: se tarkoittaa ettei sitä kameraa ole mitattu, ja silloin siitä ei
     ehdoteta mitään.
     """
+    return _thin(_gather(grid, roles, timeline, tables, settings, program_start),
+                 settings)
+
+
+def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
+            ) -> list[Reaction]:
+    """Portin läpäisseet hetket ilman harvennusta."""
     if not getattr(settings, "reactions", False):
         return []
     weights = {
@@ -208,7 +229,7 @@ def find(grid, roles, timeline, tables: dict, settings, program_start: float
                     continue
                 found.append(Reaction(speaker, at, at + settings.reaction_length,
                                       float(value)))
-    return _thin(found, settings)
+    return found
 
 
 def _thin(found: list[Reaction], settings) -> list[Reaction]:
