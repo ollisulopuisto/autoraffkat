@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.94] - 2026-08-26
+
+### Fixed
+- **Reaction Shots Were Written in a Shape Final Cut Never Produces**: they were `asset-clip`s referencing the angle's asset directly — valid DTD, clean import, and **nothing on the timeline**. A hand-made comparison file showed the real structure: a nested `mc-clip` carrying the host's own `ref`, with its angle chosen by `<mc-source angleID=…>`. As a multicam clip it also stays in sync, which a separate file reference would not.
+  - Times are in the host's local base, so a synchronous placement has `offset` and `start` equal. Final Cut's own file differs only because that clip had been dragged there by hand.
+  - Final Cut writes `srcEnable="all"`; ours is `video`, or the close-up's camera microphone would sum over the processed mics.
+
+### Added
+- **The Speaker as a Keyword on Every Clip**: the browser shows a multicam clip's *media* name, so every shot read "A-osa" regardless of what we named it, and the index's Tags tab was empty. Keywords are where Final Cut actually shows this. Reaction shots get `Reaktio · <speaker>`.
+  - The DTD fixes the order — `mc-source*`, then nested clips, then keywords — and a keyword before the lanes fails validation. A test asserts the order rather than just the presence.
+
 ## [v26.08.26.93] - 2026-08-26
 
 ### Fixed

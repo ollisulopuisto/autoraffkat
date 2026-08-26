@@ -771,11 +771,12 @@ def test_reactions_go_on_their_own_lane_not_into_the_multicam(fixture_dir):
     """
     _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
     root = ET.fromstring(xml)
-    clips = [c for c in root.iter("asset-clip") if "reaktio" in (c.get("name") or "")]
+    clips = [c for c in root.iter("mc-clip") if "reaktio" in (c.get("name") or "")]
     assert len(clips) == 1, "reaktiokuvaa ei kirjoitettu"
     assert int(clips[0].get("lane")) > 0, "reaktio ei ole omalla lanellaan"
-    # Monikameran omat kulmavalinnat eivät saa muuttua.
-    assert [c.get("srcEnable") for c in root.iter("mc-source")].count("all") == 0
+    # Sisäkkäinen mc-clip, ei asset-clip: rakenne on Final Cutin oma.
+    assert clips[0].find("mc-source") is not None
+    assert clips[0].find("mc-source").get("angleID")
 
 
 def test_a_reaction_clip_carries_no_audio(fixture_dir):
@@ -787,9 +788,12 @@ def test_a_reaction_clip_carries_no_audio(fixture_dir):
     huomaa vasta kuuntelemalla.
     """
     _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
-    clip = next(c for c in ET.fromstring(xml).iter("asset-clip")
+    clip = next(c for c in ET.fromstring(xml).iter("mc-clip")
                 if "reaktio" in (c.get("name") or ""))
-    assert clip.get("srcEnable") == "video"
+    source = clip.find("mc-source")
+    # Verrokissa Final Cut kirjoittaa "all"; meille se toisi kameramikin
+    # käsiteltyjen mikkien päälle.
+    assert source.get("srcEnable") == "video"
     assert clip.get("audioRole") is None
 
 
@@ -798,7 +802,7 @@ def test_reactions_are_clipped_to_the_programme(fixture_dir):
     tietoa eikä vienti käytä sitä."""
     _, xml = _with_reactions(fixture_dir, [("Guest", 35.0, 40.0, 2.0),
                                            ("Guest", -5.0, -1.0, 2.0)])
-    clips = [c for c in ET.fromstring(xml).iter("asset-clip")
+    clips = [c for c in ET.fromstring(xml).iter("mc-clip")
              if "reaktio" in (c.get("name") or "")]
     assert len(clips) == 1
     assert parse_time(clips[0].get("duration")) <= Fraction(1)
@@ -825,4 +829,70 @@ def test_a_reaction_export_validates_against_final_cut(fixture_dir, validate_fcp
     """Oma lukijamme hyväksyy paljon enemmän kuin tuoja."""
     _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1),
                                            ("Host", 20.0, 21.6, 1.8)])
+    validate_fcpxml(xml)
+
+
+def test_a_reaction_matches_final_cuts_own_structure(fixture_dir):
+    """Verrattuna siihen mitä Final Cut itse kirjoittaa.
+
+    Ensimmäinen yritys oli ``asset-clip`` joka viittasi kulman assettiin:
+    kelvollista DTD:tä, ja aikajanalla ei näkynyt mitään. Käsin tehty
+    verrokki paljasti oikean muodon — sisäkkäinen ``mc-clip``, jonka
+    ``mc-source`` valitsee kulman ``angleID``:llä, samalla ``ref``illä kuin
+    isäntä. Tämä testi pitää sen muodon.
+    """
+    tl, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
+    root = ET.fromstring(xml)
+    host = root.find(".//spine/mc-clip")
+    clip = next(c for c in root.iter("mc-clip")
+                if "reaktio" in (c.get("name") or ""))
+    assert clip.get("ref") == host.get("ref"), "eri media kuin isäntä"
+    assert clip.find("mc-source").get("angleID"), "kulmaa ei valittu"
+    # Synkroninen sijoitus: offset ja start ovat median omaa aikaa, joten
+    # ne ovat sama luku. Verrokissa ne eroavat vain käsin raahaamisen takia.
+    assert clip.get("offset") == clip.get("start")
+
+
+def test_a_reaction_is_skipped_when_the_angle_is_not_in_this_part(fixture_dir):
+    """Kulma voi puuttua osasta kokonaan.
+
+    Silloin siihen leikkaaminen tuottaisi kuvan jota ei ole. Kirjoittamatta
+    jättäminen on oikea vastaus — mutta vain siksi että kulma puuttuu, ei
+    hiljaisena epäonnistumisena muusta syystä.
+    """
+    from autoraffkat.reactions import Reaction
+
+    tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
+    roles = _roles_for(tl)
+    roles.closes["Guest"] = "EI_OLE_TALLAISTA_RAITAA"
+    xml = build_multicam_fcpxml(
+        tl,
+        [Segment("WIDE", "Laaja", 0.0, 4.0), Segment("CLOSE_A", "Host", 4.0, 36.0)],
+        [("host Track1", "Host"), ("guest Track2", "Guest")],
+        Fraction(0), Fraction(36), "Reaktiotesti", source="multicam.fcpxml",
+        reactions=[Reaction("Guest", 8.0, 9.6, 2.1)], roles=roles,
+    )
+    assert not [c for c in ET.fromstring(xml).iter("mc-clip")
+                if "reaktio" in (c.get("name") or "")]
+
+
+def test_clips_carry_the_speaker_as_a_keyword(fixture_dir, validate_fcpxml):
+    """Selaimessa monikameraklipin nimi on median oma, ei meidän antamamme.
+
+    Kaikki kuvat näyttivät siksi samalta — «A-osa», «B-osa» — ja
+    hakemiston Tags-välilehti oli tyhjä. Avainsana on se paikka jossa
+    Final Cut oikeasti erottaa ne, ja DTD vaatii sen **lanejen jälkeen**:
+    mc-source, sisäkkäiset klipit, vasta sitten avainsanat.
+    """
+    _, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
+    root = ET.fromstring(xml)
+    host = root.find(".//spine/mc-clip")
+    tags = [k.get("value") for k in host.findall("keyword")]
+    assert tags, "puhujaa ei merkitty avainsanaksi"
+    kids = [c.tag for c in host]
+    assert kids.index("keyword") > kids.index("mc-clip"), kids
+    reaction = next(c for c in root.iter("mc-clip")
+                    if "reaktio" in (c.get("name") or ""))
+    assert any("Reaktio" in (k.get("value") or "")
+               for k in reaction.findall("keyword"))
     validate_fcpxml(xml)

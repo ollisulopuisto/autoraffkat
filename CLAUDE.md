@@ -490,6 +490,24 @@ and for one version that meant the panel showed 96 shots while the export
 wrote none, correctly and silently. Anything drawn but not exported says so
 on its face.
 
+A reaction shot on a lane is a nested `mc-clip`, not an `asset-clip`. The
+first attempt referenced the angle's asset directly: valid DTD, clean
+import, and **nothing on the timeline at all**. A hand-made comparison in
+Final Cut showed the real shape — a nested `mc-clip` with the host's own
+`ref`, its angle chosen by `<mc-source angleID=…>`. As a multicam clip it
+also stays in sync, which a separate file reference would not. Times are in
+the host's local base, so for a synchronous placement `offset` and `start`
+are the same number; Final Cut's own file differs only because that clip was
+dragged there by hand. Final Cut writes `srcEnable="all"`; ours must be
+`video`, or the close-up's camera microphone sums over the processed mics.
+
+Keywords are where Final Cut shows what a clip is. The browser displays a
+multicam clip's *media* name — every shot reads "A-osa" — so the `name`
+attribute buys nothing there and the index's Tags tab stays empty. The
+speaker goes on as a `<keyword>`, and the DTD fixes the order: `mc-source*`,
+then nested clips, then keywords. Put the keyword before the lanes and the
+import fails validation.
+
 ## Speculative picture goes on its own lane
 
 Reaction shots — cutting to the listener while someone else talks — are not

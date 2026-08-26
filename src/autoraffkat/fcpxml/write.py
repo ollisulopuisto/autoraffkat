@@ -920,53 +920,75 @@ REACTION_LANE = 1
 
 
 def _reaction_clips(
-    reactions, timeline, roles, ids, program_start, program_end,
-    frame_duration, parent_start_frames=0,
+    reactions, timeline, roles, angles_of, mc, host_start_frames, host_offset,
+    frame_duration, program_start, program_end,
 ):
-    """Reaktiokuvat liitettyinä klippeinä omalle lanelleen.
+    """Reaktiokuvat sisäkkäisinä ``mc-clip``einä omalle lanelleen.
 
-    **Ei kulmanvaihtoja monikameran sisällä.** Kuvakulman vaihtaminen
-    tarkoittaisi että reaktioiden poistaminen vaatii uuden viennin, ja
-    siihen mennessä edellinen vienti on yleensä jo tuotu Final Cutiin ja
-    leikattu käsin — sitä työtä ``next_output_path`` on olemassa
-    suojaamaan. Omalta lanelta ne poistaa yhdellä valinnalla, ja alla oleva
-    leikkaus on ruutu ruudulta koskematon.
+    **Rakenne on Final Cutin oma, ei arvattu.** Ensimmäinen yritys oli
+    ``asset-clip`` joka viittasi kulman assettiin suoraan: kelvollista
+    DTD:tä, mutta rakenne jota Final Cut ei koskaan kirjoita, eikä se
+    näkynyt aikajanalla lainkaan. Käsin tehty verrokki näyttää mitä se
+    tekee — sisäkkäinen ``mc-clip``, jonka ``mc-source`` valitsee kulman
+    ``angleID``:llä::
 
-    **Ääni pois, eksplisiittisesti.** Lähikuvan liitetty klippi kantaa sen
-    kameran äänen, joka summautuisi käsiteltyjen mikkien päälle. Se on sama
-    perhe kuin ``uid``in romahdus ja ``srcEnable``in voitto ``active``ista:
-    kelvollinen XML, siisti tuonti, ja väärä ääni jonka huomaa vasta
-    kuuntelemalla. ``audioRole`` jätetään pois ja ``srcEnable`` on
-    ``video``.
+        <mc-clip lane="1" ref="r8" name="B-osa 8"
+                 offset="20804/25s" duration="41900/2500s" start="1991/5s">
+          <mc-source angleID="dQGA…" srcEnable="all"/>
+        </mc-clip>
+
+    Monikameraklippinä se pysyy myös synkassa: kulma on saman median sisällä
+    eikä erillinen tiedostoviittaus, joka voisi valua ripple-editissä.
+
+    **Ajat isännän paikallisessa ajassa.** ``offset`` lasketaan isännän
+    ``start``ista, ei aikajanasta — sama sääntö kuin lukijan ``_walk``issa.
+    Synkronisella sijoituksella ``offset`` ja ``start`` ovat sama luku,
+    koska kummankin nollakohta on median oma aika; verrokissa ne eroavat
+    vain siksi että klippi on raahattu käsin toisesta kohdasta.
+
+    **Ääni pois.** Verrokissa on ``srcEnable="all"``, koska Final Cut
+    tekee niin oletuksena. Meille se toisi lähikuvan kameramikin
+    käsiteltyjen mikkien päälle, joten tässä on ``video``.
     """
     lines: list[str] = []
-    for reaction in reactions:
+    own = set(mc.angle_ids)
+    for index, reaction in enumerate(reactions):
         key = roles.closes.get(reaction.speaker)
         if not key:
             continue
-        for item in timeline.track_media(key):
-            res_id = ids.get(item.asset_id)
-            if res_id is None:
-                continue
-            for placement in item.placements:
-                start = max(reaction.start, float(placement.offset), program_start)
-                end = min(reaction.end, float(placement.end), program_end)
-                if end <= start:
-                    continue
-                off = to_frames(start - program_start, frame_duration)
-                dur = to_frames(end - start, frame_duration)
-                if dur <= 0:
-                    continue
-                src = to_frames(placement.source_at(start), frame_duration)
-                lines.append(
-                    f'              <asset-clip ref="{res_id}" '
-                    f'lane="{REACTION_LANE}" '
-                    f'offset="{frames_str(parent_start_frames + off, frame_duration)}" '
-                    f"name={quoteattr(item.name + ' reaktio')} "
-                    f'start="{frames_str(src, frame_duration)}" '
-                    f'duration="{frames_str(dur, frame_duration)}" '
-                    f'srcEnable="video"/>'
-                )
+        angle_id = next((x for x in angles_of.get(key, []) if x in own), "")
+        if not angle_id:
+            continue          # kulmaa ei ole tässä osassa: ei kirjoiteta mitään
+        start = max(reaction.start, program_start)
+        end = min(reaction.end, program_end)
+        if end <= start:
+            continue
+        source = to_frames(mc.source_at(start), frame_duration)
+        dur = to_frames(end - start, frame_duration)
+        if dur <= 0:
+            continue
+        lines.append(
+            f'              <mc-clip lane="{REACTION_LANE}" '
+            f"ref={quoteattr(mc.media_id)} "
+            f"name={quoteattr(f'{reaction.speaker} reaktio {index + 1:02d}')} "
+            f'offset="{frames_str(source, frame_duration)}" '
+            f'start="{frames_str(source, frame_duration)}" '
+            f'duration="{frames_str(dur, frame_duration)}">'
+        )
+        lines.append(
+            f'                <mc-source angleID={quoteattr(angle_id)} '
+            f'srcEnable="video"/>'
+        )
+        # Avainsana, jotta reaktiokuvat löytyvät Final Cutin hakemistosta.
+        # Nimi ei riitä: monikameraklipin nimenä selain näyttää median oman
+        # nimen, ja hakemiston Tags-välilehti oli tyhjä. Avainsana on se
+        # paikka jossa Final Cut oikeasti näyttää tämän.
+        lines.append(
+            f'                <keyword start="{frames_str(source, frame_duration)}" '
+            f'duration="{frames_str(dur, frame_duration)}" '
+            f"value={quoteattr(f'Reaktio · {reaction.speaker}')}/>"
+        )
+        lines.append("              </mc-clip>")
     return lines
 
 
@@ -1069,6 +1091,17 @@ def build_multicam_fcpxml(
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
         sources = _mc_sources(video_angle, audio_angles, mc.angle_roles, raw_angles)
+        # Puhujan nimi avainsanaksi. Selaimessa monikameraklipin nimi on
+        # median oma («A-osa»), joten kaikki kuvat näyttävät samalta;
+        # avainsana on se paikka jossa Final Cut erottaa ne. Lisätään
+        # vasta lanejen jälkeen, koska DTD vaatii sen järjestyksen:
+        # `mc-source*`, sitten sisäkkäiset klipit, vasta sitten avainsanat.
+        speaker_keyword = [
+            f'              <keyword '
+            f'start="{frames_str(start_frames, frame_duration)}" '
+            f'duration="{frames_str(b - a, frame_duration)}" '
+            f"value={quoteattr(seg.label)}/>"
+        ]
         # Reaktiokuvat ensimmäiseen klippiin kuten tilaäänikin: liitetyt
         # klipit ovat isäntänsä paikallisessa ajassa, joten yksi isäntä
         # riittää koko ohjelmalle ja jakaminen klippien kesken tekisi
@@ -1076,14 +1109,8 @@ def build_multicam_fcpxml(
         if not attached_reactions and reactions and roles is not None:
             attached_reactions = True
             sources = sources + _reaction_clips(
-                reactions,
-                timeline,
-                roles,
-                {a: a for a in asset_ids},
-                program_start,
-                program_end,
-                frame_duration,
-                to_frames(mc.source_at(at), frame_duration),
+                reactions, timeline, roles, angles_of, mc,
+                start_frames, a, frame_duration, program_start, program_end,
             )
         if not attached_room and room_ids:
             attached_room = True
@@ -1096,6 +1123,7 @@ def build_multicam_fcpxml(
                 program_end,
                 to_frames(mc.source_at(at), frame_duration),
             )
+        sources = sources + speaker_keyword
         if sources:
             body.append("            <mc-clip " + " ".join(attrs) + ">")
             body += sources
