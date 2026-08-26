@@ -732,7 +732,9 @@ function renderGlobals() {
     hint: T('reactions.hint'),
     value: state.globals.reactions
       ? (reacting ? T('reactions.measuring')
-                  : T('reactions.measured', { n: video.measured || 0 }))
+                  : (video.candidates == null
+                      ? T('reactions.notMeasured')
+                      : T('reactions.candidates', { n: video.candidates })))
       : T('audio.off'),
     keys: ['reaction_turn_max'],
     toggle: {
@@ -791,7 +793,12 @@ function reactionsBody(host, mark, video, running) {
     ? T('reactions.measuringNote', {
         percent: Math.round((video.progress.fraction || 0) * 100) })
     : (video.measured
-        ? T('reactions.measuredNote', { n: video.measured })
+        ? T('reactions.measuredNote', {
+            files: video.measured,
+            frames: (video.frames || 0).toLocaleString('fi-FI'),
+            faces: video.frames
+              ? Math.round(100 * (video.faces || 0) / video.frames) : 0,
+            candidates: video.candidates == null ? '–' : video.candidates })
         : T('reactions.needMeasure'));
   host.append(note);
 

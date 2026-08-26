@@ -16,6 +16,7 @@ import threading
 import time
 import traceback
 from dataclasses import dataclass, field
+from dataclasses import replace as dataclasses_replace
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
@@ -599,6 +600,52 @@ class AppState:
         }
 
 
+def _video_json(state: AppState) -> dict:
+    """Kuvan mittausten tila käyttöliittymälle.
+
+    Tiedostojen määrä on huonoin saatavilla oleva luku: neljä lähikuvaa
+    tarkoittaa kahta kameraa kahdessa osassa, ei neljää kuvaa. Ruudut ja
+    portin läpäisseet hetket kertovat mitä oikeasti on.
+
+    Läpäisseiden määrä lasketaan joka kyselyllä, koska se muuttuu heti kun
+    porttia liikuttaa — numpyta valmiiden taulukoiden yli, ei yhtään
+    tiedostonlukua, joten se kelpaa säätökierrokselle.
+    """
+    frames = faces = 0
+    for table in state.video_tables.values():
+        found = table.get("found")
+        if found is None:
+            continue
+        frames += int(len(found))
+        faces += int(found.sum())
+
+    candidates = None
+    if state.video_tables and state.timeline is not None and state.analysis:
+        try:
+            roles = resolve_roles(state.timeline, state.settings.tracks)
+            grid, program_start, _ = build_grid(
+                state.analysis, state.settings.tracks, roles)
+            # Laskenta ei katso ``reactions``-asetusta, samasta syystä kuin
+            # mittauskaan: luku kertoo mitä aineistossa on, ja asetus
+            # päättää käytetäänkö sitä. Muuten se näyttäisi nollaa
+            # silloinkin kun ehdokkaita on satoja.
+            wanted = dataclasses_replace(state.settings.globals, reactions=True)
+            candidates = len(reactions.find(
+                grid, roles, state.timeline, state.video_tables,
+                wanted, float(program_start)))
+        except (AnalysisError, ValueError, KeyError):
+            candidates = None
+
+    return {
+        "progress": dict(state.video_progress),
+        "measured": len(state.video_tables),
+        "frames": frames,
+        "faces": faces,
+        "candidates": candidates,
+        "errors": sorted(state.video_errors.values()),
+    }
+
+
 def _audio_warnings(state: AppState, roles, replacements: dict) -> list[str]:
     """Kertoo jos vienti käyttää raakaa ääntä vaikka käsittely on päällä.
 
@@ -704,11 +751,7 @@ def _state_json(state: AppState) -> dict:
         # arvot itse — JavaScriptiin kirjoitettu kopio ajautuisi erilleen
         # hiljaa, ja silloin merkki näyttäisi väärää tai ei mitään.
         "audio_defaults": AudioSettings().to_json(),
-        "video": {
-            "progress": dict(state.video_progress),
-            "measured": len(state.video_tables),
-            "errors": sorted(state.video_errors.values()),
-        },
+        "video": _video_json(state),
         # Palojen ylärajan ja automaattivalinnan on oltava käyttöliittymässä
         # sama luku kuin käsittelyssä: se riippuu koneesta, ei asetuksista.
         # Alustojen lukemat palvelimelta, jotta käyttöliittymä ja käsittely

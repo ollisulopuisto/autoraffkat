@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.84] - 2026-08-26
+
+### Fixed
+- **"4 lähikuvaa mitattu" Was the Least Informative Number Available**: it counted *files* — two cameras in two parts — and read as though four pictures had been found. The row now says how many keyframes came out of how many files, in what share a face was found, and **how many moments pass the gate**, which is the only number that answers "will this do anything".
+  - The candidate count is recomputed on every state request, so it moves as the gate slider moves. It is numpy over the cached tables with no file reading, so it belongs in the settings loop.
+  - Like the measurement, it ignores the `reactions` setting on purpose: it reports what is in the material, and the setting only decides whether that gets used. Reading it would have shown zero while hundreds of candidates existed — the same lie as the button.
+
 ## [v26.08.26.83] - 2026-08-26
 
 ### Fixed

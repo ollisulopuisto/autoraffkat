@@ -201,15 +201,18 @@ const STRINGS = {
     'reactions.measure': 'Mittaa lähikuvat',
     'reactions.again': 'Mittaa uudestaan',
     'reactions.measuring': 'mitataan…',
-    'reactions.measured': '{n} mitattu',
+    'reactions.candidates': '{n} hetkeä',
+    'reactions.notMeasured': 'ei mitattu',
     'reactions.failed': 'Mittaus ei onnistunut',
     'reactions.needMeasure': 'Lähikuvia ei ole vielä mitattu. Purku kestää '
       + 'minuutteja, mutta tulos jää välimuistiin — toinen ajo on ilmainen.',
     'reactions.measuringNote': 'Puretaan avainruutuja ja mitataan kasvot, '
       + '{percent} %. Vain ne hetket joissa tämä puhuja on vaiti.',
-    'reactions.measuredNote': '{n} lähikuvaa mitattu. Reaktiokuvat menevät '
-      + 'vientiin omalle lanelleen, joten ne voi poistaa yhdellä valinnalla '
-      + 'ilman uutta vientiä.',
+    'reactions.measuredNote': '{frames} avainruutua {files} tiedostosta, '
+      + 'kasvot löytyi {faces} %:sta. Portin läpäisee {candidates} hetkeä — '
+      + 'se luku muuttuu heti kun porttia liikuttaa. Vientiin ne menevät '
+      + 'omalle lanelleen, joten ne voi poistaa yhdellä valinnalla ilman '
+      + 'uutta vientiä.',
     'reactions.gate': 'Portti: pään suoruus',
     'why.reaction_turn_max': 'Suurin sallittu pään kääntymä puhujasta pois. '
       + 'Mitattuna 23 käsin arvioidusta ruudusta luokat eivät mene '
@@ -475,15 +478,17 @@ const STRINGS = {
     'reactions.measure': 'Measure the close-ups',
     'reactions.again': 'Measure again',
     'reactions.measuring': 'measuring…',
-    'reactions.measured': '{n} measured',
+    'reactions.candidates': '{n} moments',
+    'reactions.notMeasured': 'not measured',
     'reactions.failed': 'The measurement failed',
     'reactions.needMeasure': 'The close-ups have not been measured yet. '
       + 'Decoding takes minutes, but the result is cached — a second run is free.',
     'reactions.measuringNote': 'Decoding keyframes and measuring faces, '
       + '{percent} %. Only the moments where this speaker is silent.',
-    'reactions.measuredNote': '{n} close-ups measured. Reaction shots go into '
-      + 'the export on their own lane, so they can be removed with one '
-      + 'selection and without exporting again.',
+    'reactions.measuredNote': '{frames} keyframes from {files} files, a face '
+      + 'found in {faces} %. {candidates} moments pass the gate — that number '
+      + 'moves as soon as you move the gate. They go into the export on their '
+      + 'own lane, so one selection removes them without exporting again.',
     'reactions.gate': 'Gate: how square the head is',
     'why.reaction_turn_max': 'The largest head turn away from the speaker that '
       + 'still passes. Measured over 23 hand-marked frames the classes do not '
