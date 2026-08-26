@@ -728,6 +728,7 @@ function renderGlobals() {
   const reacting = !!(video.progress && video.progress.running);
   rows.append(settingRow({
     key: 'reactions',
+    live: 'reaction-value',
     label: T('reactions.title'),
     hint: T('reactions.hint'),
     value: state.globals.reactions
@@ -789,6 +790,7 @@ function renderGlobals() {
 function reactionsBody(host, mark, video, running) {
   const note = document.createElement('p');
   note.className = 'why';
+  note.id = 'reaction-note';
   note.textContent = running
     ? T('reactions.measuringNote', {
         percent: Math.round((video.progress.fraction || 0) * 100) })
@@ -816,7 +818,10 @@ function reactionsBody(host, mark, video, running) {
         const response = await fetch('/api/video', { method: 'POST' });
         const data = await response.json();
         if (!response.ok) throw new Error(data.detail || '');
-        state = data;
+        /* Vastaus on kapea: vain mittauksen tila. Aiemmin tähän sijoitettiin
+           koko tila, jolloin juuri liikutettu portti hyppäsi takaisin
+           siihen mitä palvelimelle oli ehditty tallentaa. */
+        state.video = data.video;
         renderGlobals();
         watchVideo();
         return;
@@ -840,13 +845,40 @@ function reactionsBody(host, mark, video, running) {
   }, mark);
 }
 
+/* Portin luku päivittyy säätimen vieressä.
+
+   Vaikutus on olemassa — esikatselupalkin reaktiorivi muuttuu — mutta se on
+   ruudun toisella laidalla, eikä säädintä voi arvioida kohteesta jota ei
+   näe samalla. Luku vaihdetaan **paikallaan**: koko paneelin piirtäminen
+   veisi raahattavan säätimen käden alta, mikä on sama sääntö kuin
+   `swapMixButton`illa. */
+function refreshReactionCount() {
+  if (!latest) return;
+  const shots = latest.reactions;
+  if (!shots) return;
+  const value = $('reaction-value');
+  if (value && state.globals.reactions) {
+    value.textContent = T('reactions.candidates', { n: shots.length });
+  }
+  const note = $('reaction-note');
+  const video = state.video || {};
+  if (note && video.measured && !(video.progress || {}).running) {
+    note.textContent = T('reactions.measuredNote', {
+      files: video.measured,
+      frames: (video.frames || 0).toLocaleString('fi-FI'),
+      faces: video.frames ? Math.round(100 * (video.faces || 0) / video.frames) : 0,
+      candidates: shots.length,
+    });
+  }
+}
+
 /* Mittauksen seuranta. Sama kuvio kuin äänellä: palkki liikkuu vain jos
    tilaa kysytään, eikä taustasäie voi kertoa siitä itse. */
 function watchVideo() {
   const tick = async () => {
     try {
       const data = await (await fetch('/api/state')).json();
-      state = data;
+      state.video = data.video;      // samasta syystä: vain edistyminen
       renderGlobals();
       if (data.video && data.video.progress && data.video.progress.running) {
         setTimeout(tick, 1000);
@@ -993,6 +1025,7 @@ function settingRow(spec) {
   const value = document.createElement('div');
   value.className = 'arow-value';
   value.textContent = spec.value || '';
+  if (spec.live) value.id = spec.live;
 
   opener.append(name, value);
   head.append(opener);
@@ -2068,6 +2101,7 @@ async function send() {
     if (data.ok) {
       banner('');
       drawBar(); renderRuler(); renderLegend(); renderCuts();
+      refreshReactionCount();
     } else {
       banner((data.problems || [T('app.unknownError')]).join('\n'));
       latest = { ...data, preview: null };

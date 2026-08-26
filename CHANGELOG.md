@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.89] - 2026-08-26
+
+### Fixed
+- **"Mittaa uudestaan" Reverted the Gate Slider**: no, not intentional. `/api/video` answered with the whole application state and the browser assigned it straight into `state`, so every control snapped back to whatever had last reached the server — a gate you had just dragged jumped to its saved value. The endpoint now returns **only the measurement state**, which makes the mistake impossible rather than merely fixed. A test asserts the response carries nothing else.
+- **The gate slider now shows its effect beside itself.** Dragging it did change something — the reaction row in the preview bar — but that is at the other end of the screen, and a control cannot be judged against a result you have to go looking for. The moment count in the row's header and in the note under the slider now update as you drag. They are swapped **in place**: redrawing the panel would pull the slider out from under the cursor, the same rule that governs the audio button.
+
 ## [v26.08.26.88] - 2026-08-26
 
 ### Fixed

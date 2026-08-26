@@ -852,3 +852,22 @@ def test_reactions_on_without_measurements_warns_instead_of_silence(scratch_xml)
     assert exported["reactions"] == 0
     assert any("mitattu" in w or "measured" in w for w in exported["warnings"]), \
         exported["warnings"]
+
+
+def test_measuring_video_returns_only_its_own_state(scratch_xml):
+    """Mittausvastaus ei saa kantaa asetuksia mukanaan.
+
+    Koko tilan palauttaminen houkutteli selainta sijoittamaan sen suoraan
+    `state`:en, jolloin juuri liikutettu portti hyppäsi takaisin siihen
+    mitä palvelimelle oli ehditty tallentaa. Kapea vastaus tekee siitä
+    virheestä mahdottoman.
+    """
+    state = AppState(xml_path=str(scratch_xml("multicam.fcpxml")))
+    state.load()
+    while not state.progress.get("ready"):
+        time.sleep(0.05)
+    state.settings.tracks = _multicam_tracks()
+    client = TestClient(create_app(state))
+    body = client.post("/api/video").json()
+    assert set(body) == {"video"}, body
+    assert "globals" in client.get("/api/state").json()   # /api/state yhä laaja

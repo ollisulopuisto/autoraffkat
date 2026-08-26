@@ -1006,11 +1006,16 @@ def create_app(state: AppState) -> FastAPI:
             raise HTTPException(409, state.load_error or t("export.not_loaded"))
         if not state.progress.get("ready"):
             raise HTTPException(409, t("video.not_ready"))
+        # Vastaus on **vain** mittauksen tila, ei koko tila. Koko tilan
+        # palauttaminen houkutteli sijoittamaan sen selaimessa suoraan
+        # `state`:en, jolloin juuri liikutettu säädin hyppäsi takaisin
+        # siihen mitä palvelimelle oli ehditty tallentaa. Mittauksella ei
+        # ole mitään sanottavaa asetuksista, joten se ei niitä palauta.
         if state.video_progress.get("running"):
-            return _state_json(state)
+            return {"video": _video_json(state)}
         state.video_progress.update({"running": True, "fraction": 0.0, "done": 0})
         threading.Thread(target=state.measure_video, daemon=True).start()
-        return _state_json(state)
+        return {"video": _video_json(state)}
 
     @app.get("/api/state")
     def get_state():
