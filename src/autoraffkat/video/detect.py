@@ -19,6 +19,7 @@ Sopimus on kolme asiaa:
 from __future__ import annotations
 
 import ctypes
+import warnings
 from typing import Protocol
 
 import numpy as np
@@ -66,6 +67,12 @@ class VisionFaces:
             from Foundation import NSURL
         except ImportError as exc:  # pragma: no cover - riippuu alustasta
             raise DetectError("pyobjc puuttuu, ei kasvontunnistusta") from exc
+        # Paljaan osoittimen lukeminen on tässä tahallista, ja pyobjc
+        # varoittaa siitä joka kerta. Ruutuja on tuhansia ja alueita viisi
+        # kussakin, joten varoitus hukuttaisi kaiken muun lokin alleen —
+        # myös ne rivit joiden takia lokia luetaan.
+        warnings.filterwarnings(
+            "ignore", category=getattr(objc, "ObjCPointerWarning", Warning))
         self._ns_url = NSURL
         self._classes: dict = {}
         try:
