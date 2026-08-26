@@ -134,6 +134,33 @@ button.busy::before {
 }
 .banner.error { background: #3a2224; border-color: #5c3033; color: var(--error); }
 
+/* Viennin tulosrivi. Tiedostonimi on oma kenttänsä eikä osa lausetta:
+   polun seuraava käyttäjä on aina jokin toinen ohjelma, ja lauseen keskeltä
+   sitä ei saa valituksi kahdella klikkauksella. */
+.exported {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+}
+.exported .said { color: var(--muted); }
+.exported input {
+  flex: 1 1 260px;
+  min-width: 0;
+  font: 12.5px/1.4 ui-monospace, "SF Mono", Menlo, monospace;
+  color: var(--text);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+}
+.exported input:focus { outline: 1px solid var(--accent); }
+
 main {
   display: grid;
   grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);

@@ -77,3 +77,48 @@ def test_get_app_icon_path_frozen(monkeypatch, tmp_path):
 
     icon = paths.get_app_icon_path()
     assert icon == fake_assets / "autoraffkat.icns"
+
+
+def test_the_export_can_be_opened_in_final_cut(tmp_path, monkeypatch):
+    """Viennin ainoa jatko on tuonti, joten se on nappi eikä käsin kopiointi.
+
+    Nappi ei saa olla hiljainen: jos ``open`` epäonnistuu — Final Cutia ei
+    ole — käyttäjä saa syyn eikä onnistuneen näköistä painallusta.
+    """
+    import sys
+
+    from fastapi.testclient import TestClient
+
+    from autoraffkat.server import app as server_app
+    from autoraffkat.server.app import AppState, create_app
+
+    source = tmp_path / "a.fcpxml"
+    source.write_text("<x/>", encoding="utf-8")
+    out = tmp_path / "a-cut.fcpxml"
+    out.write_text("<x/>", encoding="utf-8")
+    client = TestClient(create_app(AppState(xml_path=str(source))))
+
+    calls = []
+
+    class Done:
+        returncode = 0
+        stderr = ""
+
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(server_app.subprocess, "run",
+                        lambda cmd, **kw: calls.append(cmd) or Done())
+    assert client.post("/api/final-cut", json={"path": str(out)}).json() == {"ok": True}
+    assert calls == [["open", "-a", "Final Cut Pro", str(out)]]
+
+    # Puuttuva tiedosto ei ole onnistuminen.
+    missing = client.post("/api/final-cut", json={"path": str(tmp_path / "ei.xml")})
+    assert missing.status_code == 404
+
+    class Failed:
+        returncode = 1
+        stderr = "Unable to find application"
+
+    monkeypatch.setattr(server_app.subprocess, "run", lambda cmd, **kw: Failed())
+    broken = client.post("/api/final-cut", json={"path": str(out)})
+    assert broken.status_code == 400
+    assert "Unable to find" in broken.json()["detail"]

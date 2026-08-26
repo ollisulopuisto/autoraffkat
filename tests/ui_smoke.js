@@ -93,6 +93,9 @@ function makeElement(tag) {
       return new Proxy({}, { get: () => () => {}, set: () => true });
     },
     focus() {},
+    /* Oikeassa <input>:issä on select(); ilman tätä kentän
+       kohdistuskäsittelijä kaatuisi tyngässä eikä oikeassa selaimessa. */
+    select() {},
     /* Sijainti ja koko: esikatselupalkki ja viivain laskevat leveydestä,
        joten ilman tätä ne palaisivat heti eivätkä testaisi mitään. */
     getBoundingClientRect() {
@@ -208,6 +211,8 @@ const routes = {
   '/api/video': () => state,
   '/api/pick': () => ({ path: '/x/valittu.fcpxml' }),
   '/api/open': () => state,
+  '/api/final-cut': () => ({ ok: true }),
+  '/api/reveal': () => ({ ok: true }),
   '/api/reload': () => state,
 };
 

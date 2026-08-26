@@ -1291,6 +1291,28 @@ def create_app(state: AppState) -> FastAPI:
         threading.Thread(target=state.run_mix, args=(force,), daemon=True).start()
         return {"ok": True, "running": True}
 
+    @app.post("/api/final-cut")
+    def open_in_final_cut(payload: dict):
+        """Avaa viedyn XML:n suoraan Final Cutissa.
+
+        Vienti päättyy siihen että tiedosto on levyllä, ja seuraava askel on
+        aina sen tuonti — polun kopioiminen käsin on turha välivaihe. ``open``
+        antaa Final Cutille tuonti-ikkunan, ei siis riko mitään jos painallus
+        oli vahinko.
+        """
+        path = str((payload or {}).get("path", "")).strip()
+        if not path or not os.path.exists(path):
+            raise HTTPException(404, t("export.file_missing"))
+        if sys.platform != "darwin":
+            raise HTTPException(400, t("export.only_macos"))
+        done = subprocess.run(["open", "-a", "Final Cut Pro", path],
+                              check=False, capture_output=True, text=True)
+        if done.returncode:
+            # ``open`` kertoo syyn stderrissä; ilman tätä nappi näyttäisi
+            # toimivan vaikka Final Cutia ei ole asennettu.
+            raise HTTPException(400, done.stderr.strip() or t("export.no_fcp"))
+        return {"ok": True}
+
     @app.post("/api/reveal")
     def reveal(payload: dict):
         """Näytä tiedosto Finderissa/tiedostonhallinnassa."""

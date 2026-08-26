@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.97] - 2026-08-26
+
+### Added
+- **The Exported File Gets Its Own Field**: the path used to sit in the middle of a sentence in the header, where no double-click can select it — and the next reader of that path is always another program. It now appears on its own row under the header, in a read-only field that selects itself on focus, with **Open in Final Cut** and **Show in Finder** beside it.
+  - `/api/final-cut` runs `open -a "Final Cut Pro"`, which gives Final Cut its import dialog. A failure — no Final Cut installed — is reported rather than swallowed.
+
 ## [v26.08.26.96] - 2026-08-26
 
 ### Changed

@@ -122,6 +122,14 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Tiedostoa ei ole.",
         "en": "The file does not exist.",
     },
+    "export.only_macos": {
+        "fi": "Final Cut Pro on vain macOS:llä.",
+        "en": "Final Cut Pro exists only on macOS.",
+    },
+    "export.no_fcp": {
+        "fi": "Final Cut Prota ei löytynyt.",
+        "en": "Final Cut Pro was not found.",
+    },
     "export.settings_failed": {
         "fi": "Asetuksia ei voitu tallentaa: {error}",
         "en": "Could not save the settings: {error}",

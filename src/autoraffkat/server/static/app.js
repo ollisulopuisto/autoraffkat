@@ -2189,6 +2189,61 @@ function banner(text, isError) {
   el.classList.toggle('error', !!isError);
 }
 
+/* Viety tiedosto omalle rivilleen, ei lauseen sisään.
+
+   Polun seuraava lukija on aina jokin toinen ohjelma — Final Cut, Alfred,
+   Finder — ja lauseen keskeltä sitä ei saa valituksi kaksoisklikkauksella.
+   Kenttä valitsee sisältönsä kohdistuessa, ja Final Cut avataan suoraan
+   napista, koska tuonti on viennin ainoa jatko. */
+function renderExported(path, said) {
+  const box = $('exported');
+  box.textContent = '';
+  box.classList.toggle('hidden', !path);
+  if (!path) return;
+  const label = document.createElement('span');
+  label.className = 'said';
+  label.textContent = said;
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.readOnly = true;
+  field.value = path;
+  field.spellcheck = false;
+  field.addEventListener('focus', () => field.select());
+  const fcp = document.createElement('button');
+  fcp.className = 'ghost small';
+  fcp.style.margin = '0';
+  fcp.textContent = T('export.openInFcp');
+  fcp.addEventListener('click', () => sendPath('/api/final-cut', path, fcp));
+  const show = document.createElement('button');
+  show.className = 'ghost small';
+  show.style.margin = '0';
+  show.textContent = T('export.reveal');
+  show.addEventListener('click', () => sendPath('/api/reveal', path, show));
+  box.append(label, field, fcp, show);
+}
+
+/* Yhteinen lähetys molemmille napeille: virhe kerrotaan, ei niellä.
+   Palvelin voi vastata «Final Cutia ei löytynyt», ja hiljainen nappi olisi
+   tässä projektissa tuttu vika. */
+async function sendPath(url, path, button) {
+  setBusy(button, true);
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path }),
+    });
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      banner(data.detail || T('app.exportFailed', { error: '' }), true);
+    }
+  } catch (err) {
+    banner(err.message, true);
+  } finally {
+    setBusy(button, false);
+  }
+}
+
 async function exportXml() {
   const button = $('export');
   if (button.disabled) return;
@@ -2202,8 +2257,9 @@ async function exportXml() {
     const data = await response.json();
     if (response.ok && data.ok) {
       const mixed = data.mixed ? T('app.exportedMix', { n: data.mixed }) : '';
-      $('status').textContent =
-        T('app.exported', { cuts: data.cuts, file: data.path.split('/').pop() }) + mixed;
+      $('status').textContent = '';
+      renderExported(data.path,
+                     T('app.exportedCuts', { cuts: data.cuts }) + mixed);
       /* Polkurivi näyttää mihin *seuraava* vienti menee: äsken kirjoitettua
          tiedostoa ei enää korvata. */
       if (data.next_path) { state.output_path = data.next_path; renderHeader(); }
