@@ -37,17 +37,26 @@ from .model import HOP
 # Pään asennon sallittu poikkeama perusasennosta. Yksikkö on nenän siirtymä
 # silmien välimatkaan suhteutettuna, ei radiaani.
 #
-# **Portti, ei pisteytyksen osa.** Mitattuna oikealla jaksolla, 381
-# ehdokkaasta ja käsin arvioiduista: raja 0,057 päästää läpi kaikki kuusi
-# hyväksi merkittyä eikä yhtään viidestätoista huonoksi merkitystä, ja
-# puolittaa ehdokasjoukon. Sama tehtävä Visionin omalla ``yaw``illa oli
-# hyödytön: tiukin raja joka säilytti hyvät päästi läpi 95 % kaikesta ja
-# kolme huonoa — koska ``yaw`` on portaittainen, ks. video/detect.py.
+# **Portti, ei pisteytyksen osa.** Mitattuna oikealla jaksolla: 381
+# ehdokasta ja 23 käsin arvioitua, ja luokat eivät mene lainkaan päällekkäin
+# — huonoin hyväksi merkitty 0,0721, paras huonoksi merkitty 0,0943. Raja
+# asetetaan siihen väliin: 0,080 säilyttää kaikki 12 hyvää, ei päästä
+# yhtään 11 huonosta, ja läpäisee 60 % ehdokkaista eli noin yhdeksän
+# sekuntia minuutissa. Väljempi raja alkaa päästää huonoja, tiukempi hylkää
+# hyviä — ja koska ohi mennyt reaktiokuva ei maksa mitään mutta kelvoton
+# maksaa, luku on välin tiukemmalla puoliskolla.
+#
+# Sama tehtävä Visionin omalla ``yaw``illa oli hyödytön: tiukin raja joka
+# säilytti hyvät päästi läpi 95 % kaikesta ja kolme huonoa — koska ``yaw``
+# on portaittainen, ks. video/detect.py.
+#
+# Yksitoista huonoa on kaikki samalta puhujalta, joten juuri se puoli
+# aineistosta on ohut.
 #
 # Reaktiokuvan rima ei ole «loistava» vaan «ei kelvoton»: valmiissa
 # leikkauksessa useimmat reaktiokuvat ovat mitäänsanomattomia, niiden pitää
 # vain olla nolaamatta. Siksi ratkaisee kynnys eikä järjestys.
-TURN_MAX = 0.057
+TURN_MAX = 0.080
 
 # Vanha katseen levitys. Jäljellä siksi, että lokeroitu yaw on yhä hyvä
 # karkeaan hylkäykseen — poispäin kääntynyt pää erottuu siitäkin.

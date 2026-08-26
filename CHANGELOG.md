@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.26.80] - 2026-08-26
+
+### Changed
+- **The Gate Moved to 0.080, and It Is Now Measured Rather Than Chosen**: 23 hand-marked frames out of 381 candidates, and the two classes do not overlap at all — the worst frame marked good is 0.0721, the best marked bad is 0.0943. The threshold belongs in that gap. At 0.080 it keeps **all twelve marked good, admits none of the eleven marked bad**, and passes 60 % of candidates, about nine seconds a minute. The previous 0.057 was set from six marks and falsely rejected three good frames.
+  - It sits on the tight half of the gap on purpose: a reaction shot that never happens costs nothing, one that is disqualifying costs the take. A test asserts the default stays inside the gap and on that side, so moving it says which error was chosen.
+  - Caveat kept in the source: all eleven frames marked bad come from one speaker, so that half of the evidence is thin.
+
 ## [v26.08.26.79] - 2026-08-26
 
 ### Fixed

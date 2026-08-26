@@ -374,9 +374,12 @@ out of it. `yaw` remains: as a bin, "turned away" is what it detects well.
 The reaction score is a **gate**, not a ranking. The bar for a reaction shot
 is not "outstanding" but "not disqualifying" — in a finished edit most of
 them are unremarkable and only have to avoid embarrassment. Measured on 381
-candidates against hand marks, a head-pose deviation of 0.057 keeps all six
-frames marked good, admits none of the fifteen marked bad, and halves the
-pool; the same job on the quantised `yaw` let 95 % through. So the threshold
+candidates against 23 hand marks the two classes do not overlap at all —
+worst good 0.0721, best bad 0.0943 — so the threshold goes in the gap.
+0.080 keeps all twelve marked good, admits none of the eleven marked bad,
+and passes 60 % of candidates; the same job on the quantised `yaw` let 95 %
+through. It sits on the tight half of the gap because a missed reaction shot
+costs nothing and a disqualifying one costs the take. So the threshold
 is the control that matters and the ordering among survivors barely does —
 which is why `eyes` and `size` default to zero weight. `eyes` was actively
 harmful: a hard laugh closes the eyes, and rewarding open eyes buried

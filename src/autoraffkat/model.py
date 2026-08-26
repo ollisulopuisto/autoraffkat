@@ -204,7 +204,7 @@ class Globals:
     # mitattavista ei tarkoita samaa kahdessa eri huoneessa.
     # Portti: pään asennon suurin sallittu poikkeama perusasennosta. Tämä on
     # se säädin joka ratkaisee — ks. reactions.TURN_MAX.
-    reaction_turn_max: float = 0.057
+    reaction_turn_max: float = 0.080
     reaction_threshold: float = -1.0
     reaction_length: float = 1.6      # kuvan kesto, s
     reaction_spacing: float = 25.0    # lyhin väli kahden välillä, s

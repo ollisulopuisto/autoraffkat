@@ -54,9 +54,25 @@ def test_the_gate_keeps_the_facing_frames_and_stops_the_rest():
     turn[5] = 0.30 + 0.20         # kääntynyt selvästi pois
     turn[6] = 0.30 + 0.01         # käytännössä suoraan
     data = table(turn=turn, smile=np.full(40, 5.0))   # hymy ei saa pelastaa
-    points = reactions.scores(data, {"turn_max": 0.057})
+    points = reactions.scores(data, {"turn_max": reactions.TURN_MAX})
     assert np.isneginf(points[5]), "kääntynyt pää läpäisi portin"
     assert np.isfinite(points[6])
+
+
+def test_the_gate_default_sits_between_the_marked_classes():
+    """Raja on mitattu, ei valittu.
+
+    Kaksikymmentäkolme käsin arvioitua ruutua eivät mene päällekkäin:
+    huonoin hyväksi merkitty 0,0721, paras huonoksi merkitty 0,0943.
+    Oletuksen on oltava siinä välissä, ja välin tiukemmalla puoliskolla —
+    ohi mennyt reaktiokuva ei maksa mitään, kelvoton maksaa oton.
+
+    Jos joku siirtää lukua, tämä kertoo kumman virheen hän valitsi.
+    """
+    worst_good, best_bad = 0.0721, 0.0943
+    assert worst_good < reactions.TURN_MAX < best_bad
+    middle = (worst_good + best_bad) / 2
+    assert reactions.TURN_MAX <= middle, "raja päästää huonoja ennemmin kuin hylkää hyviä"
 
 
 def test_the_turn_baseline_is_measured_not_assumed():
@@ -67,7 +83,7 @@ def test_the_turn_baseline_is_measured_not_assumed():
     """
     turn = np.full(40, 0.42)      # kaikki katsovat vakaasti sivuun
     data = table(turn=turn)
-    points = reactions.scores(data, {"turn_max": 0.057})
+    points = reactions.scores(data, {"turn_max": reactions.TURN_MAX})
     assert np.all(np.isfinite(points)), "perusasento luettiin nollaksi"
 
 
