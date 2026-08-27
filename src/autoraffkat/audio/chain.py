@@ -744,6 +744,45 @@ def deess(
     return low + high * gain
 
 
+def limiter_gain(
+    audio: np.ndarray,
+    rate: int,
+    ceiling_db: float = CEILING_DB,
+    lookahead_ms: float = LIMITER_LOOKAHEAD_MS,
+    release_ms: float = LIMITER_RELEASE_MS,
+) -> np.ndarray:
+    """Rajoittimen vahvistuskäyrä näytteittäin, arvot välillä (0, 1].
+
+    Erillään ``limiter``ista, koska ohjelmakatto tarvitsee **käyrän** eikä
+    rajoitettua ääntä: käyrä lasketaan stemien summasta ja kerrotaan
+    jokaiseen stemiin erikseen, jolloin summa noudattaa kattoa eikä
+    puhujien tasapaino muutu. Ks. ``mix.program_ceiling``.
+    """
+    from scipy import signal as _sig
+    from scipy.ndimage import minimum_filter1d
+
+    if audio.size == 0:
+        return np.ones(0, dtype=np.float64)
+    ceiling = 10.0 ** (ceiling_db / 20.0)
+    up = LIMITER_OVERSAMPLE
+    dense = _sig.resample_poly(audio, up, 1, axis=-1)
+    dense_peak = np.abs(dense).max(axis=0)
+    dense_gain = np.minimum(1.0, ceiling / np.maximum(dense_peak, 1e-9))
+    usable = (dense_gain.shape[0] // up) * up
+    needed = dense_gain[:usable].reshape(-1, up).min(axis=1)
+    if needed.shape[0] < audio.shape[1]:
+        needed = np.pad(needed, (0, audio.shape[1] - needed.shape[0]), mode="edge")
+    needed = needed[: audio.shape[1]]
+    if needed.min() >= 1.0:
+        return np.ones(audio.shape[1], dtype=np.float64)
+    window = max(1, int(lookahead_ms * rate / 1000.0))
+    ahead = minimum_filter1d(needed, size=2 * window + 1, mode="nearest")
+    smooth = _one_pole(ahead, rate, release_ms)
+    # Pehmennys saa nostaa vahvistusta hitaasti mutta ei koskaan yli sen mitä
+    # huippu sallii, muuten katto ylittyy juuri siellä missä sitä tarvitaan.
+    return np.minimum(smooth, ahead)
+
+
 def limiter(
     audio: np.ndarray,
     rate: int,
@@ -762,35 +801,12 @@ def limiter(
     veti koko tiedoston alas kovimman yksittäisen näytteen mukaan, mitattuna
     9–12 dB, ja teki puhujien tasapainosta sattumanvaraisen.
     """
-    from scipy import signal as _sig
-    from scipy.ndimage import minimum_filter1d
-
     if audio.size == 0:
         return audio, 0.0
-    ceiling = 10.0 ** (ceiling_db / 20.0)
-
     # Havainnointi ylinäytteistettynä: näytteiden **väliin** jäävä huippu on
     # se joka leikkaa D/A-muuntimessa ja lossy-koodauksessa, eikä se näy
-    # näytteitä katsomalla. Vahvistus lasketaan ylinäytteistetystä ja
-    # tiivistetään takaisin ottamalla kunkin ryhmän pienin.
-    up = LIMITER_OVERSAMPLE
-    dense = _sig.resample_poly(audio, up, 1, axis=-1)
-    dense_peak = np.abs(dense).max(axis=0)
-    dense_gain = np.minimum(1.0, ceiling / np.maximum(dense_peak, 1e-9))
-    usable = (dense_gain.shape[0] // up) * up
-    needed = dense_gain[:usable].reshape(-1, up).min(axis=1)
-    if needed.shape[0] < audio.shape[1]:
-        needed = np.pad(needed, (0, audio.shape[1] - needed.shape[0]), mode="edge")
-    needed = needed[: audio.shape[1]]
-    if needed.min() >= 1.0:
-        return audio, 0.0
-
-    window = max(1, int(lookahead_ms * rate / 1000.0))
-    ahead = minimum_filter1d(needed, size=2 * window + 1, mode="nearest")
-    smooth = _one_pole(ahead, rate, release_ms)
-    # Pehmennys saa nostaa vahvistusta hitaasti mutta ei koskaan yli sen mitä
-    # huippu sallii, muuten katto ylittyy juuri siellä missä sitä tarvitaan.
-    gain = np.minimum(smooth, ahead)
+    # näytteitä katsomalla. Ks. ``limiter_gain``.
+    gain = limiter_gain(audio, rate, ceiling_db, lookahead_ms, release_ms)
     return audio * gain, float(20.0 * np.log10(max(gain.min(), 1e-9)))
 
 

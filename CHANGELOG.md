@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.101] - 2026-08-27
+
+### Fixed
+- **The Ceiling Was Guaranteed Per Stem, But Final Cut Plays the Sum**: two microphones whose peaks are both pressed to −1.5 dBTP exceed full scale whenever those peaks coincide. Measured on a real episode: **+4.51 dBFS, 49 971 samples over full scale in 4072 bursts — 200 a minute**, median 0.23 ms. That is the distortion, and it is what Final Cut draws in red.
+  - `mix.program_ceiling` computes the limiter's gain curve from the **summed** stems and multiplies the identical curve into each one. The sum then obeys the ceiling and the balance between speakers cannot move, because every stem gets the same number. Verified on the real files: **+4.51 → −1.51 dBFS, zero samples over full scale**, at a cost of 0.5 LU and 7 s for a 20-minute pair.
+  - Not harder per-stem limiting: that would make every stem pay six decibels of crest for what some *other* file happens to do.
+  - The pass is idempotent — the curve is `min(1, ceiling/peak)`, so a sum already at the ceiling gets 1 everywhere — which is what makes it safe to run on every round, including one where most files were skipped as up to date.
+  - Summing files sample by sample is only correct when the stems line up on the timeline, so `_geometry` checks it. Stems that do not match are left untouched rather than quietly summed at the wrong offset.
+  - `chain.limiter_gain` is split out of `chain.limiter` so the curve can be computed without applying it.
+
 ## [v26.08.27.100] - 2026-08-27
 
 ### Fixed

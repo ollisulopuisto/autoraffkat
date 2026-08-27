@@ -792,3 +792,158 @@ def test_the_program_trim_moves_the_level_it_is_supposed_to_move():
     assert plain_lufs - trimmed_lufs == pytest.approx(2.0, abs=0.5), (
         f"trimmi ei siirtänyt tasoa: {plain_lufs:.2f} vs {trimmed_lufs:.2f}"
     )
+
+
+class _Placement:
+    def __init__(self, offset, end, start):
+        self.offset, self.end, self.start = offset, end, start
+        self.duration = end - offset
+
+
+class _Item:
+    asset_start = 0.0
+
+    def __init__(self, offset=0.0, end=10.0, start=0.0):
+        self.placements = [_Placement(offset, end, start)]
+
+
+def _peaky(path, rate, seconds, seed):
+    """Stemi jonka huiput on painettu kattoon, kuten ketju ne jättää."""
+    from pedalboard.io import AudioFile
+
+    rng = np.random.default_rng(seed)
+    n = int(seconds * rate)
+    audio = (rng.standard_normal(n).astype(np.float32) * 0.05)[None, :]
+    # Huiput tasan katossa: juuri se tilanne jossa kaksi stemiä summautuu yli.
+    ceiling = 10.0 ** (-1.5 / 20.0)
+    for i in range(40, n - 40, int(0.05 * rate)):
+        audio[0, i] = ceiling * (1 if rng.random() < 0.5 else -1)
+    audio = np.clip(audio, -ceiling, ceiling)
+    with AudioFile(path, "w", rate, 1, bit_depth=24) as out:
+        out.write(np.ascontiguousarray(audio))
+    return audio
+
+
+@needs_ffmpeg
+def test_the_ceiling_belongs_to_the_programme_not_to_one_stem(tmp_path):
+    """Final Cut soittaa summan, ei yhtä stemiä.
+
+    Ketju takaa katon jokaiselle tiedostolle erikseen. Kaksi stemiä joiden
+    huiput on molemmat painettu -1,5 dBTP:hen ylittävät täyden asteikon aina
+    kun huiput osuvat samaan hetkeen — oikealla jaksolla mitattuna +4,51
+    dBFS ja 200 ylityspursketta minuutissa. Se on se särö joka kuuluu.
+
+    Korjaus on **yhteinen käyrä**: vaimennus lasketaan summasta ja kerrotaan
+    jokaiseen stemiin samanlaisena, jolloin summa noudattaa kattoa eikä
+    puhujien tasapaino muutu.
+    """
+    from pedalboard.io import AudioFile
+    from autoraffkat.audio import chain
+
+    rate, seconds = 48000, 6.0
+    jobs = []
+    ennen = {}
+    for index, name in enumerate(("a", "b")):
+        source = tmp_path / f"{name}.wav"
+        target = tmp_path / f"{name} [mix].wav"
+        _peaky(str(source), rate, seconds, seed=index)
+        ennen[name] = _peaky(str(target), rate, seconds, seed=index)
+        jobs.append({
+            "key": name, "name": name, "speech": True,
+            "source": str(source), "target": str(target),
+            "item": _Item(0.0, seconds, 0.0), "bit_depth": 24,
+        })
+
+    summa = ennen["a"] + ennen["b"]
+    huippu_ennen = 20 * np.log10(float(np.abs(summa).max()))
+    assert huippu_ennen > 0.0, huippu_ennen
+
+    result = mix.MixResult()
+    mix.program_ceiling(jobs, AudioSettings(), result)
+
+    jalkeen = {}
+    for job in jobs:
+        with AudioFile(job["target"]) as handle:
+            jalkeen[job["key"]] = handle.read(handle.frames)
+        # Näytemäärä on viennin ehto.
+        assert jalkeen[job["key"]].shape[1] == int(seconds * rate)
+
+    summa2 = jalkeen["a"] + jalkeen["b"]
+    huippu = 20 * np.log10(float(np.abs(summa2).max()))
+    assert huippu <= chain.CEILING_DB + 0.15, huippu
+
+    # Sama kerroin molempiin: tasapaino ei saa muuttua. Molempien on oltava
+    # selvästi nollasta poikkeavia, tai 24-bittinen kvantisointi tekee
+    # osamäärästä mitä tahansa siellä missä signaalia ei ole.
+    kuuluva = (np.abs(ennen["a"][0]) > 1e-2) & (np.abs(ennen["b"][0]) > 1e-2)
+    assert kuuluva.sum() > 1000, int(kuuluva.sum())
+    ga = jalkeen["a"][0][kuuluva] / ennen["a"][0][kuuluva]
+    gb = jalkeen["b"][0][kuuluva] / ennen["b"][0][kuuluva]
+    assert np.allclose(ga, gb, atol=1e-3), float(np.abs(ga - gb).max())
+
+
+@needs_ffmpeg
+def test_the_programme_ceiling_does_nothing_the_second_time(tmp_path):
+    """Ajo on idempotentti, ja siitä riippuu se että sen voi ajaa aina.
+
+    Käyrä on ``min(1, katto/huippu)``, joten summalle joka jo noudattaa
+    kattoa se on ykkönen kaikkialla. Ilman tätä toinen ajo vaimentaisi
+    uudestaan ja tiedostot kuihtuisivat ajo ajolta.
+    """
+    from pedalboard.io import AudioFile
+
+    rate, seconds = 48000, 4.0
+    jobs = []
+    for index, name in enumerate(("a", "b")):
+        source = tmp_path / f"{name}.wav"
+        target = tmp_path / f"{name} [mix].wav"
+        _peaky(str(source), rate, seconds, seed=index)
+        _peaky(str(target), rate, seconds, seed=index)
+        jobs.append({
+            "key": name, "name": name, "speech": True,
+            "source": str(source), "target": str(target),
+            "item": _Item(0.0, seconds, 0.0), "bit_depth": 24,
+        })
+
+    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+    with AudioFile(jobs[0]["target"]) as handle:
+        kerran = handle.read(handle.frames)
+    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+    with AudioFile(jobs[0]["target"]) as handle:
+        kahdesti = handle.read(handle.frames)
+    assert np.allclose(kerran, kahdesti, atol=2e-5), \
+        float(np.abs(kerran - kahdesti).max())
+
+
+@needs_ffmpeg
+def test_stems_that_do_not_line_up_are_not_summed(tmp_path):
+    """Summa näyte näytteeltä on oikein vain jos stemit ovat kohdakkain.
+
+    Eri kohdassa aikajanaa oleva tiedosto ei kuulu samaan summaan, ja sen
+    laskeminen mukaan vaimentaisi molempia väärillä hetkillä. Tarkistus on
+    geometriassa, ei oletuksessa.
+    """
+    from pedalboard.io import AudioFile
+
+    rate, seconds = 48000, 4.0
+    jobs = []
+    for index, (name, offset) in enumerate((("a", 0.0), ("b", 100.0))):
+        source = tmp_path / f"{name}.wav"
+        target = tmp_path / f"{name} [mix].wav"
+        _peaky(str(source), rate, seconds, seed=index)
+        _peaky(str(target), rate, seconds, seed=index)
+        jobs.append({
+            "key": name, "name": name, "speech": True,
+            "source": str(source), "target": str(target),
+            "item": _Item(offset, offset + seconds, 0.0), "bit_depth": 24,
+        })
+    ennen = []
+    for job in jobs:
+        with AudioFile(job["target"]) as handle:
+            ennen.append(handle.read(handle.frames))
+
+    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+
+    for job, was in zip(jobs, ennen):
+        with AudioFile(job["target"]) as handle:
+            assert np.array_equal(handle.read(handle.frames), was)

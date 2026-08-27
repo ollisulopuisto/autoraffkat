@@ -189,6 +189,26 @@ because it changes the result it is in `FINGERPRINT_FIELDS`. The default is a
 share of the machine's cores, not a number written into the source: an
 eight-core laptop and a twenty-core workstation are different machines.
 
+The ceiling is the **programme's** too, and that was missing for longer
+than the loudness half. `chain` guarantees −1.5 dBTP per file, but Final Cut
+plays the sum: two stems whose peaks are both pressed to the ceiling exceed
+full scale whenever those peaks coincide — in theory +4.5 dB, and measured on
+a real episode **+4.51 dBFS with 200 clipping bursts a minute**, median
+0.23 ms. That is what the red peaks in Final Cut's waveform are, and it is
+audible as intermittent crackle on loud syllables. The fix is not harder
+per-stem limiting — then every stem pays six decibels of crest for what some
+*other* file happens to do — but a **shared curve**: `mix.program_ceiling`
+computes the limiter's gain from the summed stems and multiplies the same
+curve into each one, so the sum obeys the ceiling and the balance between
+speakers cannot move. Measured: sum +4.51 → −1.51 dBFS, cost 0.50 LU, 7 s for
+a 20-minute pair. The pass is idempotent by construction — the curve is
+`min(1, ceiling/peak)`, so a sum already at the ceiling gets 1 everywhere —
+which is what makes it safe to run on every processing round, including one
+where most files were skipped as up to date. It sums files sample by sample,
+which is only correct when the stems line up, so `_geometry` makes that a
+checked fact rather than an assumption and stems that do not match are left
+alone.
+
 The loudness target is the **program's**, not one stem's. Two microphones each
 normalised to −14 LUFS sum above it — measured on real material, −12.2 — because
 the speakers overlap and the microphones hear each other. `mix.program_trim`

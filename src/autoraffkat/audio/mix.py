@@ -365,6 +365,166 @@ class MixResult:
         return not self.errors
 
 
+# Ohjelmakaton pala ja sen marginaali. Rajoittimen muisti on ennakko (5 ms)
+# ja palautus (120 ms), joten sekunnin marginaali on kertaluokkaa liikaa —
+# ja liikaa on tässä oikea suunta, koska palan raja ei saa näkyä.
+PROGRAM_CEILING_CHUNK = 60.0
+PROGRAM_CEILING_MARGIN = 1.0
+
+
+def _geometry(item, frames: int) -> tuple:
+    """Tiedoston sijainti aikajanalla, vertailukelpoisena avaimena.
+
+    Summa lasketaan tiedostoista näyte näytteeltä, mikä on oikein vain jos
+    stemit ovat samassa kohdassa aikajanaa ja yhtä pitkiä. Tämä tekee siitä
+    tarkistettavan asian eikä oletuksen.
+    """
+    return (
+        frames,
+        tuple(
+            (
+                round(float(p.offset), 4),
+                round(float(p.end), 4),
+                round(float(p.start - item.asset_start - p.offset), 4),
+            )
+            for p in item.placements
+        ),
+    )
+
+
+def program_ceiling(jobs: list[dict], settings: AudioSettings,
+                    result: "MixResult") -> None:
+    """Huippukatto **ohjelmalle**, ei yhdelle stemille.
+
+    Sama virhe kuin äänekkyydessä, jonka ``program_trim`` jo korjaa: ketju
+    takaa katon jokaiselle tiedostolle erikseen, mutta Final Cut soittaa
+    niiden summan. Kaksi stemiä joiden huiput on molemmat painettu
+    -1,5 dBTP:hen ylittävät täyden asteikon aina kun huiput osuvat samaan
+    hetkeen — teoriassa +4,5 dB, ja oikealla jaksolla mitattuna **+4,51
+    dBFS, 200 ylityspursketta minuutissa**, mediaanipituus 0,23 ms. Se on
+    se särö joka kuuluu, ja Final Cutin punaiset huiput ovat sama asia.
+
+    Korjaus ei ole kovempi rajoitus stemeittäin — silloin jokainen stemi
+    maksaisi kuusi desibeliä crestiä sen takia mitä *toinen* tiedosto
+    sattuu tekemään — vaan **yhteinen käyrä**: vaimennus lasketaan summasta
+    ja kerrotaan jokaiseen stemiin samanlaisena. Summa noudattaa kattoa, ja
+    koska kerroin on sama, puhujien tasapaino ei muutu. Mitattuna summan
+    huippu +4,51 -> -1,51 dBFS ja hinta 0,50 LU.
+
+    Ajo on **idempotentti**: käyrä on ``min(1, katto/huippu)``, joten
+    summalle joka jo noudattaa kattoa se on ykkönen kaikkialla eikä toinen
+    ajo tee mitään. Siksi tämä voidaan ajaa aina, myös silloin kun osa
+    tiedostoista ohitettiin ajan tasalla olevina.
+    """
+    from pedalboard.io import AudioFile
+
+    mics = [
+        job
+        for job in jobs
+        if job.get("speech")
+        and job.get("item") is not None
+        and os.path.exists(job.get("target", ""))
+    ]
+    if len(mics) < 2:
+        # Yksi mikki *on* ohjelma: ketjun oma katto riittää.
+        return
+
+    groups: dict[tuple, list] = {}
+    for job in mics:
+        frames = frame_count(job["target"])
+        if frames is None:
+            continue
+        groups.setdefault(_geometry(job["item"], frames), []).append(job)
+
+    for key, members in groups.items():
+        if len(members) < 2:
+            # Yksin aikajanan palassa: ei summaa johon osua.
+            continue
+        frames = key[0]
+        try:
+            worst = _ceiling_pass(members, frames, AudioFile)
+        except (OSError, ValueError) as exc:
+            for job in members:
+                result.notes.setdefault(job["key"], []).append(str(exc))
+            _log(f"ohjelmakatto ohitettiin: {exc}")
+            continue
+        if worst < -0.01:
+            _log(f"ohjelmakatto: {len(members)} stemiä, suurin vaimennus "
+                 f"{worst:.2f} dB")
+
+
+def _ceiling_pass(members: list[dict], frames: int, AudioFile) -> float:
+    """Yksi ryhmä: summa paloittain, sama käyrä jokaiseen stemiin.
+
+    Paloittain, koska koko ohjelma muistissa olisi useita gigatavuja.
+    Marginaali molemmin puolin ja siitä keskiosa talteen, jotta rajoittimen
+    palautus ei ala nollasta jokaisen palan alussa — sama kuvio kuin
+    ``chain.apply_plugin``in rinnakkaisilla paloilla.
+    """
+    handles = [AudioFile(job["target"]) for job in members]
+    try:
+        rate = int(handles[0].samplerate)
+        if any(int(h.samplerate) != rate for h in handles):
+            raise ValueError("stemien näytetaajuudet eroavat")
+        chunk = int(PROGRAM_CEILING_CHUNK * rate)
+        margin = int(PROGRAM_CEILING_MARGIN * rate)
+        outs = [
+            AudioFile(job["target"] + ".ceil.tmp.wav", "w", rate,
+                      int(h.num_channels), bit_depth=job.get("bit_depth", 24))
+            for job, h in zip(members, handles)
+        ]
+        worst = 0.0
+        try:
+            position = 0
+            while position < frames:
+                low = max(0, position - margin)
+                high = min(frames, position + chunk + margin)
+                blocks = []
+                for handle in handles:
+                    handle.seek(low)
+                    blocks.append(handle.read(high - low))
+                total = blocks[0].copy()
+                for block in blocks[1:]:
+                    total = total + block
+                gain = chain.limiter_gain(total, rate)
+                worst = min(worst, float(20.0 * np.log10(max(gain.min(), 1e-9))))
+                head = position - low
+                tail = head + min(chunk, frames - position)
+                for out, block in zip(outs, blocks):
+                    out.write(np.ascontiguousarray(
+                        (block * gain)[:, head:tail]))
+                position += chunk
+        finally:
+            for out in outs:
+                out.close()
+    finally:
+        for handle in handles:
+            handle.close()
+
+    for job in members:
+        tmp = job["target"] + ".ceil.tmp.wav"
+        written = frame_count(tmp)
+        if written != frames:
+            # Näytemäärä on viennin ehto: mieluummin ei mitään kuin väärä
+            # pituus, ja alkuperäinen käsitelty tiedosto jää paikalleen.
+            for other in members:
+                _drop(other["target"] + ".ceil.tmp.wav")
+            raise ValueError(
+                f"ohjelmakatto muutti pituutta {frames} -> {written}"
+            )
+    for job in members:
+        os.replace(job["target"] + ".ceil.tmp.wav", job["target"])
+    return worst
+
+
+def _drop(path: str) -> None:
+    """Poistaa tilapäistiedoston, jos se on olemassa."""
+    try:
+        os.remove(path)
+    except OSError:
+        pass
+
+
 def closed_ranges(
     item, closed, program_start: float, rate: int
 ) -> list[tuple[int, int]]:
@@ -990,13 +1150,17 @@ def process(
     behind = 0.0  # jo valmiiden tiedostojen paino
 
     try:
-        return _run_todo(
+        out = _run_todo(
             result, todo, jobs, settings, plugin, masks, program_start,
             progress, trim, started, total_weight, solos,
         )
     finally:
         if hasattr(plugin, "close"):
             plugin.close()
+    # Katto vasta kun kaikki stemit ovat levyllä: se lasketaan niiden
+    # summasta, jota ei ole olemassa ennen viimeistä tiedostoa.
+    program_ceiling(jobs, settings, result)
+    return out
 
 
 def _run_todo(
