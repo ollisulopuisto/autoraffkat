@@ -1226,6 +1226,7 @@ function renderAudio() {
   host.textContent = '';
   const audio = state.audio;
   const info = state.mix || {};
+  renderMixButton();
 
   const toggle = document.createElement('label');
   toggle.className = 'check';
@@ -1457,8 +1458,6 @@ function renderAudio() {
     },
   }).row);
 
-  host.append(mixButton(info));
-
   host.append(resetButton('audio', T('app.reset.audio')));
 
   const busy = !!(info.progress && info.progress.running);
@@ -1548,10 +1547,37 @@ function mixButton(info) {
     wrap.append(run, cancel);
     return wrap;
   }
-  run.textContent = T('audio.run');
+  /* Vanhentuneiden määrä **nappiin**, ei vain paneelin selitteeseen: nappi
+     on nyt otsikkorivillä ja selite paneelissa, ja juuri se luku on syy
+     painaa. Ilman sitä nappi näyttäisi samalta riippumatta siitä onko työ
+     tekemättä vai tehty eri asetuksilla. */
+  const stale = Math.max(0, expected - (info.fresh || 0));
+  run.textContent = (stale && (info.fresh || 0) > 0)
+    ? T('audio.runStale', { n: stale }) : T('audio.run');
+  if (stale && (info.fresh || 0) > 0) run.classList.add('warn');
   run.addEventListener('click', () => runMix(false));
   wrap.append(run);
   return wrap;
+}
+
+/* Käsittelynappi otsikkoriville, «Vie XML»:n viereen.
+
+   Se ei ole ääniasetus vaan **toimenpide**, ja toimenpiteet ovat siellä
+   missä vientikin: paneelissa päätetään mitä käsittely tekee, otsikossa
+   päätetään tehdäänkö se. Sama jako kuin leikkauspaneelin ja «Vie XML»:n
+   välillä.
+
+   Painavampi syy on tila. Nappi kertoo montako tiedostoa on tehty eri
+   asetuksilla, ja se on juuri se tieto jonka tarvitsee viennin hetkellä.
+   Äänipaneelin pohjalla — oikeassa kiskossa, taitteen alla — se oli
+   näkymättömissä silloin kun sillä oli väliä, ja vienti raa'alla äänellä
+   näyttää onnistuneelta kunnes joku kuuntelee. */
+function renderMixButton() {
+  const host = $('mix-host');
+  if (!host) return;
+  host.textContent = '';
+  if (!state.audio || !state.audio.enabled) return;
+  host.append(mixButton(state.mix || {}));
 }
 
 /* Vaihtaa pelkän painikkeen paikallaan. Ks. mixButton: paneelia ei piirretä

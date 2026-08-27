@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.108] - 2026-08-27
+
+### Changed
+- **The Processing Button Moved to the Header, Beside Export**: it is an action, not an audio setting — the panel decides what processing does, the header decides whether to do it, the same split as between the cut panel and Export.
+  - The real reason is the state it carries: the button says how many files were made with different settings, and that is what you need at the moment you press Export. At the bottom of the audio panel, in the right-hand rail below the fold, it was invisible exactly when it mattered — and an export that used raw audio looks successful until somebody listens.
+  - The stale count now sits on the button itself, since the panel's explanatory note is no longer next to it.
+
 ## [v26.08.27.107] - 2026-08-27
 
 ### Added

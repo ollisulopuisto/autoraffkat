@@ -282,6 +282,7 @@ const STRINGS = {
     'audio.roomDb': 'Tilaäänen taso',
     'audio.roomDbUnit': ' dB puhetta hiljempaa',
     'audio.run': 'Käsittele ääni',
+    'audio.runStale': 'Käsittele ääni ({n} vanhentunutta)',
     'audio.running': 'Käsitellään…',
     /* Tehty työ näkyy painikkeesta. Ilman tätä painike palasi aina tekstiin
        «Käsittele ääni», eikä valmiiseen ajoon voinut luottaa katsomalla. */
@@ -603,6 +604,7 @@ const STRINGS = {
     'audio.roomDb': 'Room tone level',
     'audio.roomDbUnit': ' dB below speech',
     'audio.run': 'Process audio',
+    'audio.runStale': 'Process audio ({n} stale)',
     'audio.running': 'Processing…',
     'audio.runDone': 'Audio processed ({n} files)',
     'audio.runAgain': 'Process again — confirm',

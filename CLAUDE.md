@@ -372,6 +372,17 @@ or out unnoticed; a test fails if it does. An unknown stamp counts as stale.
 `adopt` uses the same test as `process`, or the export would use a file that
 processing has just decided to redo.
 
+The processing button belongs in the header, next to Export. It is an
+**action**, not an audio setting: the panel decides what processing does, the
+header decides whether to do it — the same split as between the cut panel and
+Export. The stronger reason is the state it carries. The button says how many
+files were made with different settings, and that is exactly what you need to
+know at the moment you press Export; at the bottom of the audio panel, in the
+right-hand rail below the fold, it was invisible precisely when it mattered,
+and an export that used raw audio looks successful until somebody listens.
+The count goes on the button itself for the same reason — in the header the
+panel's explanatory note is no longer beside it.
+
 The button carries the state, because the work is minutes long and invisible.
 `mix.freshness` counts how many files match the settings right now — `stat`
 calls and stamp reads, cheap enough for the settings round, which is where it

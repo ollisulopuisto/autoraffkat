@@ -431,7 +431,17 @@ button.small:hover { opacity: 1; }
 
 /* Käsittelypainike kertoo tilansa. Valmis on hillitty eikä kutsu painamaan;
    vahvistus erottuu, koska sen takana on minuuttien ajo. */
+/* Käsittelynappi on otsikkorivillä «Vie XML»:n vieressä: se on toimenpide
+   eikä ääniasetus, ja sen kertoma vanhentuneiden määrä tarvitaan juuri
+   viennin hetkellä. Otsikkorivi on ahdas, joten teksti ei saa katketa
+   kahdelle riville eikä nappi venyä yli. */
 .mix-run { display: inline-flex; gap: 6px; align-items: center; }
+.mix-run button { white-space: nowrap; }
+@media (max-width: 1100px) {
+  /* Kapealla ruudulla vain toimenpide, ei sen selitystä: paneelin selite
+     kertoo saman pidemmin. */
+  .mix-run button { max-width: 22ch; overflow: hidden; text-overflow: ellipsis; }
+}
 .mix-run button.done { opacity: .75; cursor: default; }
 .mix-run button.done::before { content: "✓ "; color: var(--ok, #4c9); }
 .mix-run button.warn { border-color: var(--warn); color: var(--warn); }
