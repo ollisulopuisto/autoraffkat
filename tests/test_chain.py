@@ -559,3 +559,43 @@ def test_the_third_stage_sits_below_the_second():
     toinen = settings.leveler_threshold_db + offset
     kolmas = settings.leveler_threshold_db + offset - 4.0
     assert kolmas < toinen
+
+
+def test_the_rider_does_nothing_without_a_speech_mask():
+    """Signaalista pääteltynä puolet «puheesta» on toisen vuotoa.
+
+    Mitattuna Nymanin raidalla tason heuristiikka piti puheena 74 %
+    lohkoista, kun hänen omaa puhettaan oli 53 %, ja päällekkäin ne osuivat
+    vain 38 %:ssa. Kuljettaja nosti siis vuotoa: pohjakohina nousi 3,5 dB
+    ja tason hajonta kasvoi 2,88:sta 3,37:ään.
+
+    Heuristiikka on siis huonompi kuin ei mitään, ja hiljainen huononnus on
+    tämän projektin tyypillisin vika. Ilman maskia ei kuljeteta.
+    """
+    audio = speech_like(seconds=8.0, level=0.3)
+    same = chain.ride(audio.copy(), RATE)
+    assert np.array_equal(same, audio)
+    gain, _block = chain.rider_gain(audio, RATE)
+    assert not np.any(gain)
+
+
+def test_the_rider_returns_to_unity_outside_its_speaker_s_speech():
+    """Pitäminen kantaisi noston toisen puhujan vuoron päälle.
+
+    Yhden mikin kuljettaja pitää vahvistuksen tauon yli, ja se on siellä
+    oikein. Kahden mikin nauhoituksessa tauko on **toisen puhetta**, ja
+    pidetty nosto osuu suoraan vuotoon: mitattuna erottelu oman puheen ja
+    vuodon välillä putosi 19,1 dB:stä 14,8:aan. Nollaan palautettuna se
+    säilyi 18,7:ssä.
+    """
+    rate = RATE
+    block = max(1, int(chain.RIDER_BLOCK_S * rate))
+    # Puhetta alussa, toisen vuoro lopussa.
+    audio = speech_like(seconds=12.0, level=0.05)
+    count = audio.shape[1] // block
+    speech = np.zeros(count, dtype=bool)
+    speech[: count // 2] = True
+    gain, _ = chain.rider_gain(audio, rate, speech)
+    assert np.any(gain[: count // 2]), "omalla puheella ei kuljetettu"
+    # Loppupuoli palaa nollaan; liuku on hidas, joten katsotaan viimeisiä.
+    assert abs(float(gain[-1])) < 0.5, float(gain[-1])

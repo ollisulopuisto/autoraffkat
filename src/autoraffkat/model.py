@@ -288,6 +288,10 @@ class AudioSettings:
     target_lufs: float = -14.0
     peak_threshold_db: float = -12.0  # nopea, 30 ms
     leveler_threshold_db: float = -18.0  # hidas, 300 ms
+    # Tasonkuljettaja: hidas tason tasaus **ennen** kompressoreita, se
+    # vaihe joka käsityönä tehdyssä miksauksessa on ensin. Ks.
+    # chain.rider_gain — ilman puhemaskia sitä ei ajeta lainkaan.
+    rider: bool = True
     declick: bool = False  # maiskaukset ja huulinaksut pois
     # Naksujen herkkyys. Tämä riippuu puhujasta enemmän kuin mikään muu
     # ketjun arvo: toiset maiskuttavat, toiset eivät lainkaan.

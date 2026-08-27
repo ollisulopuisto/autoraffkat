@@ -99,6 +99,7 @@ FINGERPRINT_FIELDS = (
     "target_lufs",
     "peak_threshold_db",
     "leveler_threshold_db",
+    "rider",
     "declick",
     "declick_sensitivity",
     "plugin_path",
@@ -118,6 +119,7 @@ FINGERPRINT_FIELDS = (
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 7: tasonkuljettaja ennen kompressoreita.
 # 6: vaimennusta ei enää polteta tiedostoon.
 # 5: ketjun kolmas kompressori oli kuollut ja on nyt elossa.
 # 4: liitännäisen oma tila on osa lopputulosta.
@@ -125,7 +127,7 @@ FINGERPRINT_FIELDS = (
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 6
+FINGERPRINT_VERSION = 7
 
 
 def stamp_dir() -> Path:
@@ -596,6 +598,36 @@ def closed_ranges(
     return out
 
 
+def speech_blocks(item, mask, program_start: float, rate: int,
+                  block: int, count: int) -> np.ndarray:
+    """Puhujan oma puhe lohkoittain tässä tiedostossa.
+
+    Ruudukko on aikajanan aikaa, tiedosto omaansa; muunnos on
+    esiintymittäin lineaarinen, sama kaava kuin ``closed_ranges``issa.
+    Tasonkuljettaja tarvitsee juuri tämän eikä signaalista pääteltyä
+    puhetta — ks. ``chain.rider_gain``.
+    """
+    out = np.zeros(count, dtype=bool)
+    mask = np.asarray(mask, dtype=bool)
+    for placement in item.placements:
+        base = float(placement.start - item.asset_start - placement.offset)
+        # Lohkon keskikohta tiedostoajassa -> aikajana -> ruudukon solu.
+        times = (np.arange(count) + 0.5) * block / rate
+        timeline = times - base
+        inside = ((timeline >= float(placement.offset))
+                  & (timeline < float(placement.end)))
+        cells = ((timeline - program_start) / HOP).astype(int)
+        ok = inside & (cells >= 0) & (cells < mask.shape[0])
+        out[ok] |= mask[cells[ok]]
+    return out
+
+
+def speech_masks(grid) -> dict:
+    """Puhuja -> milloin hän on äänessä, ruudukon tarkkuudella."""
+    return {lane.name: np.asarray(lane.on, dtype=bool)
+            for lane in getattr(grid, "speakers", [])}
+
+
 def duck_envelopes(grid, settings: AudioSettings,
                    program_start: float) -> dict[str, list]:
     """Vaimennus käyränä, aikajanan aikaa: ``puhuja -> [(t, dB), …]``.
@@ -901,6 +933,7 @@ def _run_one(
     solos: dict | None = None,
     partners: list | None = None,
     result=None,
+    speaking: dict | None = None,
 ) -> float:
     """Käsittelee yhden tiedoston. Palauttaa normalisoinnin noston.
 
@@ -942,6 +975,16 @@ def _run_one(
     if target is not None and trim_db:
         target = float(target) + trim_db
 
+    # Tasonkuljettajan maski: milloin **tämän raidan oma puhuja** on
+    # äänessä. Signaalista pääteltynä puolet «puheesta» olisi toisen
+    # vuotoa, ja kuljettaja nostaisi sitä — ks. ``chain.rider_gain``.
+    own = None
+    mine = (speaking or {}).get(job.get("speaker"))
+    if mine is not None and job.get("item") is not None and job.get("speech"):
+        block = max(1, int(chain.RIDER_BLOCK_S * rate))
+        own = speech_blocks(job["item"], mine, program_start, rate, block,
+                            audio.shape[1] // block)
+
     audio, info = chain.process(
         audio,
         rate,
@@ -950,6 +993,7 @@ def _run_one(
         job.get("speech", True),
         target,
         plugin,
+        speaking=own,
         stage=lambda name, frac: report(
             name, READ_SHARE + DEBLEED_SHARE + CHAIN_SHARE * frac
         ),
@@ -1260,6 +1304,7 @@ def process(
         out = _run_todo(
             result, todo, jobs, settings, plugin, masks, program_start,
             progress, trim, started, total_weight, solos,
+            speech_masks(grid) if grid is not None else None,
         )
     finally:
         if hasattr(plugin, "close"):
@@ -1276,7 +1321,7 @@ def process(
 
 def _run_todo(
     result, todo, jobs, settings, plugin, masks, program_start,
-    progress, trim, started, total_weight, solos=None,
+    progress, trim, started, total_weight, solos=None, speaking=None,
 ):
     """Tiedostot yksi kerrallaan. Erillään, jotta liitännäisvaranto suljetaan
     myös silloin kun jokin kaatuu kesken."""
@@ -1331,7 +1376,7 @@ def _run_todo(
             ]
             result.gains[job["key"]] = _run_one(
                 job, settings, plugin, masks, program_start, stage, trim,
-                solos, partners, result,
+                solos, partners, result, speaking,
             )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:
             result.errors[job["key"]] = str(exc)

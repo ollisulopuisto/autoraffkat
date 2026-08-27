@@ -140,6 +140,36 @@ relation between tracks and after it no filter can remove the bleed. And it
 measures its own output: a filter that eats the target's own speech is
 refused with a reason, because that mistake is only audible after the export.
 
+The level rider comes first, and it cannot work from the signal alone.
+A slow level ride before the compressors is the stage every hand-made mix
+starts with and ours lacked: it removes the speaker's *own* variation so the
+compressor only has to catch what is left, instead of doing the rider's job
+badly — fast and level-dependent instead of slow and even.
+
+Two things had to be measured before it worked, and both went the wrong way
+first. **Deciding "speech" from the level is worse than not riding at all.**
+On a two-microphone recording half of what is loud on a track is the other
+person: measured, the level heuristic called 74 % of Nyman's blocks speech
+when 53 % were his own, and the two agreed on only 38 %. The rider dutifully
+lifted the leakage — the noise floor rose 3.5 dB and the level spread got
+*worse*, 2.88 → 3.37 dB. So the mask comes from the grid, the same
+raw-measured source ducking uses, and without a mask `ride` returns the audio
+untouched rather than guessing.
+
+**And the gain must return to unity outside its own speaker's speech, not
+hold.** Holding is what a one-microphone rider does and it is right there;
+here the pause *is the other person talking*, so a held boost lands straight
+on their leakage. Measured, separation between own speech and leakage fell
+19.1 → 14.8 dB. Returning to zero keeps it at 18.7.
+
+What it is worth, measured on ten minutes of real speech: own-speech level
+spread 6.72 → 6.44 dB and 6.46 → 5.67 dB, with separation and noise floor
+unchanged. Modest, because real speech variation is mostly sentence-scale
+emphasis, which the rider deliberately leaves alone. Note also what the same
+measurement said about the premise: the compressor does **not** cost
+separation either (19.1 → 19.0), so the rider is not the answer to leakage —
+de-bleeding still is.
+
 Independent per-microphone normalisation lifts bleed. Two microphones
 normalised to the same LUFS get different gains — measured +25.6 dB and
 +22.5 dB on one episode — and the 3.1 dB difference lands on the quieter

@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.109] - 2026-08-27
+
+### Added
+- **A Level Rider Before the Compressors**, the stage every hand-made mix starts with and this chain lacked. It removes the speaker's own slow variation so the compressors only catch what is left. Measured on ten minutes of real speech: own-speech level spread **6.72 → 6.44 dB** and **6.46 → 5.67 dB**, separation and noise floor unchanged.
+  - **It cannot decide "speech" from the signal.** On a two-microphone recording half of what is loud on a track is the other person: the level heuristic called 74 % of Nyman's blocks speech when 53 % were his own, agreeing only 38 % of the time. It lifted the leakage — noise floor up 3.5 dB, level spread *worse* at 2.88 → 3.37 dB. The mask now comes from the grid, and without a mask `ride` returns the audio untouched rather than guessing.
+  - **The gain returns to unity outside its own speaker's speech rather than holding.** Holding is right for a one-microphone rider; here the pause is the other person talking, and a held boost lands on their leakage — separation fell 19.1 → 14.8 dB. Returning to zero keeps it at 18.7.
+  - Honest note on the premise: the compressor does not cost separation either (19.1 → 19.0), so the rider is not the answer to leakage. De-bleeding still is.
+  - `FINGERPRINT_VERSION` 6 → 7.
+
 ## [v26.08.27.108] - 2026-08-27
 
 ### Changed
