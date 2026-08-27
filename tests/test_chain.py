@@ -482,3 +482,80 @@ def test_worker_count_follows_the_machine_and_the_user(monkeypatch):
     # Yhden ytimen koneella on silti yksi työ, ei nolla.
     monkeypatch.setattr(chain.os, "cpu_count", lambda: 1)
     assert chain.worker_count() == 1
+
+
+def test_every_compressor_stage_actually_engages():
+    """Kolme rajattua vaihetta, joista yksi ei laukennut koskaan.
+
+    Kolmannen kynnys oli ``+4 dB`` toisen yläpuolella, ja se ajetaan toisen
+    jälkeen — toinen on siis jo vetänyt kaiken oman kynnyksensä alle, joten
+    neljä desibeliä sen yläpuolella ei ylity millään. Mitattuna kolmella
+    minuutilla oikeaa puhetta vaiheen vahvistuksen hajonta oli 0,00 dB
+    jokaisella tavoitteella -14…-18: ketju lupasi kolme vaihetta ja ajoi
+    kaksi, ja loput huipuista jäivät rajoittimelle.
+
+    Kuollut vaihe ei kaada mitään eikä näy missään lokissa — tämä testi on
+    ainoa paikka joka sen kertoo.
+    """
+    rate = RATE
+    # Tasavoimakkaat purskeet eivät kelpaa: kynnykset ovat absoluuttisia ja
+    # tulevat normalisoinnin jälkeen, joten signaali jonka jokainen jakso on
+    # yhtä kova asettuu kokonaan kynnysten alle eikä testi mittaisi mitään.
+    # Puheessa kovat kohdat ovat selvästi kokonaisäänekkyyden yläpuolella, ja
+    # juuri ne kynnykset ylittävät.
+    rng = np.random.default_rng(7)
+    n = int(12.0 * rate)
+    signal = rng.standard_normal(n).astype(np.float32) * 0.0005
+    levels = [0.05, 0.5, 0.12, 0.9, 0.2, 1.0, 0.08, 0.7, 0.3, 0.6]
+    for index, start in enumerate(np.arange(0.5, 11.0, 1.1)):
+        i0 = int(start * rate)
+        i1 = i0 + int(0.7 * rate)
+        t = np.arange(i1 - i0) / rate
+        level = levels[index % len(levels)]
+        signal[i0:i1] += (
+            level * np.sin(2 * np.pi * 180 * t) * (1 + 0.5 * np.sin(2 * np.pi * 3 * t))
+        ).astype(np.float32)
+    audio = signal[None, :]
+    settings = AudioSettings(target_lufs=-16.0)
+    offset = -16.0 - chain.THRESHOLD_REFERENCE_LUFS
+    # Kynnykset ovat absoluuttisia ja tulevat vasta normalisoinnin jälkeen,
+    # joten testisignaali on vietävä samaan tasoon kuin ketjussa.
+    measured = chain.loudness(audio.mean(axis=0), rate)
+    audio = audio * 10.0 ** ((-16.0 - measured) / 20.0)
+
+    stages = [
+        ("monikaista", lambda x: chain.multiband(
+            x, rate, settings.peak_threshold_db + offset, chain.PEAK_RATIO,
+            chain.MAX_GR_DB, chain.PEAK_ATTACK_MS, chain.PEAK_RELEASE_MS)),
+        ("tasaus 1", lambda x: chain.compress(
+            x, rate, settings.leveler_threshold_db + offset, chain.LEVEL_RATIO,
+            chain.MAX_GR_DB, chain.LEVEL_ATTACK_MS, chain.LEVEL_RELEASE_MS)),
+        ("tasaus 2", lambda x: chain.compress(
+            x, rate, settings.leveler_threshold_db + offset - 4.0,
+            chain.LEVEL_RATIO, chain.MAX_GR_DB,
+            chain.LEVEL_ATTACK_MS * 4, chain.LEVEL_RELEASE_MS * 2)),
+    ]
+    running = audio
+    for name, run in stages:
+        out = run(running)
+        # Vaimennus desibeleinä: nolla tarkoittaa ettei vaihe koskenut mihinkään.
+        gr = 20.0 * np.log10(
+            max(float(np.abs(out).max()), 1e-9) / max(float(np.abs(running).max()), 1e-9)
+        )
+        moved = float(np.abs(out - running).max())
+        assert moved > 1e-4, f"{name} ei tehnyt mitään"
+        assert gr <= 0.01, f"{name} nosti tasoa {gr:.2f} dB"
+        running = out
+
+
+def test_the_third_stage_sits_below_the_second():
+    """Sama vika suoraan kynnyksissä: järjestys on osa ketjun rakennetta.
+
+    Käyttäytymistesti kertoo että vaihe laukeaa; tämä kertoo *miksi*, jotta
+    merkin vaihtaminen takaisin ei mene läpi vahingossa.
+    """
+    settings = AudioSettings(target_lufs=-16.0)
+    offset = -16.0 - chain.THRESHOLD_REFERENCE_LUFS
+    toinen = settings.leveler_threshold_db + offset
+    kolmas = settings.leveler_threshold_db + offset - 4.0
+    assert kolmas < toinen

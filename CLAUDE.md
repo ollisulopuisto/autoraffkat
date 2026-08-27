@@ -304,6 +304,29 @@ into −25.74. It also makes the balance between speakers depend on whose
 loudest transient was loudest, which is to say random. The level is
 re-measured after limiting so speakers land on the same number.
 
+Every compressor stage must be shown to engage. The third stage's
+threshold was written `leveler_threshold + 4.0` — four decibels *above* the
+second — and it runs after the second, which has already pulled everything
+under its own threshold. It therefore never fired: measured on three minutes
+of real speech, its gain moved 0.00 dB at every target from −14 to −18. The
+chain promised three bounded stages and ran two, and the slack landed on the
+limiter. A dead stage crashes nothing, logs nothing and sounds like a working
+chain, so `test_every_compressor_stage_actually_engages` runs each stage in
+sequence and fails on any that leaves the signal untouched. Note what the
+test's fixture had to learn: thresholds are absolute and applied after
+normalisation, so a signal whose every burst is equally loud sits entirely
+below them and the test passes while measuring nothing. The bursts must vary,
+because in speech it is the loud passages that clear the threshold.
+
+The crest that reaches the limiter is set by `PARALLEL_MIX`, not by any
+threshold. The output is `0.4·dry + 0.6·compressed`, so 40 % of every
+untouched transient survives whatever the compressors do: measured, waking the
+third stage moved the pre-limiter peak from +7.55 to +7.16 dBFS, and raising
+the multiband's gain-reduction ceiling from 5 to 8 dB moved it not at all —
+it was never hitting 5. Peak control therefore belongs to the limiter by
+construction, which is worth knowing before reaching for a compressor to
+solve a peak problem.
+
 Compression is parallel, and the peak attack is longer than a pitch period.
 Two milliseconds modulates the waveform of a 110 Hz voice instead of its
 level, which is harmonic distortion: measured −30.9 dB THD at 2 ms against

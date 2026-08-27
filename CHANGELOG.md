@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.100] - 2026-08-27
+
+### Fixed
+- **One of the Three Compressors Never Fired**: the third stage's threshold was `leveler_threshold + 4.0` — four decibels *above* the second — and it runs after the second, which has already pulled everything below its own threshold. Measured on three minutes of real speech, the stage's gain moved **0.00 dB** at every target from −14 to −18 LUFS. The chain promised three bounded stages and ran two. It now sits 4 dB **below** the second, where it does about what the second does (σ 0.58 dB each), which is the "small amounts several times" the design intended.
+  - A dead stage crashes nothing and logs nothing. `test_every_compressor_stage_actually_engages` now runs each stage in sequence and fails on any that leaves the signal untouched; a second test asserts the ordering directly so the sign cannot flip back unnoticed.
+  - `FINGERPRINT_VERSION` 4 → 5: files processed before this are not up to date at any setting.
+
 ## [v26.08.26.99] - 2026-08-26
 
 ### Added

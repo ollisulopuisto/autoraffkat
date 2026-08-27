@@ -124,12 +124,13 @@ FINGERPRINT_FIELDS = (
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 5: ketjun kolmas kompressori oli kuollut ja on nyt elossa.
 # 4: liitännäisen oma tila on osa lopputulosta.
 # 3: ristivuodon vähennys ajetaan ennen liitännäistä.
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 4
+FINGERPRINT_VERSION = 5
 
 
 def stamp_dir() -> Path:

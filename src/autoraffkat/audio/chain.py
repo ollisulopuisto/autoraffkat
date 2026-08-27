@@ -1079,10 +1079,19 @@ def process(
             LEVEL_ATTACK_MS,
             LEVEL_RELEASE_MS,
         )
+        # Kolmas vaihe on hidas ja sen kynnys on toista **alempana**, ei
+        # ylempänä. Plusmerkki teki siitä kuolleen: se ajetaan toisen
+        # jälkeen, joka on jo vetänyt kaiken oman kynnyksensä alle, joten
+        # neljä desibeliä sen yläpuolella ei laukea koskaan. Mitattuna
+        # kolmella minuutilla oikeaa puhetta vaiheen vahvistuksen hajonta
+        # oli 0,00 dB jokaisella tavoitteella -14…-18 — ketju lupasi kolme
+        # rajattua vaihetta ja ajoi kaksi. Neljä desibeliä alempana se tekee
+        # saman verran kuin toinen vaihe (hajonta 0,58 dB kumpikin), mikä on
+        # se «pieniä määriä useaan kertaan» joka tässä oli tarkoitus.
         compressed = compress(
             compressed,
             rate,
-            settings.leveler_threshold_db + offset + 4.0,
+            settings.leveler_threshold_db + offset - 4.0,
             LEVEL_RATIO,
             MAX_GR_DB,
             LEVEL_ATTACK_MS * 4,
