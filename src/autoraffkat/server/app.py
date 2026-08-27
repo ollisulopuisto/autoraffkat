@@ -253,6 +253,13 @@ class AppState:
             traceback.print_exc()
         finally:
             self.progress["ready"] = True
+        # Istumajärjestys heti perään, jos panorointi on päällä. Kytkin
+        # käynnistää otoksen vain päälle vaihtaessa, joten ilman tätä
+        # asetuksista peritty «panorointi päällä» ei mittaisi koskaan
+        # mitään ja vienti kirjoittaisi nolla panorointia hiljaa. Vaatii
+        # ruudukon, siksi vasta analyysin jälkeen.
+        if self.settings.globals.panning and not self.seating:
+            self.start_seating()
 
     def start_seating(self) -> None:
         """Kevyt otos taustalle, jos sitä ei ole jo menossa."""

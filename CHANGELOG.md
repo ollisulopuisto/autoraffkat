@@ -5,6 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.110] - 2026-08-27
+
+### Fixed
+- **Panning Inherited From Settings Never Measured Anything**: the switch starts the sampling only when it changes from off to on, so a project that loaded with panning already enabled would export zero panning and say nothing about it. Loading now starts the sampling itself, once the grid exists.
+
 ## [v26.08.27.109] - 2026-08-27
 
 ### Added

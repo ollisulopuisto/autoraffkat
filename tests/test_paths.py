@@ -142,3 +142,19 @@ def test_the_pan_amount_is_not_a_setting():
     assert isinstance(Globals().panning, bool)
     # Leveys on koodissa ja mitattavissa, ei tiedostossa.
     assert staging.PAN_WIDTH[2] > 0
+
+
+def test_panning_inherited_from_settings_still_measures():
+    """Kytkin käynnistää otoksen vain päälle vaihtaessa.
+
+    Asetuksista peritty «panorointi päällä» ei siis mittaisi koskaan
+    mitään, ja vienti kirjoittaisi nolla panorointia kertomatta siitä —
+    tämän projektin tyypillisin vika. Lataus käynnistää otoksen itse.
+    """
+    import inspect
+
+    from autoraffkat.server import app as server_app
+
+    source = inspect.getsource(server_app.AppState._analyze)
+    assert "start_seating" in source, "lataus ei käynnistä otosta"
+    assert "panning" in source
