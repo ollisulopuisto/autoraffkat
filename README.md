@@ -1,3 +1,7 @@
+> **Moved.** This project now lives in [ollisulopuisto/podcast](https://github.com/ollisulopuisto/podcast) under `apps/autoraffkat`, together with the two other tools that share its
+> speech-mixing pipeline. This repo is kept for its history; new work
+> goes to the monorepo.
+
 # autoraffkat
 
 Automatic multicam editing for interview and podcast video on macOS. Export an
