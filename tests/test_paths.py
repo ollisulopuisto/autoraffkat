@@ -124,19 +124,21 @@ def test_the_export_can_be_opened_in_final_cut(tmp_path, monkeypatch):
     assert "Unable to find" in broken.json()["detail"]
 
 
-def test_the_pan_is_a_track_setting_not_a_calculation(tmp_path):
-    """Säätimen arvo ja viennin arvo ovat sama luku.
+def test_the_pan_amount_is_not_a_setting():
+    """Panorointi on päällä tai pois, ei liukusäädin.
 
-    Panorointi voisi yhtä hyvin laskea itsensä mittauksesta joka viennissä.
-    Silloin kortin säädin näyttäisi arvoa jota vienti ei käytä — juuri se
-    vika joka tässä projektissa toistuu. Arvo on siis raidan asetus, jonka
-    mittaus **täyttää** kerran napista, ja sen jälkeen se on tavallinen
-    luku joka kulkee tallennuksen läpi.
+    «Kuinka paljon panorointia» on kysymys johon käyttäjällä ei ole
+    vastausta: se on juuri se numero jonka tämä työkalu on olemassa
+    päättämään, ja säätimenä se olisi vastuun siirto. Leveys on siis
+    ``staging.PAN_WIDTH``, ei asetus — tämä testi kaatuu jos sellainen
+    ilmestyy takaisin.
     """
-    from autoraffkat.model import ROLE_MIC, TrackConfig
+    from autoraffkat import staging
+    from autoraffkat.model import Globals, TrackConfig
 
-    cfg = TrackConfig(role=ROLE_MIC, speaker="Nyman", pan=-3.0)
-    again = TrackConfig.from_json(cfg.to_json())
-    assert again.pan == -3.0
-    # Vanha asetustiedosto ilman kenttää ei kaadu eikä keksi arvoa.
-    assert TrackConfig.from_json({"role": ROLE_MIC, "speaker": "X"}).pan == 0.0
+    assert not [f for f in Globals.__dataclass_fields__ if "pan" in f
+                and f != "panning"]
+    assert not [f for f in TrackConfig.__dataclass_fields__ if "pan" in f]
+    assert isinstance(Globals().panning, bool)
+    # Leveys on koodissa ja mitattavissa, ei tiedostossa.
+    assert staging.PAN_WIDTH[2] > 0

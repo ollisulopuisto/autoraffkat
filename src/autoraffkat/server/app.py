@@ -46,7 +46,6 @@ from ..model import (
     ROLES,
     AudioSettings,
     Globals,
-    TrackConfig,
 )
 from ..paths import get_resource_path
 from ..preview import build as build_preview
@@ -349,26 +348,24 @@ class AppState:
                 for r in found if r.speaker in names]
 
     def pans_now(self, grid, roles) -> dict:
-        """Panorointi puhujittain, raitojen omista arvoista.
+        """Vientiin menevä panorointi: mitattu paikka, jos kytkin on päällä.
 
-        Arvo on raidan asetus eikä laskettu: mittaus täyttää sen kerran
-        (``measured_pans``), ja sen jälkeen se on tavallinen säädin. Yksi
-        paikka jossa totuus on — laskettuna säädin näyttäisi arvoa jota
-        vienti ei käytä, mikä on tämän projektin toistuva vika.
+        Määrää ei säädetä. Paikka mitataan ja leveys on vakio, koska
+        «kuinka paljon panorointia» on kysymys johon käyttäjällä ei ole
+        vastausta — se on juuri se numero jonka tämä työkalu on olemassa
+        päättämään. Kytkin on päällä tai pois.
         """
         if not self.settings.globals.panning:
             return {}
-        out: dict[str, float] = {}
-        for speaker, keys in roles.mics.items():
-            for key in keys:
-                value = float(self.settings.tracks.get(
-                    key, TrackConfig()).pan)
-                if value:
-                    out[speaker] = value
-        return out
+        return self.measured_pans(grid, roles)
 
     def measured_pans(self, grid, roles) -> dict:
         """Istumajärjestys kuvasta, puhuja -> panorointi.
+
+        Erillään ``pans_now``ista, koska käyttöliittymä näyttää tämän myös
+        kytkimen ollessa pois: ominaisuutta ei voi arvioida ennen kuin sen
+        on vienyt ja kuunnellut, ja väärin päin oleva panorointi kuulostaa
+        oikealta kunnes vertaa kuvaan. Sama sääntö kuin reaktiokerroksella.
 
         Käyttää samoja mittauksia kuin reaktiokerros, joten mitään ei pureta
         uudestaan. Ilman mittauksia tyhjä: paikkaa jota ei tiedetä ei
@@ -395,10 +392,7 @@ class AppState:
             if any(np.isfinite(v) for v in values) else float("nan")
             for name, values in sides.items()
         }
-        width = float(self.settings.globals.pan_width)
-        scale = width / staging.PAN_WIDTH[2] if staging.PAN_WIDTH[2] else 1.0
-        return {name: round(value * scale, 2)
-                for name, value in staging.pans(merged).items()}
+        return staging.pans(merged)
 
     def reactions_now(self, grid, roles, program_start) -> list:
         """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
@@ -438,10 +432,6 @@ class AppState:
                 cfg.sensitivity_db = float(values["sensitivity_db"])
             if "gain_db" in values:
                 cfg.gain_db = float(values["gain_db"])
-            if "pan" in values:
-                # Rajaus tässä eikä selaimessa: arvo tulee vientiin
-                # sellaisenaan, ja Final Cutin asteikko on -100…+100.
-                cfg.pan = max(-100.0, min(100.0, float(values["pan"])))
         raw = payload.get("globals") or {}
         g = self.settings.globals
         for name in (
@@ -468,7 +458,6 @@ class AppState:
             "reaction_eyes",
             "reaction_motion",
             "reaction_size",
-            "pan_width",
         ):
             if name in raw:
                 setattr(g, name, max(0.0, float(raw[name])))
@@ -786,6 +775,7 @@ def _video_json(state: AppState) -> dict:
         faces += int(found.sum())
 
     candidates = placed = None
+    pans: dict = {}
     if state.video_tables and state.timeline is not None and state.analysis:
         try:
             roles = resolve_roles(state.timeline, state.settings.tracks)
@@ -809,6 +799,13 @@ def _video_json(state: AppState) -> dict:
                 grid, roles, state.timeline, state.video_tables,
                 wanted, float(program_start),
                 decision=decide(grid, state.settings.globals)))
+            # Mihin panorointi puhujat asettaa. Näkyviin, koska muuten
+            # ominaisuutta ei voi arvioida ennen kuin sen on vienyt ja
+            # kuunnellut — ja väärin päin oleva panorointi kuulostaa
+            # oikealta kunnes vertaa kuvaan. Sama sääntö kuin
+            # reaktiokerroksella: piirretään myös silloin kun kytkin on
+            # pois, jotta sen voi arvioida ennen päälle laittamista.
+            pans = state.measured_pans(grid, roles)
         except (AnalysisError, ValueError, KeyError):
             candidates = placed = None
 
@@ -819,6 +816,7 @@ def _video_json(state: AppState) -> dict:
         "faces": faces,
         "candidates": candidates,
         "placed": placed,
+        "pans": pans,
         "errors": sorted(state.video_errors.values()),
     }
 
@@ -1367,33 +1365,6 @@ def create_app(state: AppState) -> FastAPI:
             project.save(state.xml_path, state.settings)
         threading.Thread(target=state.run_mix, args=(force,), daemon=True).start()
         return {"ok": True, "running": True}
-
-    @app.post("/api/pan-auto")
-    def pan_from_picture():
-        """Täyttää raitojen panoroinnit mitatusta istumajärjestyksestä.
-
-        Nappi eikä automatiikka: arvo on raidan oma asetus, ja jos se
-        muuttuisi itsestään mittauksen mukana, käsin vedetty luku katoaisi
-        seuraavalla mittauksella eikä mikään kertoisi mihin.
-        """
-        if state.timeline is None:
-            raise HTTPException(409, state.load_error or t("export.not_loaded"))
-        with state.lock:
-            result = state.compute()
-            if not result.get("ok"):
-                raise HTTPException(400, "; ".join(result.get("problems", [])))
-            grid, _start, _end, _decision = result["_grid"]
-            roles = resolve_roles(state.timeline, state.settings.tracks)
-            values = state.measured_pans(grid, roles)
-            if not values:
-                raise HTTPException(400, t("video.none_measured"))
-            for speaker, keys in roles.mics.items():
-                for key in keys:
-                    cfg = state.settings.tracks.setdefault(key, TrackConfig())
-                    cfg.pan = float(values.get(speaker, 0.0))
-            state.settings.globals.panning = True
-            project.save(state.xml_path, state.settings)
-        return _state_json(state)
 
     @app.post("/api/final-cut")
     def open_in_final_cut(payload: dict):

@@ -495,26 +495,20 @@ if (fired < MIN_HANDLERS) {
    Esiasetus on valinta, ja sen alla olevat neljä lukua ovat sen määritelmä.
    Jos ne palaavat näkyviin muissa esiasetuksissa, valinta muuttuu taas
    sivutuotteena — mikä on juuri se ero jonka tämä rivitys poisti. */
-/* Panoroinnin säädin näkyy kortilla vain kun panorointi on päällä.
+/* Panoroinnin rivi piirtyy molemmissa tiloissa, eikä siinä ole säätimiä.
 
-   Ilman tätä ajoa kortin panorointisäädintä ei piirrettäisi kertaakaan, ja
-   sen käsittelijä jäisi ajamatta — juuri se puolikas tiedostoa jossa
-   määrittelemätön muuttuja piileskelee. */
-run('panorointi kortilla', () => {
+   Kytkin on päällä tai pois: määrä on mittauksesta johdettu vakio. Jos
+   riville ilmestyy liukusäädin, se on vastuun siirtoa käyttäjälle. */
+run('panorointi ilman säätimiä', () => {
   vm.runInContext('state.globals.panning = true; renderTracks(); renderGlobals();',
                   context);
   const knobs = vm.runInContext(
     "TRACK_KNOBS().map((k) => k.key).join(',')", context);
-  if (!knobs.includes('pan')) {
-    throw new Error(`kortin säätimet ilman panorointia: ${knobs}`);
+  if (knobs.includes('pan')) {
+    throw new Error('panorointi ilmestyi kortin säätimeksi');
   }
   vm.runInContext('state.globals.panning = false; renderTracks(); renderGlobals();',
                   context);
-  const ilman = vm.runInContext(
-    "TRACK_KNOBS().map((k) => k.key).join(',')", context);
-  if (ilman.includes('pan')) {
-    throw new Error('panorointisäädin näkyi vaikka panorointi on pois');
-  }
 });
 
 run('esiasetuksen säätimet', () => {

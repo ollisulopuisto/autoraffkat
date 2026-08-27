@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.106] - 2026-08-27
+
+### Changed
+- **Panning Is On or Off; the Amount Is No Longer Adjustable**: "how much panning" is a question the user has no answer to — it is exactly the number this tool exists to decide, and a slider hands the responsibility back. The width lives in `staging.PAN_WIDTH`, where it can be measured and argued about. The per-track slider, the width slider, the `pan` track setting, the `pan_width` global and the "Set from picture" button are all gone; a test fails if a pan amount reappears in `Globals` or `TrackConfig`.
+  - The panel now shows **where the speakers were placed** — left, centre, right — and shows it whether the switch is on or off. Panning that is the wrong way round sounds perfectly fine until you compare it with the picture, so the placement has to be checkable without exporting first.
+
 ## [v26.08.27.105] - 2026-08-27
 
 ### Changed

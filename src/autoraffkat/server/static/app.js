@@ -21,14 +21,6 @@ const TRACK_KNOBS = () => [
     unit: T('knob.sensitivityUnit') },
   { key: 'gain_db', label: T('knob.gain'), min: -24, max: 24, step: 0.5,
     unit: T('unit.db') },
-  /* Panorointi kortille eikä globaaliin riviin: se on raidan ominaisuus
-     siinä missä herkkyys ja vahvistus, ja kytkentätaulussa raita on jo
-     paikka jolla on omat säätimensä. Näkyy vain kun panorointi on
-     päällä — muuten se olisi säädin joka ei tee mitään. */
-  ...(state.globals && state.globals.panning
-    ? [{ key: 'pan', label: T('knob.pan'), min: -20, max: 20, step: 1,
-         unit: '%' }]
-    : []),
 ];
 
 const RHYTHM_PRESETS = () => [
@@ -764,10 +756,8 @@ function renderGlobals() {
     label: T('panning.title'),
     hint: T('panning.hint'),
     value: state.globals.panning
-      ? (video.measured ? T('panning.on', { width: state.globals.pan_width })
-                        : T('reactions.notMeasured'))
+      ? (video.measured ? T('panning.on') : T('reactions.notMeasured'))
       : T('audio.off'),
-    keys: ['pan_width'],
     toggle: {
       checked: state.globals.panning,
       onChange: (on) => { state.globals.panning = on; renderGlobals(); schedule(0); },
@@ -900,42 +890,33 @@ function reactionsBody(host, mark, video, running) {
    Paikkoja ei säädetä käsin, koska ne mitataan — ja jos mittaus on väärin,
    säädin ei ole se paikka jossa se korjataan. */
 function panningBody(host, mark, video) {
+  /* Ei säätimiä. Määrä on mittauksesta johdettu vakio, ja «kuinka paljon
+     panorointia» on kysymys johon käyttäjällä ei ole vastausta — se on
+     juuri se numero jonka tämä työkalu on olemassa päättämään. Kytkin on
+     päällä tai pois.
+
+     Sen sijaan näytetään mihin puhujat päätyivät: muuten ominaisuutta ei
+     voi arvioida ennen kuin sen on vienyt ja kuunnellut. */
   const note = document.createElement('p');
   note.className = 'why';
   note.textContent = video.measured
     ? T('why.panning') : T('panning.needMeasure');
   host.append(note);
-  whyKnob(host, {
-    key: 'pan_width',
-    label: T('panning.width'),
-    min: 2, max: 16, step: 1, unit: '%',
-  }, mark);
-  /* Nappi eikä automatiikka: arvo on raidan oma säädin, ja jos se
-     muuttuisi itsestään mittauksen mukana, käsin vedetty luku katoaisi
-     seuraavalla mittauksella eikä mikään kertoisi mihin. */
-  const button = document.createElement('button');
-  button.type = 'button';
-  button.className = 'ghost small';
-  button.textContent = T('panning.fromPicture');
-  button.disabled = !video.measured;
-  button.addEventListener('click', async () => {
-    setBusy(button, true);
-    try {
-      const response = await fetch('/api/pan-auto', { method: 'POST' });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.detail || '');
-      state = data;
-      renderTracks();
-      renderGlobals();
-      renderLegend();
-      schedule(0);
-      return;
-    } catch (err) {
-      banner(err.message || T('reactions.failed'), true);
-    }
-    setBusy(button, false);
-  });
-  host.append(button);
+  const places = (video && video.pans) || {};
+  const names = Object.keys(places);
+  if (names.length) {
+    const list = document.createElement('p');
+    list.className = 'why';
+    list.textContent = names
+      .sort((a, b) => places[a] - places[b])
+      .map((name) => T('panning.place', {
+        name,
+        side: places[name] < 0 ? T('panning.left')
+          : (places[name] > 0 ? T('panning.right') : T('panning.centre')),
+      }))
+      .join(' · ');
+    host.append(list);
+  }
 }
 
 

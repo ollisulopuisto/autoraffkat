@@ -166,10 +166,6 @@ class TrackConfig:
     speaker: str = ""  # lähikuvan ja mikin yhdistävä nimi
     sensitivity_db: float = 12.0  # dB pohjakohinan yli
     gain_db: float = 0.0  # vahvistuksen korjaus
-    # Panorointi, -100…+100 kuten Final Cutissa. Raidan omana arvona eikä
-    # laskettuna: mittaus täyttää sen, mutta sen jälkeen se on tavallinen
-    # luku jota saa vetää. Yksi paikka jossa totuus on, ei kahta.
-    pan: float = 0.0
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -178,7 +174,7 @@ class TrackConfig:
     def from_json(cls, data: dict) -> "TrackConfig":
         known = {
             f: data[f]
-            for f in ("role", "speaker", "sensitivity_db", "gain_db", "pan")
+            for f in ("role", "speaker", "sensitivity_db", "gain_db")
             if f in data
         }
         return cls(**known)
@@ -230,8 +226,11 @@ class Globals:
     # Final Cutin omaksi ``adjust-panner``iksi kulmakohtaisesti — tiedostoja
     # ei kosketa, joten leikkaaja saa muuttaa sen jälkikäteen. Leveys on
     # tarkoituksella pieni: puhe kuuluu keskeltä.
+    # Ei leveyssäädintä: paikka mitataan ja määrä on mittauksesta johdettu
+    # vakio (``staging.PAN_WIDTH``). Säätimenä se olisi kysymys johon
+    # käyttäjällä ei ole vastausta — «kuinka paljon panorointia» on juuri
+    # se numero jonka tämä työkalu on olemassa päättämään.
     panning: bool = False
-    pan_width: float = 6.0            # kahden puhujan levein ero, %
     # Painot. Näitä on tarkoitus säätää, ja siksi mittaukset ovat
     # välimuistissa pisteiden sijaan: säätö ei maksa uutta purkua.
     # Portin läpäisseiden järjestys. Suoruus edellä; loput pieninä, koska
