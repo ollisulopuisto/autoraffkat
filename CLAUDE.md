@@ -171,6 +171,23 @@ middle and a wide spread turns a two-hander into a radio play. Above five
 speakers nothing is panned: the positions would be closer together than the
 measurement is accurate, and then centre beats almost-centre.
 
+Panning goes on the **angle**, not on the clip. Final Cut writes
+`adjust-panner` in both places, and only one of them is the feature: a panner
+on the `mc-clip` moves every angle together, which is turning the desk rather
+than panning, and both speakers land in the same spot. The per-angle form
+lives inside `<audio-role-source>`, and it was settled by having Final Cut
+write one — the DTD permits it in both places and predicts neither. Three
+literals came out of that file and none were guessable: the mode is the
+string `"1 (Stereo Left/Right)"`, volume values carry their unit (`"-27dB"`),
+and a `<keyframe time=…>` is in the **host's local time base**, the same base
+as the `mc-clip`'s `start`, not timeline time. `adjust-volume` and
+`adjust-panner` also come *before* `mc-source` in the DTD's order.
+
+Nothing is written when the pan is zero. An empty `adjust-panner` is a
+setting like any other as far as Final Cut is concerned, so an unmeasured
+episode has to produce byte-for-byte the file it produced before the feature
+existed; a test asserts exactly that.
+
 ## Sensitivity and gain are not the same thing
 
 Sensitivity is a threshold above the noise floor, so gain does not move it —

@@ -580,11 +580,25 @@ def _split_spans(spans, marks: list[int]):
     return [(s, x, y) for s, x, y in out if y > x]
 
 
+def _pan_line(indent: str, amount: float) -> list[str]:
+    """``<adjust-panner>`` yhdelle kulmalle.
+
+    Muoto on Final Cutin oma, luettu sen itsensä kirjoittamasta
+    tiedostosta: tilan nimi on merkkijono ``"1 (Stereo Left/Right)"``, ei
+    numero eikä pelkkä nimi, eikä sitä olisi arvannut.
+    """
+    if not amount:
+        return []
+    return [f'{indent}<adjust-panner mode="1 (Stereo Left/Right)" '
+            f'amount="{amount:g}"/>']
+
+
 def _mc_sources(
     video_angle: str,
     audio_angles: list[tuple[str, str]],
     roles: dict[str, str],
     raw_angles: dict[str, str] | None = None,
+    pans: dict[str, float] | None = None,
 ) -> list[str]:
     """``<mc-source>``-rivit: yksi kuva, loput ääntä omilla rooleillaan.
 
@@ -606,11 +620,29 @@ def _mc_sources(
         ]
     for angle_id, speaker in audio_angles:
         role = f"dialogue.{sanitize_role(speaker)}"
-        lines += [
-            f'              <mc-source angleID={quoteattr(angle_id)} srcEnable="audio">',
-            f"                <audio-role-source role={quoteattr(role)}/>",
-            "              </mc-source>",
-        ]
+        # Panorointi kulmakohtaisesti, ``audio-role-source``in sisään.
+        # Koko ``mc-clip``in panorointi siirtäisi kaikki kulmat yhdessä,
+        # mikä ei ole panorointi vaan miksauspöydän kääntäminen. Rakenne on
+        # tarkistettu Final Cutin itsensä kirjoittamasta tiedostosta, ei
+        # DTD:stä: DTD sallii senkin mitä sovellus ei koskaan kirjoita.
+        pan = float((pans or {}).get(speaker, 0.0))
+        inner = _pan_line("                  ", pan)
+        if inner:
+            lines += [
+                f'              <mc-source angleID={quoteattr(angle_id)} '
+                'srcEnable="audio">',
+                f"                <audio-role-source role={quoteattr(role)}>",
+                *inner,
+                "                </audio-role-source>",
+                "              </mc-source>",
+            ]
+        else:
+            lines += [
+                f'              <mc-source angleID={quoteattr(angle_id)} '
+                'srcEnable="audio">',
+                f"                <audio-role-source role={quoteattr(role)}/>",
+                "              </mc-source>",
+            ]
         twin = (raw_angles or {}).get(angle_id)
         if twin:
             raw_role = f"dialogue.{sanitize_role(f'{speaker} {RAW_TAG}')}"
@@ -1011,6 +1043,7 @@ def build_multicam_fcpxml(
     source: str = "",
     reactions: list | None = None,
     roles=None,
+    pans: dict[str, float] | None = None,
 ) -> str:
     """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
 
@@ -1096,7 +1129,8 @@ def build_multicam_fcpxml(
             f'start="{frames_str(start_frames, frame_duration)}"',
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
-        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles, raw_angles)
+        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles,
+                              raw_angles, pans)
         # Puhujan nimi avainsanaksi. Selaimessa monikameraklipin nimi on
         # median oma («A-osa»), joten kaikki kuvat näyttävät samalta;
         # avainsana on se paikka jossa Final Cut erottaa ne. Lisätään

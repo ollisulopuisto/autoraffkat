@@ -27,7 +27,7 @@ from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_rol
 from ..audio import chain, mix
 from ..audio.chain import ChainError
 from ..decide import WIDE_LABEL, decide
-from .. import reactions
+from .. import reactions, staging
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (
     WriteError,
@@ -347,6 +347,40 @@ class AppState:
                  else names.index(r.speaker))
                 for r in found if r.speaker in names]
 
+    def pans_now(self, grid, roles) -> dict:
+        """Panorointi puhujittain, mitatusta istumajärjestyksestä.
+
+        Käyttää samoja mittauksia kuin reaktiokerros, joten mitään ei pureta
+        uudestaan. Ilman mittauksia palautetaan tyhjä: paikkaa jota ei
+        tiedetä ei arvata, ja keskus on ainoa arvo joka ei ole väärin.
+        """
+        if not self.settings.globals.panning or not self.video_tables:
+            return {}
+        import numpy as np
+
+        from ..video import analyse
+
+        sides: dict[str, list] = {}
+        for speaker, key, _path in analyse.close_up_files(
+            grid, roles, self.timeline
+        ):
+            table = self.video_tables.get(key)
+            if table is None:
+                continue
+            sides.setdefault(speaker, []).append(staging.side(table))
+        # Osia voi olla monta, ja kukin niistä on oma mittauksensa samasta
+        # ihmisestä samassa tuolissa: mediaani niistä.
+        merged = {
+            name: float(np.median([v for v in values if np.isfinite(v)]))
+            if any(np.isfinite(v) for v in values) else float("nan")
+            for name, values in sides.items()
+        }
+        width = float(self.settings.globals.pan_width)
+        pans = staging.pans(merged)
+        # Käyttäjän leveys skaalaa mitatun jaon, ei korvaa sitä.
+        scale = width / staging.PAN_WIDTH[2] if staging.PAN_WIDTH[2] else 1.0
+        return {name: round(value * scale, 2) for name, value in pans.items()}
+
     def reactions_now(self, grid, roles, program_start) -> list:
         """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
 
@@ -411,6 +445,7 @@ class AppState:
             "reaction_eyes",
             "reaction_motion",
             "reaction_size",
+            "pan_width",
         ):
             if name in raw:
                 setattr(g, name, max(0.0, float(raw[name])))
@@ -420,6 +455,8 @@ class AppState:
             g.reaction_threshold = float(raw["reaction_threshold"])
         if "reactions" in raw:
             g.reactions = bool(raw["reactions"])
+        if "panning" in raw:
+            g.panning = bool(raw["panning"])
         if raw.get("overlap_rule") in OVERLAP_RULES:
             g.overlap_rule = raw["overlap_rule"]
         if raw.get("long_take_rule") in LONGTAKE_RULES:
@@ -1240,6 +1277,7 @@ def create_app(state: AppState) -> FastAPI:
                         source=state.xml_path,
                         reactions=shots,
                         roles=roles,
+                        pans=state.pans_now(_grid, roles),
                     )
                 else:
                     xml = build_fcpxml(

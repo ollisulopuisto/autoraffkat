@@ -143,7 +143,7 @@ def test_role_sanitizing():
 # ------------------------------------------------------------------ multicam
 
 
-def _multicam_cut(fixture_dir, segments=None, settings=None):
+def _multicam_cut(fixture_dir, segments=None, settings=None, pans=None):
     """Monikameraleikkaus fixturesta. Kolmas kuva ylittää osien rajan 18 s."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     segments = segments or [
@@ -161,6 +161,7 @@ def _multicam_cut(fixture_dir, segments=None, settings=None):
         "Monikameratesti",
         settings=settings,
         source="multicam.fcpxml",
+        pans=pans,
     )
     return tl, xml
 
@@ -895,4 +896,45 @@ def test_clips_carry_the_speaker_as_a_keyword(fixture_dir, validate_fcpxml):
                     if "reaktio" in (c.get("name") or ""))
     assert any("Reaktio" in (k.get("value") or "")
                for k in reaction.findall("keyword"))
+    validate_fcpxml(xml)
+
+
+def test_panning_goes_on_the_angle_not_on_the_clip(fixture_dir):
+    """Kulmakohtainen panorointi, ``audio-role-source``in sisään.
+
+    Koko ``mc-clip``in panorointi siirtäisi kaikki kulmat yhdessä, mikä ei
+    ole panorointi vaan miksauspöydän kääntäminen: kaksi puhujaa päätyisi
+    samaan paikkaan. Rakenne on luettu Final Cutin itsensä kirjoittamasta
+    tiedostosta — DTD sallii senkin mitä sovellus ei koskaan kirjoita, ja
+    tässä projektissa se ero on jo kerran maksanut kolme vientiä.
+    """
+    _, xml = _multicam_cut(fixture_dir, pans={"Host": -3.0, "Guest": 3.0})
+    clip = ET.fromstring(xml).find(".//spine/mc-clip")
+    assert clip.find("adjust-panner") is None, "koko klipin panorointi"
+    found = {}
+    for source in clip.findall('mc-source[@srcEnable="audio"]'):
+        role = source.find("audio-role-source")
+        panner = role.find("adjust-panner")
+        assert panner is not None, role.get("role")
+        # Tilan nimi on Final Cutin oma merkkijono, ei numero eikä nimi.
+        assert panner.get("mode") == "1 (Stereo Left/Right)"
+        found[role.get("role")] = float(panner.get("amount"))
+    assert found == {"dialogue.Host": -3.0, "dialogue.Guest": 3.0}
+
+
+def test_no_panning_leaves_the_angle_exactly_as_before(fixture_dir):
+    """Nolla ei ole panorointi keskelle vaan panoroinnin puuttuminen.
+
+    Mittaamattomasta jaksosta ei saa tulla erilaista tiedostoa kuin ennen:
+    tyhjä ``adjust-panner`` olisi Final Cutille asetus siinä missä muutkin.
+    """
+    _, ilman = _multicam_cut(fixture_dir)
+    _, nollilla = _multicam_cut(fixture_dir, pans={"Host": 0.0, "Guest": 0.0})
+    assert ilman == nollilla
+    assert "adjust-panner" not in ilman
+
+
+def test_panned_multicam_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    """Oma lukija hyväksyy enemmän kuin tuonti; DTD on se raja joka ratkaisee."""
+    _, xml = _multicam_cut(fixture_dir, pans={"Host": -3.0, "Guest": 3.0})
     validate_fcpxml(xml)

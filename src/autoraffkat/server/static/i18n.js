@@ -40,6 +40,18 @@ const STRINGS = {
     'app.angle': 'kulma {name}',
     'app.channels': '{n} kan.',
     'app.audioOf': 'ääni {codec} {n} kan.',
+    'panning.title': 'Panorointi',
+    'panning.hint': 'Puhujat kuuluvat sieltä missä he istuvat. Paikka mitataan kuvasta.',
+    'panning.on': 'Käytössä, leveys {width} %',
+    'panning.width': 'Leveys',
+    'panning.needMeasure': 'Mittaa lähikuvat ensin: istumajärjestys tulee kuvasta.',
+    'why.panning': 'Paikka mitataan pään asennosta: vastakkain istuvat katsovat '
+      + 'toisiaan, joten vasemmalla istuva katsoo oikealle. Paikat jaetaan tasan '
+      + 'järjestyksen mukaan — kulma kertoo järjestyksen mutta ei etäisyyttä. '
+      + 'Leveys on tarkoituksella pieni: puhe kuuluu keskeltä, ja leveä '
+      + 'panorointi tekee keskustelusta radiokuunnelman. Yli viittä puhujaa ei '
+      + 'panoroida lainkaan. Tiedostoihin ei kosketa: tämä on Final Cutin oma '
+      + 'säätö, jonka voi muuttaa jälkikäteen.',
     'app.exportedCuts': 'Viety, {cuts} kuvaa',
     'export.openInFcp': 'Avaa Final Cutissa',
     'export.reveal': 'Näytä Finderissa',
@@ -350,6 +362,18 @@ const STRINGS = {
     'app.angle': 'angle {name}',
     'app.channels': '{n} ch',
     'app.audioOf': 'audio {codec} {n} ch',
+    'panning.title': 'Panning',
+    'panning.hint': 'Speakers come from where they sit. The position is measured from the picture.',
+    'panning.on': 'On, width {width} %',
+    'panning.width': 'Width',
+    'panning.needMeasure': 'Measure the close-ups first: the seating order comes from the picture.',
+    'why.panning': 'The position is measured from head direction: people sitting '
+      + 'opposite each other look at each other, so the one on the left looks '
+      + 'right. Positions are spread evenly by order — the angle gives the '
+      + 'ordering but not the distance. The spread is deliberately small: speech '
+      + 'belongs in the middle, and a wide spread turns a conversation into a '
+      + 'radio play. Above five speakers nothing is panned. The files are not '
+      + 'touched: this is Final Cut’s own setting and can be changed afterwards.',
     'app.exportedCuts': 'Exported, {cuts} shots',
     'export.openInFcp': 'Open in Final Cut',
     'export.reveal': 'Show in Finder',

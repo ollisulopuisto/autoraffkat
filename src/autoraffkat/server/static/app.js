@@ -747,6 +747,26 @@ function renderGlobals() {
     body: (body, mark) => { reactionsBody(body, mark, video, reacting); },
   }).row);
 
+  /* Panorointi. Sama mittaus kuin reaktiokuvilla — istumajärjestys tulee
+     kuvasta — mutta oma rivinsä, koska kyse on äänen paikasta eikä siitä
+     mitä ruudulla näkyy. Tiedostoihin ei kosketa: tämä on Final Cutin oma
+     `adjust-panner`, ja leikkaaja saa muuttaa sen jälkikäteen. */
+  rows.append(settingRow({
+    key: 'panning',
+    label: T('panning.title'),
+    hint: T('panning.hint'),
+    value: state.globals.panning
+      ? (video.measured ? T('panning.on', { width: state.globals.pan_width })
+                        : T('reactions.notMeasured'))
+      : T('audio.off'),
+    keys: ['pan_width'],
+    toggle: {
+      checked: state.globals.panning,
+      onChange: (on) => { state.globals.panning = on; renderGlobals(); schedule(0); },
+    },
+    body: (body, mark) => { panningBody(body, mark, video); },
+  }).row);
+
   const overlapChosen = OVERLAP_RULES()
     .find(([value]) => value === state.globals.overlap_rule);
   rows.append(settingRow({
@@ -867,6 +887,23 @@ function reactionsBody(host, mark, video, running) {
     min: 0, max: 1.5, step: 0.05, unit: T('unit.seconds'),
   }, mark);
 }
+
+/* Panoroinnin säätimet. Yksi luku: kuinka leveälle puhujat levitetään.
+   Paikkoja ei säädetä käsin, koska ne mitataan — ja jos mittaus on väärin,
+   säädin ei ole se paikka jossa se korjataan. */
+function panningBody(host, mark, video) {
+  const note = document.createElement('p');
+  note.className = 'why';
+  note.textContent = video.measured
+    ? T('why.panning') : T('panning.needMeasure');
+  host.append(note);
+  whyKnob(host, {
+    key: 'pan_width',
+    label: T('panning.width'),
+    min: 2, max: 16, step: 1, unit: '%',
+  }, mark);
+}
+
 
 /* Portin luku päivittyy säätimen vieressä.
 

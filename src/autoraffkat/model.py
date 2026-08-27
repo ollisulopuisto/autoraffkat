@@ -221,6 +221,13 @@ class Globals:
     # vaihtuu. Ks. reactions.LEAD.
     reaction_lead: float = 0.4
     reaction_spacing: float = 25.0    # lyhin väli kahden välillä, s
+
+    # Panorointi. Paikka mitataan kuvasta (``staging.py``) ja kirjoitetaan
+    # Final Cutin omaksi ``adjust-panner``iksi kulmakohtaisesti — tiedostoja
+    # ei kosketa, joten leikkaaja saa muuttaa sen jälkikäteen. Leveys on
+    # tarkoituksella pieni: puhe kuuluu keskeltä.
+    panning: bool = False
+    pan_width: float = 6.0            # kahden puhujan levein ero, %
     # Painot. Näitä on tarkoitus säätää, ja siksi mittaukset ovat
     # välimuistissa pisteiden sijaan: säätö ei maksa uutta purkua.
     # Portin läpäisseiden järjestys. Suoruus edellä; loput pieninä, koska

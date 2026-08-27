@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.103] - 2026-08-27
+
+### Added
+- **Subtle Panning, Placed From the Picture**: each speaker's microphone is panned to where they actually sit, using the seating order `staging.py` measures from the Vision data. It is written as Final Cut's own per-angle `<adjust-panner>` inside `<audio-role-source>` — **the audio files are not touched**, so the whole thing stays editable in Final Cut afterwards. Off by default; the width is adjustable and starts at 6 %.
+  - Per **angle**, not per clip. A panner on the `mc-clip` moves every angle together — that is turning the desk, not panning, and both speakers land in the same place. Settled by having Final Cut write one rather than by reading the DTD, which permits both and predicts neither.
+  - Three literals came out of that reference file and none were guessable: the mode is the string `"1 (Stereo Left/Right)"`, volume values carry their unit (`"-27dB"`), and `<keyframe time=…>` is in the host's local time base, not timeline time.
+  - A zero pan writes nothing at all, so an unmeasured episode produces byte-for-byte the same file as before the feature existed. A test asserts it.
+
 ## [v26.08.27.102] - 2026-08-27
 
 ### Added
