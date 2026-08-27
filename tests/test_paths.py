@@ -122,3 +122,21 @@ def test_the_export_can_be_opened_in_final_cut(tmp_path, monkeypatch):
     broken = client.post("/api/final-cut", json={"path": str(out)})
     assert broken.status_code == 400
     assert "Unable to find" in broken.json()["detail"]
+
+
+def test_the_pan_is_a_track_setting_not_a_calculation(tmp_path):
+    """Säätimen arvo ja viennin arvo ovat sama luku.
+
+    Panorointi voisi yhtä hyvin laskea itsensä mittauksesta joka viennissä.
+    Silloin kortin säädin näyttäisi arvoa jota vienti ei käytä — juuri se
+    vika joka tässä projektissa toistuu. Arvo on siis raidan asetus, jonka
+    mittaus **täyttää** kerran napista, ja sen jälkeen se on tavallinen
+    luku joka kulkee tallennuksen läpi.
+    """
+    from autoraffkat.model import ROLE_MIC, TrackConfig
+
+    cfg = TrackConfig(role=ROLE_MIC, speaker="Nyman", pan=-3.0)
+    again = TrackConfig.from_json(cfg.to_json())
+    assert again.pan == -3.0
+    # Vanha asetustiedosto ilman kenttää ei kaadu eikä keksi arvoa.
+    assert TrackConfig.from_json({"role": ROLE_MIC, "speaker": "X"}).pan == 0.0

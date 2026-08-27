@@ -183,6 +183,17 @@ and a `<keyframe time=…>` is in the **host's local time base**, the same base
 as the `mc-clip`'s `start`, not timeline time. `adjust-volume` and
 `adjust-panner` also come *before* `mc-source` in the DTD's order.
 
+The pan lives on the **track**, not in a calculation. It could just as
+well be derived from the measurement at every export — and then the slider on
+the card would show a number the export does not use, which is this project's
+recurring failure wearing a new hat. So `TrackConfig.pan` is an ordinary
+setting that survives saving, the measurement *fills it* once from a button,
+and after that it is a value you drag. That is also why it sits on the
+microphone card beside sensitivity and gain rather than in the global row: it
+is a property of a track, and the patch bay is already where a track's own
+knobs live. It appears only while panning is on, or it would be a control
+that does nothing.
+
 Nothing is written when the pan is zero. An empty `adjust-panner` is a
 setting like any other as far as Final Cut is concerned, so an unmeasured
 episode has to produce byte-for-byte the file it produced before the feature

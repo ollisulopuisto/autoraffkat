@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.105] - 2026-08-27
+
+### Changed
+- **The Pan Slider Moved onto the Microphone Card**, beside sensitivity and gain, where a track's own knobs already live. It shows only while panning is on — otherwise it would be a control that does nothing.
+  - The pan is now a **track setting**, not a calculation. Deriving it from the measurement at every export would mean the slider showed a number the export did not use, which is this project's recurring failure in a new hat. "Set from picture" fills every microphone's pan from the measured seating once; after that it is an ordinary value that survives saving.
+  - A button rather than automatic: a value that changed itself whenever the video was re-measured would silently discard whatever had been dragged by hand.
+
 ## [v26.08.27.104] - 2026-08-27
 
 ### Changed

@@ -211,6 +211,7 @@ const routes = {
   '/api/video': () => state,
   '/api/pick': () => ({ path: '/x/valittu.fcpxml' }),
   '/api/open': () => state,
+  '/api/pan-auto': () => state,
   '/api/final-cut': () => ({ ok: true }),
   '/api/reveal': () => ({ ok: true }),
   '/api/reload': () => state,
@@ -494,6 +495,28 @@ if (fired < MIN_HANDLERS) {
    Esiasetus on valinta, ja sen alla olevat neljä lukua ovat sen määritelmä.
    Jos ne palaavat näkyviin muissa esiasetuksissa, valinta muuttuu taas
    sivutuotteena — mikä on juuri se ero jonka tämä rivitys poisti. */
+/* Panoroinnin säädin näkyy kortilla vain kun panorointi on päällä.
+
+   Ilman tätä ajoa kortin panorointisäädintä ei piirrettäisi kertaakaan, ja
+   sen käsittelijä jäisi ajamatta — juuri se puolikas tiedostoa jossa
+   määrittelemätön muuttuja piileskelee. */
+run('panorointi kortilla', () => {
+  vm.runInContext('state.globals.panning = true; renderTracks(); renderGlobals();',
+                  context);
+  const knobs = vm.runInContext(
+    "TRACK_KNOBS().map((k) => k.key).join(',')", context);
+  if (!knobs.includes('pan')) {
+    throw new Error(`kortin säätimet ilman panorointia: ${knobs}`);
+  }
+  vm.runInContext('state.globals.panning = false; renderTracks(); renderGlobals();',
+                  context);
+  const ilman = vm.runInContext(
+    "TRACK_KNOBS().map((k) => k.key).join(',')", context);
+  if (ilman.includes('pan')) {
+    throw new Error('panorointisäädin näkyi vaikka panorointi on pois');
+  }
+});
+
 run('esiasetuksen säätimet', () => {
   const count = (rhythm) => {
     let n = 0;

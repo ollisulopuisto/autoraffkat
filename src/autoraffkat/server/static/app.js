@@ -21,6 +21,14 @@ const TRACK_KNOBS = () => [
     unit: T('knob.sensitivityUnit') },
   { key: 'gain_db', label: T('knob.gain'), min: -24, max: 24, step: 0.5,
     unit: T('unit.db') },
+  /* Panorointi kortille eikä globaaliin riviin: se on raidan ominaisuus
+     siinä missä herkkyys ja vahvistus, ja kytkentätaulussa raita on jo
+     paikka jolla on omat säätimensä. Näkyy vain kun panorointi on
+     päällä — muuten se olisi säädin joka ei tee mitään. */
+  ...(state.globals && state.globals.panning
+    ? [{ key: 'pan', label: T('knob.pan'), min: -20, max: 20, step: 1,
+         unit: '%' }]
+    : []),
 ];
 
 const RHYTHM_PRESETS = () => [
@@ -902,6 +910,32 @@ function panningBody(host, mark, video) {
     label: T('panning.width'),
     min: 2, max: 16, step: 1, unit: '%',
   }, mark);
+  /* Nappi eikä automatiikka: arvo on raidan oma säädin, ja jos se
+     muuttuisi itsestään mittauksen mukana, käsin vedetty luku katoaisi
+     seuraavalla mittauksella eikä mikään kertoisi mihin. */
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.className = 'ghost small';
+  button.textContent = T('panning.fromPicture');
+  button.disabled = !video.measured;
+  button.addEventListener('click', async () => {
+    setBusy(button, true);
+    try {
+      const response = await fetch('/api/pan-auto', { method: 'POST' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.detail || '');
+      state = data;
+      renderTracks();
+      renderGlobals();
+      renderLegend();
+      schedule(0);
+      return;
+    } catch (err) {
+      banner(err.message || T('reactions.failed'), true);
+    }
+    setBusy(button, false);
+  });
+  host.append(button);
 }
 
 

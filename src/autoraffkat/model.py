@@ -166,6 +166,10 @@ class TrackConfig:
     speaker: str = ""  # lähikuvan ja mikin yhdistävä nimi
     sensitivity_db: float = 12.0  # dB pohjakohinan yli
     gain_db: float = 0.0  # vahvistuksen korjaus
+    # Panorointi, -100…+100 kuten Final Cutissa. Raidan omana arvona eikä
+    # laskettuna: mittaus täyttää sen, mutta sen jälkeen se on tavallinen
+    # luku jota saa vetää. Yksi paikka jossa totuus on, ei kahta.
+    pan: float = 0.0
 
     def to_json(self) -> dict:
         return asdict(self)
@@ -174,7 +178,7 @@ class TrackConfig:
     def from_json(cls, data: dict) -> "TrackConfig":
         known = {
             f: data[f]
-            for f in ("role", "speaker", "sensitivity_db", "gain_db")
+            for f in ("role", "speaker", "sensitivity_db", "gain_db", "pan")
             if f in data
         }
         return cls(**known)

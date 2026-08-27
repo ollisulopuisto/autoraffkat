@@ -46,6 +46,7 @@ from ..model import (
     ROLES,
     AudioSettings,
     Globals,
+    TrackConfig,
 )
 from ..paths import get_resource_path
 from ..preview import build as build_preview
@@ -348,13 +349,32 @@ class AppState:
                 for r in found if r.speaker in names]
 
     def pans_now(self, grid, roles) -> dict:
-        """Panorointi puhujittain, mitatusta istumajärjestyksestä.
+        """Panorointi puhujittain, raitojen omista arvoista.
+
+        Arvo on raidan asetus eikä laskettu: mittaus täyttää sen kerran
+        (``measured_pans``), ja sen jälkeen se on tavallinen säädin. Yksi
+        paikka jossa totuus on — laskettuna säädin näyttäisi arvoa jota
+        vienti ei käytä, mikä on tämän projektin toistuva vika.
+        """
+        if not self.settings.globals.panning:
+            return {}
+        out: dict[str, float] = {}
+        for speaker, keys in roles.mics.items():
+            for key in keys:
+                value = float(self.settings.tracks.get(
+                    key, TrackConfig()).pan)
+                if value:
+                    out[speaker] = value
+        return out
+
+    def measured_pans(self, grid, roles) -> dict:
+        """Istumajärjestys kuvasta, puhuja -> panorointi.
 
         Käyttää samoja mittauksia kuin reaktiokerros, joten mitään ei pureta
-        uudestaan. Ilman mittauksia palautetaan tyhjä: paikkaa jota ei
-        tiedetä ei arvata, ja keskus on ainoa arvo joka ei ole väärin.
+        uudestaan. Ilman mittauksia tyhjä: paikkaa jota ei tiedetä ei
+        arvata, ja keskus on ainoa arvo joka ei ole koskaan väärin.
         """
-        if not self.settings.globals.panning or not self.video_tables:
+        if not self.video_tables:
             return {}
         import numpy as np
 
@@ -368,7 +388,7 @@ class AppState:
             if table is None:
                 continue
             sides.setdefault(speaker, []).append(staging.side(table))
-        # Osia voi olla monta, ja kukin niistä on oma mittauksensa samasta
+        # Osia voi olla monta, ja kukin on oma mittauksensa samasta
         # ihmisestä samassa tuolissa: mediaani niistä.
         merged = {
             name: float(np.median([v for v in values if np.isfinite(v)]))
@@ -376,10 +396,9 @@ class AppState:
             for name, values in sides.items()
         }
         width = float(self.settings.globals.pan_width)
-        pans = staging.pans(merged)
-        # Käyttäjän leveys skaalaa mitatun jaon, ei korvaa sitä.
         scale = width / staging.PAN_WIDTH[2] if staging.PAN_WIDTH[2] else 1.0
-        return {name: round(value * scale, 2) for name, value in pans.items()}
+        return {name: round(value * scale, 2)
+                for name, value in staging.pans(merged).items()}
 
     def reactions_now(self, grid, roles, program_start) -> list:
         """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
@@ -419,6 +438,10 @@ class AppState:
                 cfg.sensitivity_db = float(values["sensitivity_db"])
             if "gain_db" in values:
                 cfg.gain_db = float(values["gain_db"])
+            if "pan" in values:
+                # Rajaus tässä eikä selaimessa: arvo tulee vientiin
+                # sellaisenaan, ja Final Cutin asteikko on -100…+100.
+                cfg.pan = max(-100.0, min(100.0, float(values["pan"])))
         raw = payload.get("globals") or {}
         g = self.settings.globals
         for name in (
@@ -1344,6 +1367,33 @@ def create_app(state: AppState) -> FastAPI:
             project.save(state.xml_path, state.settings)
         threading.Thread(target=state.run_mix, args=(force,), daemon=True).start()
         return {"ok": True, "running": True}
+
+    @app.post("/api/pan-auto")
+    def pan_from_picture():
+        """Täyttää raitojen panoroinnit mitatusta istumajärjestyksestä.
+
+        Nappi eikä automatiikka: arvo on raidan oma asetus, ja jos se
+        muuttuisi itsestään mittauksen mukana, käsin vedetty luku katoaisi
+        seuraavalla mittauksella eikä mikään kertoisi mihin.
+        """
+        if state.timeline is None:
+            raise HTTPException(409, state.load_error or t("export.not_loaded"))
+        with state.lock:
+            result = state.compute()
+            if not result.get("ok"):
+                raise HTTPException(400, "; ".join(result.get("problems", [])))
+            grid, _start, _end, _decision = result["_grid"]
+            roles = resolve_roles(state.timeline, state.settings.tracks)
+            values = state.measured_pans(grid, roles)
+            if not values:
+                raise HTTPException(400, t("video.none_measured"))
+            for speaker, keys in roles.mics.items():
+                for key in keys:
+                    cfg = state.settings.tracks.setdefault(key, TrackConfig())
+                    cfg.pan = float(values.get(speaker, 0.0))
+            state.settings.globals.panning = True
+            project.save(state.xml_path, state.settings)
+        return _state_json(state)
 
     @app.post("/api/final-cut")
     def open_in_final_cut(payload: dict):
