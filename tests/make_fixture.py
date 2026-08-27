@@ -297,7 +297,7 @@ def write_multicam_xml(path: str, parts: dict) -> None:
 
     def mc_sources(letter: str) -> str:
         out = []
-        for role, name_a, name_b in ANGLE_NAMES:
+        for role, _name_a, _name_b in ANGLE_NAMES:
             index = 0 if letter == "A" else 1
             aid = f"{letter}{index}{role}"
             enable = "video" if role == "wide" else "audio"

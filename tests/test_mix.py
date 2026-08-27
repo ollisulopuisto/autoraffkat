@@ -8,9 +8,8 @@ import os
 import pathlib
 import time
 
-import pytest
-
 import numpy as np
+import pytest
 
 from autoraffkat.audio import mix
 from autoraffkat.model import HOP, AudioSettings
@@ -38,9 +37,9 @@ def test_adopt_takes_the_processed_files_already_on_disk(
     Ilman tätä sama jakso uudestaan avattuna vietäisiin raakana, vaikka
     valmis ``[mix]`` on lähteen vieressä.
     """
+    from autoraffkat.analysis import resolve_roles
     from autoraffkat.fcpxml.read import read_fcpxml
     from autoraffkat.model import ROLE_MIC, TrackConfig
-    from autoraffkat.analysis import resolve_roles
 
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     tracks = {
@@ -560,6 +559,7 @@ def test_frame_count_matches_the_asset(fixture_dir):
 def _grid(on_a, on_b, level_a, level_b, n=500):
     """Kaksi puhujaa ruudukolla, annetuilla maskeilla ja tasoilla."""
     import numpy as np
+
     from autoraffkat.decide import Grid, SpeakerLanes
 
     def lane(name, on, level):
@@ -580,15 +580,15 @@ def _grid(on_a, on_b, level_a, level_b, n=500):
 
 def _quiet_knobs(**kw):
     """Ajat pois päältä, jotta testi mittaa sääntöä eikä liukuja."""
-    base = dict(
-        duck=True,
-        duck_dominance_db=6.0,
-        duck_lookahead=0.0,
-        duck_hold=0.0,
-        duck_min_open=0.0,
-        duck_min_closed=0.0,
-        duck_release=0.0,
-    )
+    base = {
+        "duck": True,
+        "duck_dominance_db": 6.0,
+        "duck_lookahead": 0.0,
+        "duck_hold": 0.0,
+        "duck_min_open": 0.0,
+        "duck_min_closed": 0.0,
+        "duck_release": 0.0,
+    }
     base.update(kw)
     return AudioSettings(**base)
 
@@ -649,6 +649,7 @@ def test_ducking_off_produces_no_masks():
 def test_closed_ranges_map_timeline_to_file_time(fixture_dir):
     """Ruudukko on aikajanan aikaa, vaimennus tiedoston aikaa."""
     import numpy as np
+
     from autoraffkat.fcpxml.read import read_fcpxml
     from autoraffkat.model import HOP
 
@@ -667,6 +668,7 @@ def test_closed_ranges_map_timeline_to_file_time(fixture_dir):
 def test_closed_ranges_stay_inside_the_clip(fixture_dir):
     """Esiintymän ulkopuolta ei vaimenneta: siitä ei ole tietoa."""
     import numpy as np
+
     from autoraffkat.fcpxml.read import read_fcpxml
     from autoraffkat.model import HOP
 
@@ -848,6 +850,7 @@ def test_the_ceiling_belongs_to_the_programme_not_to_one_stem(tmp_path):
     puhujien tasapaino muutu.
     """
     from pedalboard.io import AudioFile
+
     from autoraffkat.audio import chain
 
     rate, seconds = 48000, 6.0
@@ -869,7 +872,7 @@ def test_the_ceiling_belongs_to_the_programme_not_to_one_stem(tmp_path):
     assert huippu_ennen > 0.0, huippu_ennen
 
     result = mix.MixResult()
-    mix.program_ceiling(jobs, AudioSettings(), result)
+    mix.program_ceiling(jobs, result)
 
     jalkeen = {}
     for job in jobs:
@@ -915,10 +918,10 @@ def test_the_programme_ceiling_does_nothing_the_second_time(tmp_path):
             "item": _Item(0.0, seconds, 0.0), "bit_depth": 24,
         })
 
-    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+    mix.program_ceiling(jobs, mix.MixResult())
     with AudioFile(jobs[0]["target"]) as handle:
         kerran = handle.read(handle.frames)
-    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+    mix.program_ceiling(jobs, mix.MixResult())
     with AudioFile(jobs[0]["target"]) as handle:
         kahdesti = handle.read(handle.frames)
     assert np.allclose(kerran, kahdesti, atol=2e-5), \
@@ -952,7 +955,7 @@ def test_stems_that_do_not_line_up_are_not_summed(tmp_path):
         with AudioFile(job["target"]) as handle:
             ennen.append(handle.read(handle.frames))
 
-    mix.program_ceiling(jobs, AudioSettings(), mix.MixResult())
+    mix.program_ceiling(jobs, mix.MixResult())
 
     for job, was in zip(jobs, ennen):
         with AudioFile(job["target"]) as handle:

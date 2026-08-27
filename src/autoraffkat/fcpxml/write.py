@@ -11,19 +11,18 @@ from __future__ import annotations
 import json
 import os
 import re
+from dataclasses import replace
 from fractions import Fraction
 from typing import TYPE_CHECKING
 from urllib.request import pathname2url
 from xml.sax.saxutils import escape, quoteattr
 
-from dataclasses import replace
-
 from .. import __version__
 from ..audio.mix import ROOM_ROLE
-from ..i18n import t
 from ..decide import WIDE_LABEL
+from ..i18n import t
 from ..model import DEFAULT_PROJECT_NAME, MediaItem, Segment
-from ..timeline import FPS_LABELS, format_time, frames_str, fps_of, to_frames
+from ..timeline import FPS_LABELS, format_time, fps_of, frames_str, to_frames
 
 if TYPE_CHECKING:  # vain tyypitystä varten: kirjoitus ei riipu asetuksista
     from ..project import ProjectSettings
@@ -59,7 +58,8 @@ def sanitize_role(name: str) -> str:
     return cleaned or "Puhuja"
 
 
-def _format_name(width: int, height: int, frame_duration: Fraction) -> str | None:
+def _format_name(width: int, height: int,  # noqa: ARG001
+                 frame_duration: Fraction) -> str | None:
     """Final Cutin nimetty formaatti, tai ``None`` jos mitat ovat epästandardit.
 
     Väärä nimi on pahempi kuin puuttuva nimi: Final Cut lukee formaatin
@@ -1006,8 +1006,7 @@ REACTION_LANE = 1
 
 
 def _reaction_clips(
-    reactions, timeline, roles, angles_of, mc, host_start_frames, host_offset,
-    frame_duration, program_start, program_end,
+    reactions, roles, angles_of, mc, frame_duration, program_start, program_end,
 ):
     """Reaktiokuvat sisäkkäisinä ``mc-clip``einä omalle lanelleen.
 
@@ -1154,7 +1153,6 @@ def build_multicam_fcpxml(
     # joten reaktioklippi viittaa niihin sellaisenaan eikä uutta resurssia
     # tarvita. Tunnetut id:t poimitaan sieltä, jotta viittaus tuntemattomaan
     # assettiin jää tekemättä sen sijaan että se rikkoisi tuonnin.
-    asset_ids = set(re.findall(r'<asset\b[^>]*\bid="([^"]+)"', resources))
     for index, (seg, a, b) in enumerate(spans):
         at = program_start + frame_duration * a
         mc = timeline.multicam_at(at)
@@ -1205,8 +1203,8 @@ def build_multicam_fcpxml(
         if not attached_reactions and reactions and roles is not None:
             attached_reactions = True
             sources = sources + _reaction_clips(
-                reactions, timeline, roles, angles_of, mc,
-                start_frames, a, frame_duration, program_start, program_end,
+                reactions, roles, angles_of, mc,
+                frame_duration, program_start, program_end,
             )
         if not attached_room and room_ids:
             attached_room = True

@@ -293,6 +293,7 @@ def test_all_wide_is_a_problem_not_a_result(scratch_xml):
 def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
     """Kamera ei kerro kumpaa puhujaa se kuvaa, mutta viime jakso kertoo."""
     import shutil
+
     from autoraffkat import project
 
     previous = tmp_path / "jakso53.fcpxmld"
@@ -300,7 +301,7 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
     project.save(
         str(previous / "Info.fcpxml"),
         project.ProjectSettings(
-            tracks={k: v for k, v in _multicam_tracks().items()},
+            tracks=dict(_multicam_tracks().items()),
             globals=Globals(min_shot=4.0),
         ),
     )
@@ -321,6 +322,7 @@ def test_roles_are_inherited_from_the_previous_episode(fixture_dir, tmp_path):
 def test_audio_settings_are_inherited_too(fixture_dir, tmp_path):
     """Kanavanauha ja vaimennus ovat samat viikosta toiseen."""
     import shutil
+
     from autoraffkat import project
     from autoraffkat.model import AudioSettings
 
@@ -329,7 +331,7 @@ def test_audio_settings_are_inherited_too(fixture_dir, tmp_path):
     project.save(
         str(previous / "Info.fcpxml"),
         project.ProjectSettings(
-            tracks={k: v for k, v in _multicam_tracks().items()},
+            tracks=dict(_multicam_tracks().items()),
             audio=AudioSettings(
                 enabled=True, duck=True, duck_db=-20.0, target_lufs=-17.0
             ),
@@ -349,6 +351,7 @@ def test_audio_settings_are_inherited_too(fixture_dir, tmp_path):
 
 def test_own_settings_beat_the_previous_episode(fixture_dir, tmp_path):
     import shutil
+
     from autoraffkat import project
 
     other = tmp_path / "jakso53.fcpxmld"
@@ -710,12 +713,13 @@ def test_server_messages_follow_the_language(scratch_xml):
 def test_language_is_remembered_and_inherited(fixture_dir, tmp_path):
     """Kieli valitaan kerran, ei joka jaksossa."""
     import shutil
+
     from autoraffkat import project
 
     previous = tmp_path / "jakso53.fcpxmld"
     previous.mkdir()
     settings = project.ProjectSettings(
-        tracks={k: v for k, v in _multicam_tracks().items()}
+        tracks=dict(_multicam_tracks().items())
     )
     settings.language = "en"
     project.save(str(previous / "Info.fcpxml"), settings)

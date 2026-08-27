@@ -181,7 +181,7 @@ def listening(grid, speaker: str) -> np.ndarray:
     return others & ~active[me]
 
 
-def to_timeline(item, file_times: np.ndarray, program_start: float) -> np.ndarray:
+def to_timeline(item, file_times: np.ndarray) -> np.ndarray:
     """Tiedostoajat aikajanan ajaksi. ``nan`` niille jotka jäävät ulos.
 
     Sama muunnos kuin ``mix.closed_ranges``illa mutta toisin päin:
@@ -275,7 +275,7 @@ def find(grid, roles, timeline, tables: dict, settings, program_start: float,
     return _vary(_thin(found, settings, tempo, program_start), grid, decision)
 
 
-def _snap(grid, at: float, program_start: float, settings) -> float:
+def _snap(grid, at: float, program_start: float) -> float:
     """Siirtää leikkauksen lähimpään taukoon, jos sellainen on lähellä.
 
     Puheen keskelle osuva leikkaus kuulostaa katkaisulta. Tauko on tässä
@@ -330,8 +330,7 @@ def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
             if table is None:
                 continue
             points = scores(table, weights)
-            stamps = to_timeline(item, np.asarray(table["times"], dtype=np.float64),
-                                 program_start)
+            stamps = to_timeline(item, np.asarray(table["times"], dtype=np.float64))
             for index in np.argsort(points)[::-1]:
                 value = points[index]
                 if not np.isfinite(value) or value < settings.reaction_threshold:
@@ -346,7 +345,7 @@ def _gather(grid, roles, timeline, tables: dict, settings, program_start: float
                 # tätä kuva vaihtuu vasta kun reaktio on jo käynnissä.
                 lead = float(getattr(settings, "reaction_lead", LEAD))
                 begin = max(program_start,
-                            _snap(grid, at - lead, program_start, settings))
+                            _snap(grid, at - lead, program_start))
                 found.append(Reaction(speaker, begin,
                                       begin + settings.reaction_length,
                                       float(value)))

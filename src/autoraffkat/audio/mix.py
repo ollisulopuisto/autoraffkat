@@ -23,6 +23,7 @@ käsitellystä äänestä laskettu päätös olisi huonompi.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import os
@@ -195,13 +196,11 @@ def read_stamp(target: str) -> str:
 
 def write_stamp(job: dict, settings: AudioSettings) -> None:
     """Merkitsee millä asetuksilla juuri valmistunut tiedosto tehtiin."""
-    try:
+    # Merkinnän puuttuminen maksaa yhden turhan käsittelyn, ei tulosta.
+    with contextlib.suppress(OSError):
         _stamp_path(job["target"]).write_text(
             fingerprint(job, settings), encoding="utf-8"
         )
-    except OSError:
-        # Merkinnän puuttuminen maksaa yhden turhan käsittelyn, ei tulosta.
-        pass
 
 
 def is_fresh(job: dict, settings: AudioSettings) -> bool:
@@ -390,8 +389,8 @@ def _geometry(item, frames: int) -> tuple:
     )
 
 
-def program_ceiling(jobs: list[dict], settings: AudioSettings,
-                    result: "MixResult", envelopes: dict | None = None) -> None:
+def program_ceiling(jobs: list[dict], result: "MixResult",
+                    envelopes: dict | None = None) -> None:
     """Huippukatto **ohjelmalle**, ei yhdelle stemille.
 
     Sama virhe kuin äänekkyydessä, jonka ``program_trim`` jo korjaa: ketju
@@ -477,7 +476,7 @@ def _ceiling_pass(members: list[dict], frames: int, AudioFile,
         outs = [
             AudioFile(job["target"] + ".ceil.tmp.wav", "w", rate,
                       int(h.num_channels), bit_depth=job.get("bit_depth", 24))
-            for job, h in zip(members, handles)
+            for job, h in zip(members, handles, strict=True)
         ]
         worst = 0.0
         try:
@@ -490,7 +489,7 @@ def _ceiling_pass(members: list[dict], frames: int, AudioFile,
                     handle.seek(low)
                     blocks.append(handle.read(high - low))
                 total = None
-                for job, block in zip(members, blocks):
+                for job, block in zip(members, blocks, strict=True):
                     heard = block * _envelope_block(
                         job, envelopes, low, high, rate
                     )
@@ -499,7 +498,7 @@ def _ceiling_pass(members: list[dict], frames: int, AudioFile,
                 worst = min(worst, float(20.0 * np.log10(max(gain.min(), 1e-9))))
                 head = position - low
                 tail = head + min(chunk, frames - position)
-                for out, block in zip(outs, blocks):
+                for out, block in zip(outs, blocks, strict=True):
                     out.write(np.ascontiguousarray(
                         (block * gain)[:, head:tail]))
                 position += chunk
@@ -564,10 +563,8 @@ def _envelope_block(job: dict, envelopes: dict | None, low: int, high: int,
 
 def _drop(path: str) -> None:
     """Poistaa tilapäistiedoston, jos se on olemassa."""
-    try:
+    with contextlib.suppress(OSError):
         os.remove(path)
-    except OSError:
-        pass
 
 
 def closed_ranges(
@@ -871,7 +868,7 @@ CHAIN_SHARE = 0.81
 WRITE_SHARE = 0.07
 
 
-def _debleed(job, settings, audio, rate, program_start, solos, partners, result):
+def _debleed(job, audio, rate, program_start, solos, partners, result):
     """Vähentää muiden mikkien vuodon ``audio``:sta paikan päällä.
 
     Yksi lähde kerrallaan ja aina tuoreimmasta tuloksesta: kun kolmas
@@ -927,7 +924,6 @@ def _run_one(
     job: dict,
     settings: AudioSettings,
     plugin,
-    masks: dict | None = None,
     program_start: float = 0.0,
     stage=None,
     trim_db: float = 0.0,
@@ -964,7 +960,7 @@ def _run_one(
     # lineaarista suhdetta, ja sen jälkeen vuotoa ei enää voi vähentää
     # millään suotimella.
     if settings.debleed and job.get("speech", True) and partners:
-        _debleed(job, settings, audio, rate, program_start, solos, partners, result)
+        _debleed(job, audio, rate, program_start, solos, partners, result)
     report("debleed", READ_SHARE + DEBLEED_SHARE)
 
     # Ohjelmatrimmi kuuluu **tavoitteeseen**, ei vahvistukseen. Ketju
@@ -1299,11 +1295,10 @@ def process(
     result.program_trim = trim
     started = time.perf_counter()
     total_weight = sum(job["weight"] for job in todo) or 1.0
-    behind = 0.0  # jo valmiiden tiedostojen paino
 
     try:
         out = _run_todo(
-            result, todo, jobs, settings, plugin, masks, program_start,
+            result, todo, jobs, settings, plugin, program_start,
             progress, trim, started, total_weight, solos,
             speech_masks(grid) if grid is not None else None,
         )
@@ -1316,12 +1311,12 @@ def process(
     # laskettaisiin ohjelmasta jota Final Cut ei soita.
     ducks = (duck_envelopes(grid, settings, program_start)
              if grid is not None else {})
-    program_ceiling(jobs, settings, result, ducks)
+    program_ceiling(jobs, result, ducks)
     return out
 
 
 def _run_todo(
-    result, todo, jobs, settings, plugin, masks, program_start,
+    result, todo, jobs, settings, plugin, program_start,
     progress, trim, started, total_weight, solos=None, speaking=None,
 ):
     """Tiedostot yksi kerrallaan. Erillään, jotta liitännäisvaranto suljetaan
@@ -1376,7 +1371,7 @@ def _run_todo(
                 and os.path.exists(other["source"])
             ]
             result.gains[job["key"]] = _run_one(
-                job, settings, plugin, masks, program_start, stage, trim,
+                job, settings, plugin, program_start, stage, trim,
                 solos, partners, result, speaking,
             )
         except (MixError, ChainError, OSError, RuntimeError, ValueError) as exc:

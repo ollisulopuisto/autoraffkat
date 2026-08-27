@@ -119,7 +119,7 @@ def main() -> None:
         raise SystemExit(make_dmg(app_path=args.app, output=args.output))
     except RuntimeError as exc:
         print(f"Levykuvan teko epäonnistui:\n{exc}", file=sys.stderr)
-        raise SystemExit(1)
+        raise SystemExit(1) from exc
 
 
 if __name__ == "__main__":

@@ -18,7 +18,8 @@ from pathlib import Path
 import numpy as np
 
 from ..model import HOP
-from .binaries import get_binary_path, require_ffmpeg as _check_binaries
+from .binaries import get_binary_path
+from .binaries import require_ffmpeg as _check_binaries
 
 SAMPLE_RATE = 8000  # riittää puheen energialle, neljäsosa purkuajasta
 CACHE_VERSION = 2

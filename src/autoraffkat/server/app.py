@@ -8,6 +8,7 @@ ffmpegiä.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import subprocess
@@ -22,12 +23,11 @@ from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from .. import i18n, pick, probe, project, thumbs
+from .. import i18n, pick, probe, project, reactions, staging, thumbs
 from ..analysis import Analysis, AnalysisError, analyze, build_grid, resolve_roles
 from ..audio import chain, mix
 from ..audio.chain import ChainError
 from ..decide import WIDE_LABEL, decide
-from .. import reactions, staging
 from ..fcpxml.read import ReadError, Timeline, read_fcpxml
 from ..fcpxml.write import (
     WriteError,
@@ -395,7 +395,7 @@ class AppState:
                  else names.index(r.speaker))
                 for r in found if r.speaker in names]
 
-    def pans_now(self, grid, roles) -> dict:
+    def pans_now(self) -> dict:
         """Vientiin menevä panorointi: mitattu paikka, jos kytkin on päällä.
 
         Määrää ei säädetä. Paikka mitataan ja leveys on vakio, koska
@@ -405,9 +405,9 @@ class AppState:
         """
         if not self.settings.globals.panning:
             return {}
-        return self.measured_pans(grid, roles)
+        return self.measured_pans()
 
-    def measured_pans(self, grid, roles) -> dict:
+    def measured_pans(self) -> dict:
         """Istumajärjestys kuvasta, puhuja -> panorointi.
 
         Erillään ``pans_now``ista, koska käyttöliittymä näyttää tämän myös
@@ -634,7 +634,6 @@ class AppState:
         minuuttien ajoa aloiteta vahingossa.
         """
         assert self.timeline is not None
-        roles = resolve_roles(self.timeline, self.settings.tracks)
         self.mix_progress.update(
             {
                 "done": 0,
@@ -821,7 +820,7 @@ def _video_json(state: AppState) -> dict:
     # ei voi arvioida ennen kuin sen on vienyt ja kuunnellut — ja väärin
     # päin oleva panorointi kuulostaa oikealta kunnes vertaa kuvaan. Sama
     # sääntö kuin reaktiokerroksella: näytetään myös kytkimen ollessa pois.
-    pans = staging.pans(dict(state.seating)) if state.seating else {}
+    pans = state.measured_pans()
     if state.video_tables and state.timeline is not None and state.analysis:
         try:
             roles = resolve_roles(state.timeline, state.settings.tracks)
@@ -1014,10 +1013,9 @@ def create_app(state: AppState) -> FastAPI:
         i18n.set_language(state.language)
         with state.lock:
             state.settings.language = state.language
-            try:
+            # Kieli ei ole tallentamisen arvoinen virhe.
+            with contextlib.suppress(OSError):
                 project.save(state.xml_path, state.settings)
-            except OSError:
-                pass  # kieli ei ole tallentamisen arvoinen virhe
         return {"language": state.language, "languages": list(LANGUAGES)}
 
     @app.get("/")
@@ -1349,7 +1347,7 @@ def create_app(state: AppState) -> FastAPI:
                         source=state.xml_path,
                         reactions=shots,
                         roles=roles,
-                        pans=state.pans_now(_grid, roles),
+                        pans=state.pans_now(),
                         ducks=ducks,
                     )
                 else:

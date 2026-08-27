@@ -28,6 +28,7 @@ ja jatkaa parametreilla.
 from __future__ import annotations
 
 import base64
+import contextlib
 import json
 import sys
 import threading
@@ -64,10 +65,8 @@ def _become_an_app() -> bool:
         import time
 
         time.sleep(1.0)
-        try:
+        with contextlib.suppress(Exception):
             NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
-        except Exception:
-            pass
 
     threading.Thread(target=raise_it, daemon=True).start()
     return True

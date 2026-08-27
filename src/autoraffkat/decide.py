@@ -303,7 +303,7 @@ def _cut_points(
     last_speech = _last_speech(active) if hang else None
 
     for start, end, target in _runs(want):
-        if target == HOLD or target == current:
+        if target in (HOLD, current):
             continue
         if (end - start) < confirm:
             continue

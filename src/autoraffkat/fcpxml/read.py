@@ -500,7 +500,7 @@ def _common_name(names: list[str]) -> str:
     split = [re.split(r"\s+", n.strip()) for n in names]
     if len({len(t) for t in split}) != 1:
         return names[0]
-    kept = [tokens[0] for tokens in zip(*split) if len(set(tokens)) == 1]
+    kept = [tokens[0] for tokens in zip(*split, strict=True) if len(set(tokens)) == 1]
     return " ".join(kept) or names[0]
 
 

@@ -844,7 +844,7 @@ def test_a_reaction_matches_final_cuts_own_structure(fixture_dir):
     ``mc-source`` valitsee kulman ``angleID``:llä, samalla ``ref``illä kuin
     isäntä. Tämä testi pitää sen muodon.
     """
-    tl, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
+    _tl, xml = _with_reactions(fixture_dir, [("Guest", 8.0, 9.6, 2.1)])
     root = ET.fromstring(xml)
     host = root.find(".//spine/mc-clip")
     clip = next(c for c in root.iter("mc-clip")

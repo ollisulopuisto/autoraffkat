@@ -84,8 +84,12 @@ def fps_of(frame_duration: Fraction) -> Fraction:
     return 1 / frame_duration
 
 
-def format_name(width: int, height: int, frame_duration: Fraction) -> str:
-    """Final Cutin formaattinimi, esim. ``FFVideoFormat1080p25``."""
+def format_name(width: int, height: int, frame_duration: Fraction) -> str:  # noqa: ARG001
+    """Final Cutin formaattinimi, esim. ``FFVideoFormat1080p25``.
+
+    ``width`` on mukana kutsujien vuoksi ja koska nimi on parin (leveys,
+    korkeus) nimi; Final Cutin oma nimeäminen käyttää vain korkeutta.
+    """
     label = FPS_LABELS.get(fps_of(frame_duration))
     if label is None:
         return "FFVideoFormatRateUndefined"

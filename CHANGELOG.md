@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.112] - 2026-08-27
+
+### Added
+- **Strict Linting, and It Immediately Found Dead Code**: ruff with a broad `select` (pyflakes, bugbear, comprehensions, simplify, return, unused arguments, perf, numpy), run in CI **before** the tests. The rationale is this project's failure mode: an undefined name or an unused argument does not crash anything — it leaves some stage quietly doing nothing, which is exactly the bug class that keeps costing time here.
+  - It found two dead locals (`asset_ids` in the writer, left over from the `asset-clip` reaction structure; `roles` in `run_mix`, which the worker child resolves itself), and four dead parameters left by today's changes — `masks` in `_run_one`/`_run_todo` after ducking moved to envelopes, three arguments to `_reaction_clips` after the nested `mc-clip` rewrite, and `settings` in `program_ceiling` and `_debleed`.
+  - `zip()` now carries `strict=True` wherever the lengths must match. A silent length mismatch pairing the wrong items is the same family as the frames-and-timestamps rule in the video layer.
+  - Rules that genuinely do not fit carry a written reason in `ignore`: Finnish typography is deliberate (`RUF001-003`), `int(round(x))` is not redundant on numpy scalars (`RUF046`), and a filtered nested loop reads better than a nested comprehension in a codebase where the explanation sits between the lines (`PERF401`).
+
 ## [v26.08.27.111] - 2026-08-27
 
 ### Fixed

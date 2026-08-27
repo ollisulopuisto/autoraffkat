@@ -103,7 +103,7 @@ def seating(grid, roles, timeline, detector, tables=None) -> dict:
     # tiedostolle, ja niistä 22 oli odottamista.
     sides: dict[str, list] = {}
     with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
-        for (speaker, _key, _path), value in zip(files, pool.map(one, files)):
+        for (speaker, _key, _path), value in zip(files, pool.map(one, files), strict=True):
             if np.isfinite(value):
                 sides.setdefault(speaker, []).append(value)
     # Osia voi olla monta, ja kukin on oma mittauksensa samasta ihmisestä
@@ -144,7 +144,7 @@ def tables(grid, roles, timeline, settings, progress=None) -> tuple[dict, dict]:
         errors["files"] = "ei mitattavia lähikuvia"
         return out, errors
     todo = []
-    for speaker, key, path in files:
+    for _speaker, key, path in files:
         if not os.path.exists(path):
             errors[key] = f"{os.path.basename(path)}: mediaa ei löydy"
         else:

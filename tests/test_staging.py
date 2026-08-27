@@ -70,7 +70,7 @@ def test_the_spread_is_even_and_stays_narrow():
     assert sorted(vino.values()) == [-4.0, 0.0, 4.0]
 
     # Levein sallittu on silti kapea: kuulokkeilla tätä ei juuri huomaa.
-    for count, width in staging.PAN_WIDTH.items():
+    for count in staging.PAN_WIDTH.keys():
         sides = {f"p{i}": 1.0 - i * 0.1 for i in range(count)}
         values = staging.pans(sides)
         assert max(values.values()) <= 6.0

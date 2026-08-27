@@ -86,10 +86,7 @@ def fetch_binaries(
 ) -> Path:
     sys_name = (target_os or platform.system()).lower()
     machine = platform.machine().lower()
-    if machine in ("aarch64", "arm64"):
-        arch = "arm64"
-    else:
-        arch = "x86_64"
+    arch = "arm64" if machine in ("aarch64", "arm64") else "x86_64"
 
     dest_dir = output_dir or (Path(__file__).resolve().parents[1] / "bin")
     dest_dir.mkdir(parents=True, exist_ok=True)

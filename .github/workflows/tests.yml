@@ -30,6 +30,12 @@ jobs:
       - name: Install
         run: uv sync --all-extras
 
+      # Lintti ennen testejä: määrittelemätön nimi tai kuollut argumentti
+      # ei kaada testejä, se vain jättää jonkin kohdan tekemättä mitään —
+      # ja juuri se on tässä projektissa toistuva vika.
+      - name: Lint
+        run: uv run ruff check .
+
       - name: Tests
         run: uv run pytest -q
 

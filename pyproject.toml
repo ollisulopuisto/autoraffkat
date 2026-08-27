@@ -1,6 +1,6 @@
 [project]
 name = "autoraffkat"
-version = "2026.8.27.111"
+version = "2026.8.27.112"
 description = "Automatic multicam editing for interview video: FCPXML in, FCPXML out"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -45,4 +45,63 @@ pythonpath = ["src"]
 dev = [
     "httpx>=0.28.1",
     "pyinstaller>=6.0",
+]
+
+# Linttaus on tiukka, koska tämän projektin viat ovat hiljaisia. Määrittelemätön
+# muuttuja, kuollut haara tai käyttämätön tuonti eivät kaada mitään — ne vain
+# tekevät jostain kohdasta sellaisen ettei se tee mitään, ja juuri se on ollut
+# tässä toistuva vika. `node --check` ei huomaa määrittelemätöntä muuttujaa
+# JavaScriptissä, ja siksi käyttöliittymällä on oma savutestinsä; Pythonissa
+# ruff huomaa.
+[tool.ruff]
+line-length = 90
+target-version = "py312"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",      # pycodestyle
+    "F",           # pyflakes: määrittelemättömät ja käyttämättömät nimet
+    "I",           # tuontien järjestys
+    "B",           # bugbear: yleiset ansat
+    "C4",          # comprehension-siivous
+    "SIM",         # yksinkertaistukset
+    "RET",         # paluuarvojen haarat
+    "ARG",         # käyttämättömät argumentit
+    "PIE", "PERF", # turhat rakenteet ja hitaat kuviot
+    "NPY",         # numpy-erityiset
+    "RUF",
+]
+ignore = [
+    # Rivin pituus hoidetaan line-lengthillä; E501 kaksoiskappaleena vain
+    # meluaisi kommenteista joissa on mittauslukuja.
+    "E501",
+    # Silmukan muuttuja suljetussa funktiossa on tässä koodissa tahallista
+    # (esikatselun piirto, säätimien käsittelijät) ja aina heti kutsuttua.
+    "B023",
+    # Koodi ja kommentit ovat suomea ja käyttävät typografisia merkkejä
+    # tarkoituksella: «lainausmerkit» ja miinusmerkki mittausluvuissa.
+    # Sekaannusta ei ole, koska nämä eivät ole tunnisteita.
+    "RUF001", "RUF002", "RUF003",
+    # `int(round(x))` **ei** ole turha kun x on numpy-liukuluku: silloin
+    # round palauttaa numpy-liukuluvun eikä int:iä. ruff ei näe eroa.
+    "RUF046",
+    # Ehdollinen kerääminen sisäkkäisessä silmukassa on tässä koodissa
+    # luettavampi silmukkana kuin sisäkkäisenä comprehensionina: rivien
+    # välissä on selitykset, ja ne katoaisivat yhteen lausekkeeseen.
+    "PERF401",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Testit saavat toistaa itseään ja käyttää pitkiä nimiä: ne ovat
+# dokumentaatiota siinä missä tarkistuksiakin.
+"tests/*" = [
+    "ARG",     # tuplat pitävät oikean rajapinnan muodon vaikka eivät käytä
+    "B011",
+    "SIM",
+    # Testituplan luokka-attribuutti on tarkoituksella jaettu lista: se on
+    # kiinteä syöte, ei tila.
+    "RUF012",
+    # Testeissä zip vertaa tarkoituksella eri mittaisia jonoja.
+    "B905",
 ]

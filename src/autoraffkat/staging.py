@@ -99,7 +99,7 @@ def pans(sides: dict) -> dict:
     """
     names = order(sides)
     measured = [n for n in names if np.isfinite(sides.get(n, float("nan")))]
-    out = {name: 0.0 for name in sides}
+    out = dict.fromkeys(sides, 0.0)
     count = len(measured)
     if count < 2 or count > PAN_MAX_SPEAKERS:
         return out
@@ -108,6 +108,6 @@ def pans(sides: dict) -> dict:
     # osuu nollaan itsestään, mikä on juuri haluttu: kolmesta yksi on
     # keskellä eikä ketään siirretä turhaan.
     steps = np.linspace(-width / 2.0, width / 2.0, count)
-    for name, value in zip(measured, steps):
+    for name, value in zip(measured, steps, strict=True):
         out[name] = round(float(value), 2)
     return out

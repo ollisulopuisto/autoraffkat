@@ -12,7 +12,8 @@ import numpy as np
 import pytest
 
 from autoraffkat import reactions
-from autoraffkat.model import HOP as HOP_FOR_TEST, Globals
+from autoraffkat.model import HOP as HOP_FOR_TEST
+from autoraffkat.model import Globals
 
 FIELDS = ("yaw", "roll", "size", "x", "y", "w", "h", "eyes", "smile",
           "cx", "cy", "turn", "tilt")
@@ -508,10 +509,10 @@ def test_a_cut_lands_on_a_pause_when_one_is_within_reach():
 
     # Tauko ruuduissa 100-125 = 2,0…2,5 s.
     Grid.speakers[0].on[100:125] = False
-    moved = reactions._snap(Grid(), 2.3, 0.0, Globals())
+    moved = reactions._snap(Grid(), 2.3, 0.0)
     assert abs(moved - 2.0) < 0.05, moved
     # Kaukana olevaa taukoa ei haeta.
-    assert reactions._snap(Grid(), 8.0, 0.0, Globals()) == 8.0
+    assert reactions._snap(Grid(), 8.0, 0.0) == 8.0
 
 
 def test_the_same_face_twice_in_a_row_becomes_the_wide():

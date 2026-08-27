@@ -108,19 +108,19 @@ def _standard_plugin_dirs() -> tuple[str, ...]:
             "/Library/Audio/Plug-Ins/Components",
             "~/Library/Audio/Plug-Ins/Components",
         )
-    elif sys.platform.startswith("linux"):
+    if sys.platform.startswith("linux"):
         return (
             "/usr/lib/vst3",
             "/usr/local/lib/vst3",
             "~/.vst3",
             "~/.local/lib/vst3",
         )
-    elif sys.platform == "win32":
+    if sys.platform == "win32":
         common_files = os.environ.get(
-            "CommonProgramFiles", r"C:\Program Files\Common Files"
+            "COMMONPROGRAMFILES", r"C:\Program Files\Common Files"
         )
         common_files_x86 = os.environ.get(
-            "CommonProgramFiles(x86)", r"C:\Program Files (x86)\Common Files"
+            "COMMONPROGRAMFILES(X86)", r"C:\Program Files (x86)\Common Files"
         )
         local_app_data = os.environ.get("LOCALAPPDATA", "")
         dirs = [
@@ -216,7 +216,7 @@ def read_parameters(plugin) -> dict:
     kahdessa paikassa eri lukemaa.
     """
     out: dict = {}
-    for name, param in getattr(plugin, "parameters", {}).items():
+    for name in getattr(plugin, "parameters", {}):
         try:
             value = getattr(plugin, name)
         except Exception:
@@ -477,7 +477,7 @@ def _spec(name: str, param) -> dict | None:
             "choices": choices[:MAX_CHOICES],
         }
     span = tuple(getattr(param, "range", None) or ())
-    low, high, step = (span + (None, None, None))[:3]
+    low, high, step = ((*span, None, None, None))[:3]
     if low is None or high is None or float(high) <= float(low):
         return None
     low, high = float(low), float(high)

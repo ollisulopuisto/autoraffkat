@@ -168,6 +168,7 @@ def test_files_are_measured_in_parallel(monkeypatch):
     juuri sellainen hidastuminen jota kukaan ei huomaa ilman mittausta.
     """
     import threading
+
     from autoraffkat.model import Globals
 
     grid = _Grid(_Lane("A", [1, 1]), _Lane("B", [0, 0]))

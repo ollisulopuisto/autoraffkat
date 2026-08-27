@@ -329,6 +329,7 @@ class _Plugin:
         ):
             raise ValueError("out of range")
         self.values[name] = value
+        return None
 
     def __getattr__(self, name):
         try:
@@ -389,7 +390,7 @@ def test_too_many_parameters_are_cut_and_the_cut_is_reported(tmp_path, monkeypat
             self.parameters = {
                 f"p{i}": _Param(f"P {i}") for i in range(chain.MAX_PARAMS + 5)
             }
-            self.values = {name: 0.0 for name in self.parameters}
+            self.values = dict.fromkeys(self.parameters, 0.0)
 
     fake = tmp_path / "Iso.vst3"
     fake.mkdir()

@@ -34,7 +34,7 @@ def _room(seconds=240.0, seed=3):
 def test_bleed_goes_and_own_speech_stays():
     """Istutettu vuotopolku lähtee, eikä kohteen omaan puheeseen kosketa."""
     target, source, _, solo_source, solo_target = _room()
-    out, info = debleed.remove(target, source, RATE, solo_source, solo_target)
+    _out, info = debleed.remove(target, source, RATE, solo_source, solo_target)
 
     assert info["reason"] == ""
     assert info["reduction_db"] > 20.0, f"vuotoa lähti vain {info['reduction_db']:.1f} dB"
