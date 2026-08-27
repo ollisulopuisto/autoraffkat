@@ -756,7 +756,8 @@ function renderGlobals() {
     label: T('panning.title'),
     hint: T('panning.hint'),
     value: state.globals.panning
-      ? (video.measured ? T('panning.on') : T('reactions.notMeasured'))
+      ? (Object.keys((video && video.pans) || {}).length
+          ? T('panning.on') : T('panning.looking'))
       : T('audio.off'),
     toggle: {
       checked: state.globals.panning,
@@ -899,8 +900,7 @@ function panningBody(host, mark, video) {
      voi arvioida ennen kuin sen on vienyt ja kuunnellut. */
   const note = document.createElement('p');
   note.className = 'why';
-  note.textContent = video.measured
-    ? T('why.panning') : T('panning.needMeasure');
+  note.textContent = T('why.panning');
   host.append(note);
   const places = (video && video.pans) || {};
   const names = Object.keys(places);

@@ -183,6 +183,32 @@ and a `<keyframe time=…>` is in the **host's local time base**, the same base
 as the `mc-clip`'s `start`, not timeline time. `adjust-volume` and
 `adjust-panner` also come *before* `mc-source` in the DTD's order.
 
+Panning does not need the reaction measurement, and must not wait for it.
+The two features ask different questions at different prices: reactions look
+for *moments*, so every keyframe is a candidate and the decode is minutes;
+seating decides one sign per speaker. Measured, **five random frames got the
+sign right 400 times out of 400** — the classes sit at +0.46 and −0.28, so
+the median settles immediately. `measure.sample_file` therefore takes 24
+frames spread across the file, which is far more than needed on purpose,
+because some frames have no face in them and the sample must not shrink to
+nothing by chance. `SIDE_MIN_FRAMES` is 5 for the same reason it is not 100:
+a hundred would have forced the full decode back.
+
+The trap there is `keyframe_times`, and it is the entire cost. It reads
+every packet in the file with ffprobe, which on a 20-minute clip is longer
+than the frame extraction it was meant to serve — the first version of the
+light scan timed out at five minutes doing nothing else. The sample needs no
+timestamps at all: `-ss` finds the nearest keyframe by itself, and a seating
+position is not tied to a moment. `measure.duration` reads one header field
+instead, and the scan went from over 300 s to **22.9 s serial**, four files
+in parallel after that.
+
+Both switches start their own scan. A feature that silently requires another
+feature's button to have been pressed is a feature that looks broken, so
+turning panning on samples the picture and turning reaction shots on starts
+the full measurement. The buttons stay, because a minutes-long run is
+something you may want to repeat deliberately.
+
 Panning is on or off, and the amount is not a setting. "How much panning"
 is a question the user has no answer to — it is precisely the number this tool
 exists to decide, and offering it as a slider is handing the responsibility

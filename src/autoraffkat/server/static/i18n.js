@@ -47,7 +47,7 @@ const STRINGS = {
     'panning.left': 'vasemmalla',
     'panning.right': 'oikealla',
     'panning.centre': 'keskellä',
-    'panning.needMeasure': 'Mittaa lähikuvat ensin: istumajärjestys tulee kuvasta.',
+    'panning.looking': 'Katsotaan kuvasta…',
     'why.panning': 'Paikka mitataan pään asennosta: vastakkain istuvat katsovat '
       + 'toisiaan, joten vasemmalla istuva katsoo oikealle. Paikat jaetaan tasan '
       + 'järjestyksen mukaan — kulma kertoo järjestyksen mutta ei etäisyyttä. '
@@ -372,7 +372,7 @@ const STRINGS = {
     'panning.left': 'left',
     'panning.right': 'right',
     'panning.centre': 'centre',
-    'panning.needMeasure': 'Measure the close-ups first: the seating order comes from the picture.',
+    'panning.looking': 'Looking at the picture…',
     'why.panning': 'The position is measured from head direction: people sitting '
       + 'opposite each other look at each other, so the one on the left looks '
       + 'right. Positions are spread evenly by order — the angle gives the '

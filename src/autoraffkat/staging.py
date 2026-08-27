@@ -35,8 +35,14 @@ PAN_WIDTH = {2: 6.0, 3: 8.0, 4: 10.0, 5: 12.0}
 PAN_MAX_SPEAKERS = 5
 
 # Kuinka monta mittausta puhujalta tarvitaan ennen kuin puolta uskotaan.
-# Yksittäinen ruutu voi olla mitä tahansa; sata on jo jakauma.
-SIDE_MIN_FRAMES = 100
+#
+# Viisi, ei sata. Kysymys on yksi merkki puhujaa kohti, ja luokat ovat
+# kaukana toisistaan: mitattuna oikealla jaksolla vasemmalla istuvan
+# mediaani oli +0,46 ja oikealla istuvan -0,28. Viidellä satunnaisella
+# ruudulla merkki osui 400/400 kertaa. Sata olisi vaatinut täyden
+# mittauksen, ja silloin panorointi riippuisi minuuttien ajosta jota se ei
+# tarvitse — ks. ``video.analyse.seating``.
+SIDE_MIN_FRAMES = 5
 
 
 def side(table: dict) -> float:

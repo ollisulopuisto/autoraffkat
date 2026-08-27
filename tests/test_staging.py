@@ -41,11 +41,13 @@ def test_a_speaker_without_enough_frames_has_no_side():
     Mittaamaton puhuja ei saa arvattua paikkaa: keskus on ainoa arvo joka
     ei ole koskaan väärin.
     """
-    assert np.isnan(staging.side(table(np.full(10, 0.5))))
-    # Kasvot löytyivät harvasta ruudusta: sama tilanne.
+    assert np.isnan(staging.side(table(np.full(3, 0.5))))
+    # Kasvot löytyivät liian harvasta ruudusta: sama tilanne.
     found = np.zeros(400, dtype=bool)
-    found[:20] = True
+    found[:2] = True
     assert np.isnan(staging.side(table(np.full(400, 0.5), found=found)))
+    # Kevyt otos riittää: viisi ruutua on jo vastaus, ks. SIDE_MIN_FRAMES.
+    assert staging.side(table(np.full(5, 0.46))) > 0
     assert np.isnan(staging.side({"found": np.zeros(0, dtype=bool), "turn": []}))
 
 

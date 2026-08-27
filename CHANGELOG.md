@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.107] - 2026-08-27
+
+### Added
+- **Panning No Longer Waits for the Reaction Measurement**: the two features ask different questions at different prices. Reactions look for *moments*, so every keyframe is a candidate and the decode is minutes; seating decides one sign per speaker. Measured, **five random frames got the sign right 400 times out of 400**. `measure.sample_file` takes 24 frames spread across the file — far more than needed, on purpose, since some frames have no face in them.
+- **Both Switches Start Their Own Scan**: turning panning on samples the picture; turning reaction shots on starts the full measurement. A feature that silently requires another feature's button to have been pressed is a feature that looks broken. The buttons stay, because a minutes-long run is something you may want to repeat deliberately.
+
+### Fixed
+- **`keyframe_times` Was the Entire Cost of the Light Scan**: it reads every packet in the file with ffprobe, which on a 20-minute clip takes longer than the frame extraction it was meant to serve — the first version of the light scan timed out at five minutes doing nothing else. The sample needs no timestamps: `-ss` finds the nearest keyframe itself, and a seating position is not tied to a moment. `measure.duration` reads one header field instead: **over 300 s → 22.9 s serial**, and four files in parallel after that.
+  - `SIDE_MIN_FRAMES` drops from 100 to 5, which is what makes the light sample usable at all. A hundred would have forced the full decode back.
+
 ## [v26.08.27.106] - 2026-08-27
 
 ### Changed

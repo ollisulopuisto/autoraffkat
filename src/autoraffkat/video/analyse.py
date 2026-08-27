@@ -15,6 +15,8 @@ import os
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
+import numpy as np
+
 from . import detect, measure
 
 # Montako tiedostoa puretaan yhtä aikaa.
@@ -70,6 +72,43 @@ def freshness(grid, roles, timeline, settings) -> tuple[int, int]:
     ready = sum(1 for _, _, path in files
                 if os.path.exists(path) and measure.is_cached(path, detector))
     return (ready, len(files))
+
+
+def seating(grid, roles, timeline, detector, tables=None) -> dict:
+    """Istumajärjestys puhujittain, ilman täyttä mittausta.
+
+    Panorointi tarvitsee yhden merkin puhujaa kohti, ei tuhansia ruutuja.
+    Täysi mittaus on minuutteja ja koko reaktiokerroksen hinta; tämä on
+    sekunteja, joten panorointi ei enää riipu siitä että joku on jaksanut
+    painaa mittausnappia.
+
+    Valmiit taulukot käytetään jos ne ovat: ne ovat parempi otos eivätkä
+    maksa mitään, ja kahdesta eri vastauksesta samaan kysymykseen ei ole
+    kenellekään iloa.
+    """
+    from .. import staging
+
+    def one(job):
+        _speaker, key, path = job
+        table = (tables or {}).get(key)
+        if table is None:
+            table = (measure.table(path, detector)
+                     if measure.is_cached(path, detector)
+                     else measure.sample_file(path, detector))
+        return staging.side(table)
+
+    files = close_up_files(grid, roles, timeline)
+    # Rinnakkain tiedostoittain, samasta syystä kuin ``tables``issa: yhden
+    # virran purku ei leviä ytimille. Mitattuna sarjassa 22,9 s neljälle
+    # tiedostolle, ja niistä 22 oli odottamista.
+    sides: dict[str, list] = {}
+    with ThreadPoolExecutor(max_workers=MAX_PARALLEL) as pool:
+        for (speaker, _key, _path), value in zip(files, pool.map(one, files)):
+            if np.isfinite(value):
+                sides.setdefault(speaker, []).append(value)
+    # Osia voi olla monta, ja kukin on oma mittauksensa samasta ihmisestä
+    # samassa tuolissa: mediaani niistä.
+    return {name: float(np.median(values)) for name, values in sides.items()}
 
 
 def tables(grid, roles, timeline, settings, progress=None) -> tuple[dict, dict]:

@@ -62,6 +62,24 @@ def cache_key(path: str, detector: detect.Detector) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()
 
 
+def duration(path: str) -> float:
+    """Tiedoston kesto sekunteina, tai 0. Otsikosta, ei pakettivirrasta.
+
+    Erotus on koko juttu: ``keyframe_times`` lukee jokaisen paketin läpi,
+    tämä lukee yhden kentän. Kevyt otos tarvitsee vain tietää mistä välistä
+    poimia.
+    """
+    probe = get_binary_path("ffprobe")
+    done = subprocess.run(
+        [probe, "-v", "error", "-show_entries", "format=duration",
+         "-of", "csv=p=0", path],
+        capture_output=True, text=True, timeout=TIMEOUT)
+    try:
+        return float(done.stdout.strip().rstrip(","))
+    except ValueError:
+        return 0.0
+
+
 def keyframe_times(path: str) -> list[float]:
     """Avainruutujen aikaleimat sekunteina."""
     probe = get_binary_path("ffprobe")
@@ -100,6 +118,69 @@ def _extract(path: str, into: Path) -> list[Path]:
             f"{os.path.basename(path)}: purku epäonnistui"
             + (f" — {tail[-1]}" if tail else ""))
     return frames
+
+
+# Kuinka monta ruutua istumajärjestykseen riittää.
+#
+# Kysymys on eri kuin reaktiokuvilla: siellä etsitään **hetkiä** ja jokainen
+# avainruutu on ehdokas, tässä päätetään yksi merkki puhujaa kohti. Mitattuna
+# oikealla jaksolla viisi satunnaista ruutua riitti 400/400 kertaa — luokat
+# ovat kaukana toisistaan (+0,46 ja -0,28), joten mediaani asettuu heti.
+# Kaksikymmentäneljä on siis reilusti yli tarpeen, ja se on tarkoitus: osasta
+# ruuduista ei löydy kasvoja lainkaan, eikä otos saa kutistua sattumalta
+# olemattomiin.
+SEATING_FRAMES = 24
+
+
+def sample_file(path: str, detector: detect.Detector,
+                count: int = SEATING_FRAMES) -> dict:
+    """Mittaa muutaman tasavälein poimitun ruudun. Ei välimuistia.
+
+    Kevyt sukulainen ``measure_file``ille: sen työ on purkaa **kaikki**
+    avainruudut, mikä on minuutteja ja koko reaktiokerroksen hinta. Paikan
+    päättämiseen riittää kourallinen, ja silloin ominaisuus ei enää riipu
+    siitä että joku on jaksanut painaa mittausnappia.
+
+    Ruudut haetaan syötteen haulla (``-ss`` ennen ``-i``), joka hyppää
+    lähimpään avainruutuun purkamatta väliin jäävää — se on koko idea.
+    """
+    # **Ei** ``keyframe_times``: se lukee koko tiedoston läpi ffprobella, ja
+    # se on tässä koko hinta — 20 minuutin tiedostolla enemmän kuin ruutujen
+    # poiminta. Aikaleimoja ei tarvita: paikkaa ei sidota hetkeen, ja
+    # ``-ss`` hakee lähimmän avainruudun itse. Kestoon riittää formaatin
+    # oma luku, joka tulee otsikosta eikä pakettivirrasta.
+    span = duration(path)
+    if not span:
+        raise MeasureError(f"{os.path.basename(path)}: kestoa ei saatu")
+    # Reunat pois: ensimmäisessä sekunnissa kamera voi vielä tarkentaa ja
+    # viimeisessä istua jo väärin, eikä kumpikaan kerro istumajärjestyksestä.
+    times = list(np.linspace(span * 0.05, span * 0.95, max(1, count)))
+    picks = range(len(times))
+    ffmpeg = get_binary_path("ffmpeg")
+    work = Path(tempfile.mkdtemp(prefix="autoraffkat-seat-"))
+    try:
+        columns = {name: np.zeros(len(times), dtype=np.float32)
+                   for name in detector.fields}
+        found = np.zeros(len(times), dtype=bool)
+        for index, pick in enumerate(picks):
+            frame = work / f"{index:03d}.jpg"
+            done = subprocess.run(
+                [ffmpeg, "-v", "error", "-ss", f"{times[pick]:.3f}",
+                 "-i", path, "-frames:v", "1",
+                 "-vf", f"scale={WIDTH}:-2", "-q:v", "4", str(frame)],
+                capture_output=True, text=True, timeout=TIMEOUT)
+            if done.returncode != 0 or not frame.exists():
+                continue          # yksi ruutu vähemmän ei kaada otosta
+            row = detector.measure(str(frame))
+            if row is None:
+                continue
+            found[index] = True
+            for name in detector.fields:
+                columns[name][index] = float(row.get(name, 0.0))
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+    return {"times": np.asarray(times, dtype=np.float32),
+            "found": found, **columns}
 
 
 def measure_file(path: str, detector: detect.Detector, progress=None) -> dict:

@@ -120,6 +120,11 @@ class AppState:
     _marks_key: tuple | None = None
     video_tables: dict = field(default_factory=dict)
     video_errors: dict = field(default_factory=dict)
+    # Istumajärjestys kevyestä otoksesta. Erillään ``video_tables``ista,
+    # koska se on eri kysymys eri hinnalla: yksi merkki puhujaa kohti
+    # sekunneissa, ei tuhansia ruutuja minuuteissa.
+    seating: dict = field(default_factory=dict)
+    seating_running: bool = False
     video_progress: dict = field(
         default_factory=lambda: {"done": 0, "total": 0, "current": "",
                                  "fraction": 0.0, "running": False}
@@ -249,6 +254,42 @@ class AppState:
         finally:
             self.progress["ready"] = True
 
+    def start_seating(self) -> None:
+        """Kevyt otos taustalle, jos sitä ei ole jo menossa."""
+        if self.seating_running or self.timeline is None:
+            return
+        self.seating_running = True
+        threading.Thread(target=self.measure_seating, daemon=True).start()
+
+    def measure_seating(self) -> None:
+        """Taustasäie: kevyt otos pelkkää istumajärjestystä varten.
+
+        Panorointi tarvitsee yhden merkin puhujaa kohti, ei tuhansia
+        ruutuja. Täysi mittaus on minuutteja; tämä on sekunteja, joten
+        panoroinnin voi laittaa päälle ilman että se vaatii koko
+        reaktiokerroksen hinnan.
+
+        Valmiit taulukot voittavat: jos lähikuvat on jo mitattu, tästä ei
+        tule uutta ffmpeg-ajoa lainkaan.
+        """
+        from ..video import analyse as video_analyse
+        from ..video import detect
+
+        if self.timeline is None or self.analysis is None:
+            return
+        try:
+            roles = resolve_roles(self.timeline, self.settings.tracks)
+            grid, _, _ = build_grid(self.analysis, self.settings.tracks, roles)
+            detector = detect.load(self.settings.globals.reaction_detector)
+            self.seating = video_analyse.seating(
+                grid, roles, self.timeline, detector, self.video_tables
+            )
+        except (AnalysisError, ValueError, KeyError, OSError) as exc:
+            self.video_errors = dict(self.video_errors)
+            self.video_errors["seating"] = str(exc)
+        finally:
+            self.seating_running = False
+
     def measure_video(self) -> None:
         """Taustasäie: mittaa lähikuvien avainruudut reaktiokuvia varten.
 
@@ -371,28 +412,9 @@ class AppState:
         uudestaan. Ilman mittauksia tyhjä: paikkaa jota ei tiedetä ei
         arvata, ja keskus on ainoa arvo joka ei ole koskaan väärin.
         """
-        if not self.video_tables:
+        if not self.seating:
             return {}
-        import numpy as np
-
-        from ..video import analyse
-
-        sides: dict[str, list] = {}
-        for speaker, key, _path in analyse.close_up_files(
-            grid, roles, self.timeline
-        ):
-            table = self.video_tables.get(key)
-            if table is None:
-                continue
-            sides.setdefault(speaker, []).append(staging.side(table))
-        # Osia voi olla monta, ja kukin on oma mittauksensa samasta
-        # ihmisestä samassa tuolissa: mediaani niistä.
-        merged = {
-            name: float(np.median([v for v in values if np.isfinite(v)]))
-            if any(np.isfinite(v) for v in values) else float("nan")
-            for name, values in sides.items()
-        }
-        return staging.pans(merged)
+        return staging.pans(dict(self.seating))
 
     def reactions_now(self, grid, roles, program_start) -> list:
         """Ehdotetut reaktiokuvat nykyisillä asetuksilla ja mittauksilla.
@@ -466,9 +488,22 @@ class AppState:
             # nollaisi sen.
             g.reaction_threshold = float(raw["reaction_threshold"])
         if "reactions" in raw:
+            was = g.reactions
             g.reactions = bool(raw["reactions"])
+            # Sama sääntö: kytkin käynnistää mittauksen. Nappi jää, koska
+            # ajo on minuutteja ja sen saa haluta uudestaan, mutta
+            # ensimmäistä kertaa ei pidä joutua pyytämään erikseen.
+            if (g.reactions and not was and not self.video_tables
+                    and not self.video_progress.get("running")):
+                threading.Thread(target=self.measure_video, daemon=True).start()
         if "panning" in raw:
+            was = g.panning
             g.panning = bool(raw["panning"])
+            # Kytkin käynnistää otoksen. Ilman tätä panorointi olisi
+            # ominaisuus joka vaatii toisen ominaisuuden mittausnapin
+            # painamista ensin, eikä mikään kertoisi sitä.
+            if g.panning and not was and not self.seating:
+                self.start_seating()
         if raw.get("overlap_rule") in OVERLAP_RULES:
             g.overlap_rule = raw["overlap_rule"]
         if raw.get("long_take_rule") in LONGTAKE_RULES:
@@ -775,7 +810,11 @@ def _video_json(state: AppState) -> dict:
         faces += int(found.sum())
 
     candidates = placed = None
-    pans: dict = {}
+    # Mihin panorointi puhujat asettaa. Näkyviin, koska muuten ominaisuutta
+    # ei voi arvioida ennen kuin sen on vienyt ja kuunnellut — ja väärin
+    # päin oleva panorointi kuulostaa oikealta kunnes vertaa kuvaan. Sama
+    # sääntö kuin reaktiokerroksella: näytetään myös kytkimen ollessa pois.
+    pans = staging.pans(dict(state.seating)) if state.seating else {}
     if state.video_tables and state.timeline is not None and state.analysis:
         try:
             roles = resolve_roles(state.timeline, state.settings.tracks)
@@ -799,13 +838,6 @@ def _video_json(state: AppState) -> dict:
                 grid, roles, state.timeline, state.video_tables,
                 wanted, float(program_start),
                 decision=decide(grid, state.settings.globals)))
-            # Mihin panorointi puhujat asettaa. Näkyviin, koska muuten
-            # ominaisuutta ei voi arvioida ennen kuin sen on vienyt ja
-            # kuunnellut — ja väärin päin oleva panorointi kuulostaa
-            # oikealta kunnes vertaa kuvaan. Sama sääntö kuin
-            # reaktiokerroksella: piirretään myös silloin kun kytkin on
-            # pois, jotta sen voi arvioida ennen päälle laittamista.
-            pans = state.measured_pans(grid, roles)
         except (AnalysisError, ValueError, KeyError):
             candidates = placed = None
 
@@ -817,6 +849,7 @@ def _video_json(state: AppState) -> dict:
         "candidates": candidates,
         "placed": placed,
         "pans": pans,
+        "seating": bool(state.seating) or state.seating_running,
         "errors": sorted(state.video_errors.values()),
     }
 
