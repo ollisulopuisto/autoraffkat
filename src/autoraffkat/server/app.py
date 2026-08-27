@@ -1256,6 +1256,17 @@ def create_app(state: AppState) -> FastAPI:
                 # päällä ja lopputuloksessa ei mitään on tässä projektissa
                 # tuttu vika, joten kumpikin tyhjä tapaus kerrotaan: ei
                 # mittauksia, ja mittaukset mutta ei läpäisijöitä.
+                # Vaimennus menee vientiin käyränä eikä tiedostoihin, joten
+                # «asetus päällä, tuloksessa ei mitään» ei saa jäädä hiljaa —
+                # se on tässä projektissa toistuva vika, ja nyt se osuisi
+                # kohtaan jota ei kuule ennen kuin miksaa Final Cutissa.
+                ducks = mix.duck_envelopes(
+                    _grid, state.settings.audio, float(program_start)
+                )
+                if (state.settings.audio.duck
+                        and state.settings.audio.duck_db < 0 and not ducks):
+                    warnings.append(t("export.duck_none"))
+
                 shots = state.reactions_now(_grid, roles, program_start)
                 if state.settings.globals.reactions and not shots:
                     warnings.append(t("video.none_measured")
@@ -1278,6 +1289,7 @@ def create_app(state: AppState) -> FastAPI:
                         reactions=shots,
                         roles=roles,
                         pans=state.pans_now(_grid, roles),
+                        ducks=ducks,
                     )
                 else:
                     xml = build_fcpxml(

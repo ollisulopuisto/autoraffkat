@@ -122,6 +122,12 @@ CATALOG: dict[str, dict[str, str]] = {
         "fi": "Tiedostoa ei ole.",
         "en": "The file does not exist.",
     },
+    "export.duck_none": {
+        "fi": "Vaimennus on päällä, mutta yksikään mikki ei osunut maskiin: "
+        "vientiin ei kirjoitettu yhtään vaimennuskäyrää.",
+        "en": "Ducking is on, but no microphone matched a mask: no ducking "
+        "envelope was written into the export.",
+    },
     "export.only_macos": {
         "fi": "Final Cut Pro on vain macOS:llä.",
         "en": "Final Cut Pro exists only on macOS.",

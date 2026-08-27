@@ -103,15 +103,9 @@ FINGERPRINT_FIELDS = (
     "declick_sensitivity",
     "plugin_path",
     "plugin_params",
-    "duck",
-    "duck_db",
-    "duck_lookahead",
-    "duck_hold",
-    "duck_min_open",
-    "duck_dominance_db",
-    "duck_fade",
-    "duck_release",
-    "duck_min_closed",
+    # Vaimennuksen luvut **eivät** ole tässä, ja se on tarkoitus: ne eivät
+    # enää kosketa tiedostoon vaan menevät vientiin käyränä. Vaimennuksen
+    # syvyyden muuttaminen on siis ilmaista — vie uudestaan, älä käsittele.
     "gain_db",
     "room_db",
     "program_target",
@@ -124,13 +118,14 @@ FINGERPRINT_FIELDS = (
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 6: vaimennusta ei enää polteta tiedostoon.
 # 5: ketjun kolmas kompressori oli kuollut ja on nyt elossa.
 # 4: liitännäisen oma tila on osa lopputulosta.
 # 3: ristivuodon vähennys ajetaan ennen liitännäistä.
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 5
+FINGERPRINT_VERSION = 6
 
 
 def stamp_dir() -> Path:
@@ -393,7 +388,7 @@ def _geometry(item, frames: int) -> tuple:
 
 
 def program_ceiling(jobs: list[dict], settings: AudioSettings,
-                    result: "MixResult") -> None:
+                    result: "MixResult", envelopes: dict | None = None) -> None:
     """Huippukatto **ohjelmalle**, ei yhdelle stemille.
 
     Sama virhe kuin äänekkyydessä, jonka ``program_trim`` jo korjaa: ketju
@@ -442,7 +437,7 @@ def program_ceiling(jobs: list[dict], settings: AudioSettings,
             continue
         frames = key[0]
         try:
-            worst = _ceiling_pass(members, frames, AudioFile)
+            worst = _ceiling_pass(members, frames, AudioFile, envelopes)
         except (OSError, ValueError) as exc:
             for job in members:
                 result.notes.setdefault(job["key"], []).append(str(exc))
@@ -453,8 +448,16 @@ def program_ceiling(jobs: list[dict], settings: AudioSettings,
                  f"{worst:.2f} dB")
 
 
-def _ceiling_pass(members: list[dict], frames: int, AudioFile) -> float:
+def _ceiling_pass(members: list[dict], frames: int, AudioFile,
+                  envelopes: dict | None = None) -> float:
     """Yksi ryhmä: summa paloittain, sama käyrä jokaiseen stemiin.
+
+    ``envelopes`` on vaimennus puhujittain aikajanan aikana. Se **on**
+    otettava mukaan summaan, koska vaimennusta ei enää polteta tiedostoon:
+    ilman sitä summa olisi ohjelma jota Final Cut ei koskaan soita — tällä
+    aineistolla 8 ja 30 minuuttia vaimennettavaa — ja katto laskettaisiin
+    liian kovasta signaalista. Vaimennus itse kirjoitetaan silti vientiin,
+    ei tiedostoon; tässä se vain otetaan huomioon.
 
     Paloittain, koska koko ohjelma muistissa olisi useita gigatavuja.
     Marginaali molemmin puolin ja siitä keskiosa talteen, jotta rajoittimen
@@ -483,9 +486,12 @@ def _ceiling_pass(members: list[dict], frames: int, AudioFile) -> float:
                 for handle in handles:
                     handle.seek(low)
                     blocks.append(handle.read(high - low))
-                total = blocks[0].copy()
-                for block in blocks[1:]:
-                    total = total + block
+                total = None
+                for job, block in zip(members, blocks):
+                    heard = block * _envelope_block(
+                        job, envelopes, low, high, rate
+                    )
+                    total = heard if total is None else total + heard
                 gain = chain.limiter_gain(total, rate)
                 worst = min(worst, float(20.0 * np.log10(max(gain.min(), 1e-9))))
                 head = position - low
@@ -515,6 +521,42 @@ def _ceiling_pass(members: list[dict], frames: int, AudioFile) -> float:
     for job in members:
         os.replace(job["target"] + ".ceil.tmp.wav", job["target"])
     return worst
+
+
+def _envelope_block(job: dict, envelopes: dict | None, low: int, high: int,
+                    rate: int) -> np.ndarray:
+    """Vaimennuksen kerroin tiedoston näyteväliltä ``[low, high)``.
+
+    Käyrä on aikajanan aikaa, tiedosto omaansa. Muunnos on esiintymittäin
+    lineaarinen, sama kaava kuin ``closed_ranges``issa. Ykkösiä silloin kun
+    puhujalle ei ole käyrää: silloin summaan menee tiedosto sellaisenaan.
+    """
+    points = (envelopes or {}).get(job.get("speaker"))
+    item = job.get("item")
+    if not points or item is None:
+        return np.ones(1, dtype=np.float32)
+    gain = np.ones(high - low, dtype=np.float32)
+    for placement in item.placements:
+        base = float(placement.start - item.asset_start - placement.offset)
+        # Tiedostoaika = base + aikajana, joten aikajana = tiedostoaika - base.
+        first = max(low / rate, float(placement.offset) + base)
+        last = min(high / rate, float(placement.end) + base)
+        if last <= first:
+            continue
+        i0, i1 = int(round(first * rate)) - low, int(round(last * rate)) - low
+        i0, i1 = max(0, i0), min(len(gain), i1)
+        if i1 <= i0:
+            continue
+        times = (np.arange(i0, i1, dtype=np.float64) + low) / rate - base
+        curve = np.interp(
+            times,
+            [t for t, _ in points],
+            [v for _, v in points],
+            left=0.0,
+            right=0.0,
+        )
+        gain[i0:i1] = (10.0 ** (curve / 20.0)).astype(np.float32)
+    return gain
 
 
 def _drop(path: str) -> None:
@@ -552,6 +594,71 @@ def closed_ranges(
                 (int(round((base + first) * rate)), int(round((base + last) * rate)))
             )
     return out
+
+
+def duck_envelopes(grid, settings: AudioSettings,
+                   program_start: float) -> dict[str, list]:
+    """Vaimennus käyränä, aikajanan aikaa: ``puhuja -> [(t, dB), …]``.
+
+    Vaimennus ei kuulu tiedostoihin. Se on tasopäätös siinä missä
+    panorointikin, ja poltettuna se on ainoa asia koko ketjussa jota
+    leikkaaja ei voi enää muuttaa katsomatta: liian syvä vaimennus vaatii
+    minuuttien ajon, kun se käyränä on yhden liu'un veto. Sama peruste kuin
+    reaktiokuvien omalla lanella.
+
+    Muoto vastaa ``chain.apply_duck``ia piste pisteeltä, koska tulos ei saa
+    muuttua sen mukaan kummalla tavalla se tehdään: liu'ut ovat **jakson
+    sisällä** — lasku alkaa jakson alusta, nousu päättyy sen loppuun — ja
+    epäsymmetriset, koska lasku osuu toisen puhujan aloitukseen ja jää sen
+    alle, kun taas nousu osuu hiljaisuuteen jossa mikään ei peitä sitä.
+    Liuku on desibeleissä, ja niin on Final Cutin keyframe-parametrikin.
+
+    Pelkkää laskentaa ruudukon päällä: ei tiedostoja, joten tämä saa olla
+    myös esikatselussa.
+    """
+    depth = float(settings.duck_db)
+    if not settings.duck or depth >= 0:
+        return {}
+    fade = float(settings.duck_fade)
+    release = float(settings.duck_release or settings.duck_fade)
+    out: dict[str, list] = {}
+    for name, mask in duck_masks(grid, settings).items():
+        points: list[tuple[float, float]] = []
+        for start, end, value in _runs(np.asarray(mask).astype(np.int8)):
+            if not value:
+                continue
+            t0 = program_start + start * HOP
+            t1 = program_start + end * HOP
+            span = t1 - t0
+            head = min(fade, span / 2.0)
+            tail = min(release, span - head)
+            points.append((t0, 0.0))
+            points.append((t0 + head, depth))
+            points.append((t1 - tail, depth))
+            points.append((t1, 0.0))
+        if points:
+            out[name] = points
+    return out
+
+
+def envelope_at(points: list, when: float) -> float:
+    """Käyrän arvo hetkellä ``when``, desibeleinä. Väleissä lineaarinen.
+
+    Käyrän ulkopuolella nolla: vaimennus on paikallinen tapahtuma, ei tila.
+    """
+    if not points:
+        return 0.0
+    if when <= points[0][0] or when >= points[-1][0]:
+        return 0.0
+    times = [t for t, _ in points]
+    index = np.searchsorted(times, when)
+    if index <= 0:
+        return float(points[0][1])
+    t0, v0 = points[index - 1]
+    t1, v1 = points[min(index, len(points) - 1)]
+    if t1 <= t0:
+        return float(v1)
+    return float(v0 + (v1 - v0) * (when - t0) / (t1 - t0))
 
 
 def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
@@ -848,18 +955,10 @@ def _run_one(
         ),
     )
 
-    # Vaimennus viimeisenä: sitä ennen mitattu taso koskee puhetta, ei
-    # puheen ja hiljaisuuden keskiarvoa.
-    mask = (masks or {}).get(job.get("speaker"))
-    if mask is not None and settings.duck and settings.duck_db < 0:
-        audio = chain.apply_duck(
-            audio,
-            rate,
-            closed_ranges(job["item"], mask, program_start, rate),
-            settings.duck_db,
-            settings.duck_fade,
-            settings.duck_release,
-        )
+    # Vaimennusta **ei** polteta tiedostoon. Se kirjoitetaan vientiin Final
+    # Cutin omaksi kulmakohtaiseksi äänenvoimakkuuskäyräksi, jolloin
+    # leikkaaja voi muuttaa sen ilman uutta ajoa — ks. ``duck_envelopes``.
+    # Tiedostoon poltettuna se oli ketjun ainoa peruuttamaton tasopäätös.
     report("duck", READ_SHARE + DEBLEED_SHARE + CHAIN_SHARE)
 
     limit = int(rate * MAX_LAG_MS / 1000)
@@ -1166,8 +1265,12 @@ def process(
         if hasattr(plugin, "close"):
             plugin.close()
     # Katto vasta kun kaikki stemit ovat levyllä: se lasketaan niiden
-    # summasta, jota ei ole olemassa ennen viimeistä tiedostoa.
-    program_ceiling(jobs, settings, result)
+    # summasta, jota ei ole olemassa ennen viimeistä tiedostoa. Vaimennus
+    # mukaan, koska sitä ei enää ole tiedostoissa — ilman sitä katto
+    # laskettaisiin ohjelmasta jota Final Cut ei soita.
+    ducks = (duck_envelopes(grid, settings, program_start)
+             if grid is not None else {})
+    program_ceiling(jobs, settings, result, ducks)
     return out
 
 

@@ -182,7 +182,17 @@ def test_fingerprint_covers_every_setting():
     fields = set(AudioSettings.__dataclass_fields__)
     # `enabled` ja `room_track` päättävät tehdäänkö työtä, eivät miltä
     # tulos kuulostaa: ne eivät kuulu sormenjälkeen.
-    assert fields - {"enabled", "room_track"} == set(mix.FINGERPRINT_FIELDS)
+    #
+    # Vaimennuksen luvut eivät ole mukana siksi, että vaimennusta ei enää
+    # polteta tiedostoon: se menee vientiin käyränä, joten sen muuttaminen
+    # ei vanhenna yhtäkään tiedostoa. Tämä on poikkeus jonka pitää olla
+    # kirjoitettu näkyviin — hiljaisena se olisi juuri se vika jota tämä
+    # testi vartioi, vain toisin päin.
+    ducking = {name for name in fields if name.startswith("duck")}
+    assert ducking, "vaimennuksen kentät ovat kadonneet"
+    outside = {"enabled", "room_track"} | ducking
+    assert fields - outside == set(mix.FINGERPRINT_FIELDS)
+    assert not ducking & set(mix.FINGERPRINT_FIELDS)
 
 
 def test_every_setting_changes_the_fingerprint(tmp_path, monkeypatch):

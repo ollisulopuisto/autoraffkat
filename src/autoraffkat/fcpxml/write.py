@@ -593,12 +593,58 @@ def _pan_line(indent: str, amount: float) -> list[str]:
             f'amount="{amount:g}"/>']
 
 
+def _volume_lines(indent: str, points: list, low, high, mc,
+                  frame_duration) -> list[str]:
+    """``<adjust-volume>`` keyframeineen yhdelle kulmalle yhdessä kuvassa.
+
+    Ajat ovat **isännän paikallisessa aikapohjassa**, samassa jossa
+    ``mc-clip``in ``start`` on — ei aikajanan. Tämä on luettu Final Cutin
+    itsensä kirjoittamasta tiedostosta eikä pääteltävissä: aikajanan aikoina
+    jokainen piste osuisi väärään kohtaan, tiedosto kelpaisi tuontiin, ja
+    vaimennus olisi jossain muualla kuin missä sen pitäisi.
+
+    Kuvan reunoille kirjoitetaan pisteet aina kun käyrä ei ole niissä
+    nollassa: ilman niitä Final Cut interpoloi kuvan alusta ensimmäiseen
+    pisteeseen ja vaimennus alkaisi väärästä arvosta. Kuva joka on kokonaan
+    nollassa ei saa ``adjust-volume``ia lainkaan.
+    """
+    from ..audio.mix import envelope_at
+
+    if not points:
+        return []
+    a, b = float(low), float(high)
+    inside = [(t, v) for t, v in points if a < t < b]
+    edge_low = envelope_at(points, a)
+    edge_high = envelope_at(points, b)
+    if not inside and not edge_low and not edge_high:
+        return []
+    marks = [(a, edge_low), *inside, (b, edge_high)]
+    lines = [f"{indent}<adjust-volume>",
+             f'{indent}  <param name="amount">',
+             f"{indent}    <keyframeAnimation>"]
+    for when, value in marks:
+        local = to_frames(mc.source_at(Fraction(when).limit_denominator(48000)),
+                          frame_duration)
+        lines.append(
+            f'{indent}      <keyframe time="{frames_str(local, frame_duration)}" '
+            f'value="{value:g}dB"/>'
+        )
+    lines += [f"{indent}    </keyframeAnimation>",
+              f"{indent}  </param>",
+              f"{indent}</adjust-volume>"]
+    return lines
+
+
 def _mc_sources(
     video_angle: str,
     audio_angles: list[tuple[str, str]],
     roles: dict[str, str],
     raw_angles: dict[str, str] | None = None,
     pans: dict[str, float] | None = None,
+    ducks: dict[str, list] | None = None,
+    span: tuple | None = None,
+    mc=None,
+    frame_duration=None,
 ) -> list[str]:
     """``<mc-source>``-rivit: yksi kuva, loput ääntä omilla rooleillaan.
 
@@ -627,6 +673,13 @@ def _mc_sources(
         # DTD:stä: DTD sallii senkin mitä sovellus ei koskaan kirjoita.
         pan = float((pans or {}).get(speaker, 0.0))
         inner = _pan_line("                  ", pan)
+        # Vaimennus samaan paikkaan kuin panorointi: kulmakohtaisesti.
+        # Koko klipin äänenvoimakkuus vaimentaisi molemmat puhujat, mikä on
+        # päinvastoin kuin vaimennuksen tarkoitus.
+        if span is not None and mc is not None:
+            inner = _volume_lines("                  ",
+                                  (ducks or {}).get(speaker, []),
+                                  span[0], span[1], mc, frame_duration) + inner
         if inner:
             lines += [
                 f'              <mc-source angleID={quoteattr(angle_id)} '
@@ -1044,6 +1097,7 @@ def build_multicam_fcpxml(
     reactions: list | None = None,
     roles=None,
     pans: dict[str, float] | None = None,
+    ducks: dict[str, list] | None = None,
 ) -> str:
     """Rakentaa monikameraleikkauksen: yksi ``<mc-clip>`` per kuva.
 
@@ -1129,8 +1183,10 @@ def build_multicam_fcpxml(
             f'start="{frames_str(start_frames, frame_duration)}"',
             f'duration="{frames_str(b - a, frame_duration)}"',
         ]
-        sources = _mc_sources(video_angle, audio_angles, mc.angle_roles,
-                              raw_angles, pans)
+        sources = _mc_sources(
+            video_angle, audio_angles, mc.angle_roles, raw_angles, pans,
+            ducks, (at, program_start + frame_duration * b), mc, frame_duration,
+        )
         # Puhujan nimi avainsanaksi. Selaimessa monikameraklipin nimi on
         # median oma («A-osa»), joten kaikki kuvat näyttävät samalta;
         # avainsana on se paikka jossa Final Cut erottaa ne. Lisätään

@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.104] - 2026-08-27
+
+### Changed
+- **Ducking Is Now an Envelope in the Export, Not a Burn Into the File**: it is a level decision, and level decisions belong where the editor can still reach them. Baked in it was the one setting in the whole chain that could not be changed without a minutes-long run — "3 dB too deep" meant reprocessing every microphone. It is now written as Final Cut's own per-angle `<adjust-volume>` keyframes: on this episode 1164 and 3120 points at −9 dB, and one drag to change.
+  - `mix.duck_envelopes` reproduces the shape `chain.apply_duck` burnt, point for point — fades **inside** the range, asymmetric, interpolated in decibels — because the result must not depend on which way it was made.
+  - **The duck settings left `FINGERPRINT_FIELDS`.** Changing the depth no longer makes a single file stale: export again, don't process. A test asserts they stay out.
+  - **`program_ceiling` now applies the envelope while it sums**, because the stems on disk are no longer what Final Cut plays — 8 and 30 minutes of attenuation are missing from them, and a ceiling computed without it limits a programme that does not exist.
+  - A shot the envelope does not touch gets no `<adjust-volume>` at all; a shot it crosses gets a keyframe on its edge carrying the value there, or Final Cut would restart the attenuation from zero at every cut.
+  - Ducking on with no envelope written is now an export warning, not a silence.
+  - `FINGERPRINT_VERSION` 5 → 6.
+
 ## [v26.08.27.103] - 2026-08-27
 
 ### Added

@@ -143,7 +143,8 @@ def test_role_sanitizing():
 # ------------------------------------------------------------------ multicam
 
 
-def _multicam_cut(fixture_dir, segments=None, settings=None, pans=None):
+def _multicam_cut(fixture_dir, segments=None, settings=None, pans=None,
+                  ducks=None):
     """Monikameraleikkaus fixturesta. Kolmas kuva ylittää osien rajan 18 s."""
     tl = read_fcpxml(str(fixture_dir / "multicam.fcpxml"))
     segments = segments or [
@@ -162,6 +163,7 @@ def _multicam_cut(fixture_dir, segments=None, settings=None, pans=None):
         settings=settings,
         source="multicam.fcpxml",
         pans=pans,
+        ducks=ducks,
     )
     return tl, xml
 
@@ -937,4 +939,96 @@ def test_no_panning_leaves_the_angle_exactly_as_before(fixture_dir):
 def test_panned_multicam_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
     """Oma lukija hyväksyy enemmän kuin tuonti; DTD on se raja joka ratkaisee."""
     _, xml = _multicam_cut(fixture_dir, pans={"Host": -3.0, "Guest": 3.0})
+    validate_fcpxml(xml)
+
+
+def _volume_of(clip, role):
+    """Yhden kulman keyframet ``(aika, dB)``, tai None."""
+    for source in clip.findall('mc-source[@srcEnable="audio"]'):
+        found = source.find("audio-role-source")
+        if found.get("role") != role:
+            continue
+        volume = found.find("adjust-volume")
+        if volume is None:
+            return None
+        return [(k.get("time"), k.get("value"))
+                for k in volume.iter("keyframe")]
+    return None
+
+
+def test_ducking_is_an_envelope_on_the_angle_not_baked_into_the_file(fixture_dir):
+    """Vaimennus on tasopäätös, ja tasopäätökset kuuluvat vientiin.
+
+    Tiedostoon poltettuna se oli ketjun ainoa peruuttamaton säätö: liian
+    syvä vaimennus vaati minuuttien ajon. Käyränä se on yhden liu'un veto.
+
+    Kulmalle eikä klipille: koko klipin äänenvoimakkuus vaimentaisi
+    molemmat puhujat, mikä on päinvastoin kuin vaimennuksen tarkoitus.
+    """
+    # Vaimennetaan Host 6…10 s, aikajanan aikaa.
+    ducks = {"Host": [(6.0, 0.0), (6.25, -9.0), (9.75, -9.0), (10.0, 0.0)]}
+    _, xml = _multicam_cut(fixture_dir, ducks=ducks)
+    root = ET.fromstring(xml)
+    clips = root.findall(".//spine/mc-clip")
+    # Klipin oma äänenvoimakkuus vaimentaisi kaikki kulmat kerralla.
+    assert all(c.find("adjust-volume") is None for c in clips)
+
+    values = []
+    for clip in clips:
+        points = _volume_of(clip, "dialogue.Host")
+        if points:
+            values += [v for _, v in points]
+        # Toista puhujaa ei vaimenneta lainkaan.
+        assert _volume_of(clip, "dialogue.Guest") is None
+    assert "-9dB" in values, values
+    assert "0dB" in values
+
+
+def test_a_shot_the_envelope_does_not_touch_gets_no_volume(fixture_dir):
+    """Nolla ei ole «vaimennus nollaan» vaan vaimennuksen puuttuminen.
+
+    Tyhjä ``adjust-volume`` on Final Cutille asetus siinä missä muutkin, ja
+    sellainen jokaisessa kuvassa tekisi tiedostosta moninkertaisen ilman
+    että mikään muuttuu.
+    """
+    ducks = {"Host": [(6.0, 0.0), (6.25, -9.0), (9.75, -9.0), (10.0, 0.0)]}
+    _, xml = _multicam_cut(fixture_dir, ducks=ducks)
+    clips = ET.fromstring(xml).findall(".//spine/mc-clip")
+    koskematon = [c for c in clips if _volume_of(c, "dialogue.Host") is None]
+    assert koskematon, "jokainen kuva sai käyrän"
+
+    # Ilman käyrää tiedosto on tavulleen sama kuin ennen ominaisuutta.
+    _, ilman = _multicam_cut(fixture_dir)
+    assert "adjust-volume" not in ilman
+
+
+def test_the_envelope_crossing_a_shot_boundary_keeps_its_value(fixture_dir):
+    """Kuvan reunalle on kirjoitettava piste, tai arvo alkaa nollasta.
+
+    Vaimennusjakso on tyypillisesti pidempi kuin yksi kuva. Ilman reunan
+    pistettä Final Cut interpoloi kuvan alusta ensimmäiseen pisteeseen, ja
+    vaimennus lähtisi joka leikkauksessa nollasta — kuuluva pumppaus, jota
+    mikään ei kerro.
+    """
+    # Jakso kattaa kokonaan toisen kuvan (4…12 s) ja ylittää sen molemmat
+    # reunat.
+    ducks = {"Host": [(2.0, 0.0), (2.5, -9.0), (29.5, -9.0), (30.0, 0.0)]}
+    _, xml = _multicam_cut(fixture_dir, ducks=ducks)
+    clips = ET.fromstring(xml).findall(".//spine/mc-clip")
+    keskella = [c for c in clips if _volume_of(c, "dialogue.Host")]
+    assert len(keskella) >= 2
+    for clip in keskella:
+        points = _volume_of(clip, "dialogue.Host")
+        # Kuvan sisällä pysyvä vaimennus alkaa vaimennettuna, ei nollasta.
+        if all(v == "-9dB" for _, v in points):
+            break
+    else:
+        raise AssertionError("yksikään kuva ei jatkanut vaimennettuna")
+
+
+def test_ducked_multicam_passes_the_fcp_dtd(fixture_dir, validate_fcpxml):
+    """Oma lukija hyväksyy enemmän kuin tuonti; DTD on se raja joka ratkaisee."""
+    ducks = {"Host": [(6.0, 0.0), (6.25, -9.0), (9.75, -9.0), (10.0, 0.0)]}
+    _, xml = _multicam_cut(fixture_dir, ducks=ducks,
+                           pans={"Host": -3.0, "Guest": 3.0})
     validate_fcpxml(xml)

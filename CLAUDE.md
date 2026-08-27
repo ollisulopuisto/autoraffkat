@@ -412,6 +412,33 @@ library doesn't do what its name promises, both measured:
   peaks to zero. It was replaced by `peak_guard`, a static attenuation that
   never raises.
 
+Ducking is an envelope in the export, not a burn into the file. It is a
+level decision, and level decisions belong where the editor can still reach
+them: baked in, it was the one setting in the whole chain that could not be
+changed without a minutes-long run, and "the ducking is 3 dB too deep" meant
+reprocessing every microphone. As `<adjust-volume>` keyframes on the angle it
+is one drag. `mix.duck_envelopes` produces the same shape `chain.apply_duck`
+burnt — fades **inside** the range, asymmetric, interpolated in decibels —
+because the result must not depend on which way it was made.
+
+Two consequences follow, and both are load-bearing. The duck settings left
+`FINGERPRINT_FIELDS`, so changing the depth no longer makes a single file
+stale: export again, do not process. A test asserts they are absent, since a
+silent *re-*inclusion would put minutes back onto a free adjustment. And
+`program_ceiling` must apply the envelope while it sums, because the stems on
+disk are no longer what Final Cut plays — on this episode 8 and 30 minutes of
+attenuation are missing from them, and a ceiling computed without it limits a
+programme that does not exist.
+
+The keyframes go on the **angle**, like the panning, and for the same reason:
+volume on the `mc-clip` would duck both speakers at once, which is the
+opposite of ducking. A shot the envelope does not touch gets no
+`<adjust-volume>` at all — an empty one is a setting as far as Final Cut is
+concerned. A shot the envelope crosses gets a keyframe on its edge carrying
+the value there: without it Final Cut interpolates from the clip's start and
+the attenuation restarts from zero at every cut, which is audible pumping
+that nothing reports.
+
 ## Microphone to the angle, room tone to a lane — and why
 
 Microphone audio goes into the export inside the multicam clip (`mc-source`),
