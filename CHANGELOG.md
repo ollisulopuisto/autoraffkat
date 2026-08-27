@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.113] - 2026-08-27
+
+### Fixed
+- **A Microphone From Another Part Was Offered as a Leakage Source**: in a multicam the parts are consecutive, so "wancke b" is never on screen at the same moment as "nyman a". It was still handed to the de-bleeder, `_aligned` returned nothing but zeros, and the log said `vuotopolkua ei saatu ratkaistua` about a pairing that was never possible.
+  - The export was never wrong — the real partner is processed separately — but the same file appeared to both succeed and fail in the log, and that noise hid the genuine failure on the long parts for most of a day. An error message you cannot believe is worse than no message.
+  - No fingerprint bump: the spurious partner was a no-op, so no processed file changes.
+
 ## [v26.08.27.112] - 2026-08-27
 
 ### Added

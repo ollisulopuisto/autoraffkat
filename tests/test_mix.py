@@ -960,3 +960,37 @@ def test_stems_that_do_not_line_up_are_not_summed(tmp_path):
     for job, was in zip(jobs, ennen):
         with AudioFile(job["target"]) as handle:
             assert np.array_equal(handle.read(handle.frames), was)
+
+
+def test_a_partner_from_another_part_is_not_a_leakage_source():
+    """Eri osassa oleva mikki ei voi vuotaa tähän tiedostoon.
+
+    Monikamerassa osat ovat peräkkäin, joten «wancke b» ei ole yhtään
+    hetkeä päällekkäin «nyman a»:n kanssa. Silti se tarjottiin
+    vuotolähteeksi, ja ``_aligned`` palautti pelkkää nollaa — mistä tuli
+    «vuotopolkua ei saatu ratkaistua».
+
+    Vienti ei mennyt siitä rikki, koska oikea kumppani käsiteltiin
+    erikseen, mutta loki valehteli: sama tiedosto näytti sekä onnistuvan
+    että epäonnistuvan, ja se peitti alleen oikean vian pitkissä osissa.
+    Virheilmoitus jota ei voi uskoa on huonompi kuin ei ilmoitusta.
+    """
+    class P:
+        def __init__(self, offset, end):
+            self.offset, self.end = offset, end
+            self.start, self.duration = 0.0, end - offset
+
+    class Item:
+        asset_start = 0.0
+
+        def __init__(self, offset, end):
+            self.placements = [P(offset, end)]
+
+    a = Item(0.0, 819.0)
+    b = Item(819.0, 4632.0)
+    assert mix.overlaps(a, a)
+    assert not mix.overlaps(a, b), "eri osat eivät ole päällekkäin"
+    assert not mix.overlaps(b, a)
+    # Raja on kosketus, ei päällekkäisyys: peräkkäiset osat jakavat hetken.
+    assert not mix.overlaps(Item(0.0, 10.0), Item(10.0, 20.0))
+    assert mix.overlaps(Item(0.0, 10.0), Item(9.0, 20.0))

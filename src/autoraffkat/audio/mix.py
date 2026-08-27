@@ -868,6 +868,26 @@ CHAIN_SHARE = 0.81
 WRITE_SHARE = 0.07
 
 
+def overlaps(one, other) -> bool:
+    """Ovatko kaksi mediaa yhtään hetkeä yhtä aikaa aikajanalla.
+
+    Monikamerassa osat ovat peräkkäin, joten toisen osan mikki ei voi
+    vuotaa tämän osan tiedostoon. Ilman tätä se tarjottiin silti
+    vuotolähteeksi, ``_aligned`` palautti pelkkää nollaa, ja lokiin tuli
+    «vuotopolkua ei saatu ratkaistua» pariutumisesta joka ei ollut koskaan
+    mahdollinen. Vienti ei mennyt siitä rikki — oikea kumppani käsiteltiin
+    erikseen — mutta sama tiedosto näytti lokissa sekä onnistuvan että
+    epäonnistuvan, ja se peitti alleen oikean vian pitkissä osissa.
+    Virheilmoitus jota ei voi uskoa on huonompi kuin ei ilmoitusta.
+    """
+    for mine in one.placements:
+        for theirs in other.placements:
+            if (float(mine.offset) < float(theirs.end)
+                    and float(theirs.offset) < float(mine.end)):
+                return True
+    return False
+
+
 def _debleed(job, audio, rate, program_start, solos, partners, result):
     """Vähentää muiden mikkien vuodon ``audio``:sta paikan päällä.
 
@@ -893,6 +913,8 @@ def _debleed(job, audio, rate, program_start, solos, partners, result):
         theirs = (solos or {}).get(partner.get("speaker"))
         if theirs is None:
             continue
+        if partner.get("item") is None or not overlaps(job["item"], partner["item"]):
+            continue          # eri osa: ei yhtään yhteistä hetkeä
         try:
             with AudioFile(ensure_readable(partner["source"])) as handle:
                 if handle.samplerate != rate:
