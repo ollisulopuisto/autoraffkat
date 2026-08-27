@@ -572,6 +572,14 @@ def _jobs(timeline, roles, settings: AudioSettings) -> list[dict]:
                             "target_lufs": settings.target_lufs,
                             "gain_db": settings.gain_db,
                             "speech": True,
+                            # Mikki on aina mono ulos, myös jos lähde on
+                            # stereo. Kaksikanavainen mikki rikkoo laskennan
+                            # useassa kohtaa hiljaa: ristivuodon vähennys
+                            # katsoo vain ensimmäistä kanavaa, ohjelmakatto
+                            # summaa eri kanavamäärät levittämällä, ja
+                            # panorointi on monolähteen käsite. Yhteen
+                            # kanavaan pakotettuna ne kaikki pitävät.
+                            "mono": True,
                             "weight": weight_of(item.path),
                         }
                     )

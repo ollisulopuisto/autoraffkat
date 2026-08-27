@@ -147,12 +147,43 @@ microphone's bleed of the louder speaker, worsening the comb by exactly that
 much. A gentle level rider per track with the loudness set on the programme
 avoids it; our chain does not, which is part of why de-bleeding is needed.
 
+## Where people sit is measured, not configured
+
+`staging.py` derives the seating order from the same Vision measurements the
+reaction layer already caches, so it costs nothing extra and belongs in the
+settings loop. The measure is `turn` — the nose relative to the midpoint of
+the eyes — and **its sign is the opposite of the obvious guess**: two people
+sitting opposite each other look at each other, so the one on the *left*
+looks *right* and has a positive `turn`. Measured on a real episode, the
+left-hand speaker read +0.46 and the right-hand one −0.28, the same in both
+parts. This was settled by extracting frames and looking at them, not by
+reasoning about coordinate systems, because the reasoning gives the wrong
+answer confidently. Framing (`cx`) does not work for this: on the same
+episode both speakers sat in the right half of their own close-up, +0.51 and
++0.60, which describes the camera operator rather than the room.
+
+The pan positions are spread evenly by *order*, never in proportion to the
+measured angle: the angle gives the ordering reliably and the distance not at
+all, since it depends on how the chairs happen to be turned and on the lens.
+Three speakers are therefore left, centre, right. The spread is tiny on
+purpose — a few percent, ±6 at the widest — because speech belongs in the
+middle and a wide spread turns a two-hander into a radio play. Above five
+speakers nothing is panned: the positions would be closer together than the
+measurement is accurate, and then centre beats almost-centre.
+
 ## Sensitivity and gain are not the same thing
 
 Sensitivity is a threshold above the noise floor, so gain does not move it —
 the floor moves by the same amount. Gain only affects how microphones compare
 against each other during overlapping speech. Change this and the controls
 start interfering with each other.
+
+A microphone is always mono out, even from a stereo source. Two channels
+break the arithmetic in three places silently: de-bleeding reads only the
+first channel, the programme ceiling sums stems of differing channel counts
+by broadcasting them, and panning is a mono-source idea to begin with. The
+`mono` flag is in the fingerprint, so a stereo source that used to be
+processed as stereo counts as stale.
 
 ## Audio: analyse raw, export processed
 

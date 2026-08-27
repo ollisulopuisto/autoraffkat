@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.102] - 2026-08-27
+
+### Added
+- **Where People Sit, Measured From the Picture**: `staging.py` reads the seating order out of the Vision measurements the reaction layer already caches — no new decoding, and fast enough for the settings loop. The measure is `turn`, and **its sign is the opposite of the obvious guess**: people sitting opposite each other look at each other, so the one on the left looks right and reads positive. Measured on a real episode: left-hand speaker +0.46, right-hand −0.28, the same in both parts, confirmed by extracting frames and looking at them.
+  - Framing (`cx`) is useless for this — both speakers sat in the right half of their own close-up (+0.51, +0.60), which describes the camera operator, not the room.
+  - Pan positions spread evenly by *order*, not in proportion to the angle: the angle gives the ordering reliably and the distance not at all. Three speakers are left, centre, right.
+  - The spread is deliberately tiny — ±3 for two speakers, ±6 at the widest. Above five speakers nothing is panned at all.
+
+### Fixed
+- **A Microphone Is Always Mono Out**: a stereo source used to stay stereo through the chain, which breaks three things without saying so — de-bleeding reads only the first channel, the programme ceiling sums stems of differing channel counts by broadcasting them, and panning is a mono-source idea. `mono` is in the fingerprint, so anything previously processed as stereo counts as stale.
+
 ## [v26.08.27.101] - 2026-08-27
 
 ### Fixed
