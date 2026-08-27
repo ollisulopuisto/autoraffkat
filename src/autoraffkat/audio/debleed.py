@@ -66,6 +66,53 @@ MIN_SPEECH_KEPT = 0.99
 MIN_REDUCTION_DB = 0.5
 
 
+# Kuinka pitkissä paloissa korrelaatiot lasketaan.
+#
+# Sadan tuhannen näytteen palat olisivat turhan pieniä ja kymmenen miljoonan
+# turhan isoja; miljoona on FFT:lle nopea ja muistille olematon.
+_LAG_BLOCK = 1 << 20
+
+
+def _lags(a: np.ndarray, b: np.ndarray, taps: int) -> np.ndarray:
+    """``out[k] = sum_n a[n+k] * b[n]`` viiveille ``0 … taps-1``.
+
+    Paloittain, eikä koko ``2n-1`` mittaista korrelaatiota josta leikataan
+    kaksituhatta lukua. Ero ei ole hienosäätöä: tunnin mikki on 184
+    miljoonaa näytettä, jolloin täysi korrelaatio on 368 miljoonaa
+    liukulukua ja sen FFT pyöristyy seuraavaan nopeaan pituuteen — useita
+    gigatavuja, ja siinä koossa ratkaisu ei enää tullut ulos. Oireena
+    «vuotopolkua ei saatu ratkaistua» **vain pitkissä osissa**: 20 minuutin
+    tiedostot menivät läpi, 64 minuutin eivät.
+
+    Sama virhe kuin ``np.correlate(..., "full")``ssa siirtymän mittauksessa
+    ja ``keyframe_times``issa videopuolella: lasketaan kaikki ja otetaan
+    siitä murto-osa. Summat ovat tässä samat luku luvulta, vain kertyminen
+    on eri järjestyksessä.
+    """
+    from scipy import signal as sig
+
+    n = min(len(a), len(b))
+    out = np.zeros(taps, dtype=np.float64)
+    step = max(taps * 4, _LAG_BLOCK)
+    for start in range(0, n, step):
+        stop = min(start + step, n)
+        piece = np.asarray(b[start:stop], dtype=np.float64)
+        if not piece.size:
+            break
+        # Laajennettu pala kantaa viiveet palan reunan yli, joten raja ei
+        # katkaise yhtään summan termiä. Lopussa signaali loppuu kesken, ja
+        # silloin **nollataan**, ei lyhennetä: täysi korrelaatio tekee
+        # saman implisiittisesti, ja lyhentäminen jättäisi pitkät viiveet
+        # laskematta — jolloin ``out`` täyttyisi vain viiveelle nolla.
+        wide = np.asarray(a[start:start + piece.size + taps - 1],
+                          dtype=np.float64)
+        if wide.size < piece.size + taps - 1:
+            wide = np.pad(wide, (0, piece.size + taps - 1 - wide.size))
+        found = sig.correlate(wide, piece, "valid", method="fft")
+        out[: found.size] += found[:taps]
+    return out
+
+
 def path(
     target: np.ndarray,
     source: np.ndarray,
@@ -83,7 +130,6 @@ def path(
     kokonaan.
     """
     from scipy import linalg
-    from scipy import signal as sig
 
     n = min(len(target), len(source), len(keep))
     mask = np.asarray(keep[:n], dtype=np.float64)
@@ -92,12 +138,8 @@ def path(
     if not np.any(s):
         return np.zeros(taps)
 
-    mid = n - 1
-    auto = sig.correlate(s, s, "full", method="fft")[mid : mid + taps].copy()
-    cross = sig.correlate(t, s, "full", method="fft")[mid : mid + taps]
-    if auto.size < taps:  # lyhyt pätkä: täydennä nollilla
-        auto = np.pad(auto, (0, taps - auto.size))
-        cross = np.pad(cross, (0, taps - cross.size))
+    auto = _lags(s, s, taps)
+    cross = _lags(t, s, taps)
     if auto[0] <= 0:
         return np.zeros(taps)
     auto[0] *= 1.0 + REGULARISATION

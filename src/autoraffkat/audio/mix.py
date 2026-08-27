@@ -119,6 +119,7 @@ FINGERPRINT_FIELDS = (
 # samoilla asetuksilla syntyvää. Sama tarkoitus kuin verhokäyrän
 # ``CACHE_VERSION``:illa.
 #
+# 8: ristivuoto ratkeaa myös pitkissä osissa.
 # 7: tasonkuljettaja ennen kompressoreita.
 # 6: vaimennusta ei enää polteta tiedostoon.
 # 5: ketjun kolmas kompressori oli kuollut ja on nyt elossa.
@@ -127,7 +128,7 @@ FINGERPRINT_FIELDS = (
 # 2: naksunpoiston kynnys. Vanhat tiedostot on tehty detektorilla joka
 #    korjasi 2 % kaikista näytteistä; ne eivät ole ajan tasalla millään
 #    asetuksella, ja ilman tätä painike olisi kertonut päinvastaista.
-FINGERPRINT_VERSION = 7
+FINGERPRINT_VERSION = 8
 
 
 def stamp_dir() -> Path:

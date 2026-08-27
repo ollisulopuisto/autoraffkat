@@ -170,6 +170,28 @@ measurement said about the premise: the compressor does **not** cost
 separation either (19.1 → 19.0), so the rider is not the answer to leakage —
 de-bleeding still is.
 
+Compute the lags you need, never the whole correlation. `debleed.path`
+wants 2048 lags and was slicing them out of a full `2n-1` correlation. A
+64-minute microphone is 184 million samples, so that correlation is 368
+million floats and its FFT rounds up to the next fast length — gigabytes. At
+20 minutes it survived; at 64 it did not, and the "no path" guard turned the
+failure into a **reason string instead of an error**. The symptom was that
+de-bleeding worked on the short parts of an episode and silently gave up on
+the long ones, which reads as "this material is harder" rather than as a bug.
+`_lags` accumulates the same sums blockwise: identical to 1e-16 relative,
+36 s for the whole file, and both directions now solve at −4.12 and −3.77 dB
+with own speech kept at 0.9998.
+
+This is the third instance of the same mistake in this codebase, after
+`np.correlate(..., "full")` in the shift measurement and `keyframe_times`
+reading every packet to pick 24 frames. When a computation ends in a slice,
+check what it computed to get there.
+
+The block's tail must be **zero-padded, not shortened**. When the signal runs
+out, a shortened window makes `correlate(..., "valid")` return a single
+value, so only lag zero is filled and the "filter" is one number rather than
+a path. That hits the final block of every run, and it looks like it worked.
+
 Independent per-microphone normalisation lifts bleed. Two microphones
 normalised to the same LUFS get different gains — measured +25.6 dB and
 +22.5 dB on one episode — and the 3.1 dB difference lands on the quieter

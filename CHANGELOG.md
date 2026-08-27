@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to Calendar Versioning (CalVer).
 
+## [v26.08.27.111] - 2026-08-27
+
+### Fixed
+- **De-bleeding Silently Gave Up on Long Parts of an Episode**: `debleed.path` needs 2048 lags and was slicing them out of a full `2n-1` correlation. A 64-minute microphone is 184 M samples, so that correlation is 368 M floats whose FFT rounds up to the next fast length — gigabytes. Twenty-minute files survived, 64-minute ones did not, and the "no path" guard turned the failure into a reason string rather than an error. It read as "this material is harder", not as a bug.
+  - `_lags` accumulates the same sums blockwise — **identical to 1e-16 relative**, 36 s for the whole file. Both directions now solve: **−4.12 dB and −3.77 dB**, own speech kept at 0.9998.
+  - Third instance of this mistake here, after `np.correlate(..., "full")` in the shift measurement and `keyframe_times` reading every packet to pick 24 frames. When a computation ends in a slice, check what it computed to get there.
+  - The block's tail is zero-padded, not shortened: a shortened window makes `correlate(..., "valid")` return one value, so only lag zero is filled and the filter is a single number rather than a path. That hits the final block of every run and looks like it worked. Both behaviours now have tests.
+  - `FINGERPRINT_VERSION` 7 → 8.
+
 ## [v26.08.27.110] - 2026-08-27
 
 ### Fixed

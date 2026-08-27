@@ -136,3 +136,49 @@ def test_the_partner_lands_on_the_same_timeline_moment():
     # Aikajanan hetki 0 on lähdetiedoston hetki 1 s.
     assert out[0] == pytest.approx(float(RATE))
     assert out[RATE] == pytest.approx(float(2 * RATE))
+
+
+def test_the_lag_sums_match_a_full_correlation():
+    """Paloittain laskettu korrelaatio on sama luku luvulta.
+
+    Koko ``2n-1`` mittaisen korrelaation laskeminen kahdentuhannen viiveen
+    poimimiseksi kaatui pitkiin tiedostoihin: tunnin mikki on 184 miljoonaa
+    näytettä, ja siitä täysi korrelaatio on 368 miljoonaa liukulukua. Oire
+    oli «vuotopolkua ei saatu ratkaistua» **vain pitkissä osissa** — 20
+    minuutin tiedostot menivät läpi, 64 minuutin eivät.
+
+    Optimointi ei saa muuttaa tulosta, joten sitä verrataan siihen mitä se
+    korvasi.
+    """
+    from scipy import signal as sig
+
+    rng = np.random.default_rng(1)
+    taps = 2048
+    for n in (5000, 300000):
+        a = rng.standard_normal(n)
+        b = rng.standard_normal(n)
+        full = sig.correlate(a, b, "full", method="fft")[n - 1:n - 1 + taps]
+        blocked = debleed._lags(a, b, taps)
+        scale = max(float(np.abs(full).max()), 1e-12)
+        assert np.abs(full - blocked).max() / scale < 1e-12, n
+
+
+def test_the_lags_cover_the_tail_when_the_signal_runs_out():
+    """Lopussa signaali loppuu kesken, ja silloin nollataan eikä lyhennetä.
+
+    Lyhentäminen jätti pitkät viiveet laskematta ja täytti vain viiveen
+    nolla — suodin oli silloin yksi luku, ei polku. Tämä osui jokaiseen
+    palaan jonka jälkeen aineisto loppui, eli aina viimeiseen.
+    """
+    rng = np.random.default_rng(5)
+    taps = 64
+    n = 300
+    a = rng.standard_normal(n)
+    b = rng.standard_normal(n)
+    out = debleed._lags(a, b, taps)
+    # Jokainen viive on laskettu, ei vain ensimmäinen.
+    assert np.count_nonzero(out) == taps, np.count_nonzero(out)
+    suora = np.array([
+        float(np.dot(a[k:k + n - k], b[: n - k])) for k in range(taps)
+    ])
+    assert np.abs(out - suora).max() / max(np.abs(suora).max(), 1e-12) < 1e-12
